@@ -121,11 +121,20 @@ A rule automatically moves matching windows to a desktop. Format:
 [Rules]
 Rule1=3 (?i)^patienthistorik
 Rule2=2 Spotify
+Rule3=2 /exe:(?i)^spotify\.exe$ /follow
+Rule4=4 /exe:(?i)^olk\.exe$ ^Kalender
 ```
 
-`RuleN=<desktop number> <regex>` — one space between the number and the
-regex; everything after that space is the pattern, matched against window
-*titles*.
+`RuleN=<desktop number> [/exe:<process regex>] [/follow] <title regex>` —
+everything after the optional switches is the pattern, matched against
+window *titles*.
+
+- `/exe:` additionally matches the **process executable name** (same regex
+  flavor, no spaces) — more robust than titles for apps that retitle
+  constantly. With `/exe:` given, the title regex may be omitted entirely:
+  the rule then catches every new window of that process.
+- `/follow` switches to the target desktop when the rule moves a window —
+  useful for "launch app X and take me there" workflows.
 
 The easiest way to create a rule is the title bar menu: right-click a window
 title → *Flytta alltid "…" till* → pick a desktop. A dialog opens with the

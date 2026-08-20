@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.0 (2026-08-20)
+
+- Rules 2.0: `/exe:<process regex>` matches the process name (title regex
+  optional when given) and `/follow` switches along when a rule moves a
+  window.
+- "Start with Windows" toggle in the tray menu (creates/removes a Startup
+  shortcut, works for both the script and the compiled exe).
+- Reproducible release builds: `build.ps1` downloads the toolchain and
+  produces the portable zip; a GitHub Actions workflow builds and attaches
+  it automatically on version tags.
+
 ## 1.0.0 (2026-08-20)
 
 First public release of DeskPilot.

@@ -1,5 +1,5 @@
 ;===============================================================================
-; DeskPilot — v1.0.0 (2026-08-20)
+; DeskPilot — v1.1.0 (2026-08-20)
 ;
 ; * OSD showing the desktop name on every desktop switch.
 ; * Tray icon with the active desktop's number (icons\d1.ico - d9.ico).
@@ -290,8 +290,12 @@ TitleMenuBand=(?i)^olk\.exe$
 [Rules]
 ; Windows that should always be moved to a specific desktop. Easiest to
 ; create via right-click on the window's title bar, but editable here too:
-;   RuleN=<desktop number> <regex matching the window title>
-; Example:  Rule1=3 (?i)^patienthistorik
+;   RuleN=<desktop number> [/exe:<process regex>] [/follow] <title regex>
+; /exe: matches the process executable name; /follow switches along when
+; the rule moves a window. The title regex may be omitted if /exe: is given.
+; Examples:
+;   Rule1=3 (?i)^patienthistorik
+;   Rule2=2 /exe:(?i)^spotify\.exe$ /follow
 ; Note: AHK's \w does not match åäö - write [\wåäöÅÄÖ] when needed.
 )"
     FileAppend(text "`n", g_konfigFil, "UTF-16")
@@ -315,6 +319,7 @@ T(k) {
         "ruleSaved", "Rule saved → ",
         "trayShowName", "Show desktop name", "trayOpenConfig", "Open configuration",
         "trayReloadConfig", "Reload configuration", "trayLanguage", "Language",
+        "trayAutostart", "Start with Windows",
         "trayRestart", "Restart script", "trayExit", "Exit",
         "configLoaded", "Configuration loaded", "invalidHotkeys", "Invalid hotkeys:")
     static sv := Map(
@@ -331,6 +336,7 @@ T(k) {
         "ruleSaved", "Regel sparad → ",
         "trayShowName", "Visa skrivbordsnamn", "trayOpenConfig", "Öppna konfigurationen",
         "trayReloadConfig", "Läs om konfigurationen", "trayLanguage", "Språk",
+        "trayAutostart", "Starta med Windows",
         "trayRestart", "Starta om skriptet", "trayExit", "Avsluta",
         "configLoaded", "Konfigurationen inläst", "invalidHotkeys", "Ogiltiga kortkommandon:")
     return (g_språk = "sv" ? sv : en).Get(k, k)
@@ -853,13 +859,32 @@ RegExEscape(s) {
     return RegExReplace(s, "[\\.*?+\[\]{}()|^$]", "\$0")
 }
 
+; Rule format: RuleN=<desktop> [/exe:<process regex>] [/follow] <title regex>
+; The title regex may be empty when /exe: is given (any window of that
+; process). /follow switches along when the rule moves a window.
 LäsRegler() {
     global g_regler
     g_regler := []
     sektion := IniRead(g_konfigFil, "Rules", , "")
     loop parse sektion, "`n", "`r" {
-        if RegExMatch(A_LoopField, "^Rule\d+\s*=\s*(\d+)\s+(.+)$", &m)
-            g_regler.Push({mål: Integer(m[1]), regex: m[2]})
+        if !RegExMatch(A_LoopField, "^Rule\d+\s*=\s*(\d+)\s*(.*)$", &m)
+            continue
+        rest := Trim(m[2]), exe := "", följ := false
+        loop {
+            if RegExMatch(rest, "^/exe:(\S+)\s*(.*)$", &e) {
+                exe := e[1], rest := e[2]
+                continue
+            }
+            if RegExMatch(rest, "^/follow(?:\s+(.*))?$", &f) {
+                följ := true, rest := f[1]
+                continue
+            }
+            break
+        }
+        rest := Trim(rest)
+        if (exe = "" && rest = "")
+            continue   ; a rule needs at least an exe or a title pattern
+        g_regler.Push({mål: Integer(m[1]), exe: exe, följ: följ, regex: rest})
     }
 }
 
@@ -889,17 +914,27 @@ RegelSvep() {
         }
         for regel in g_regler {
             try {
-                if !(titel ~= regel.regex)
+                if (regel.exe != "" && !(WinGetProcessName(hwnd) ~= regel.exe))
                     continue
-                if (gammal != "" && gammal ~= regel.regex)
-                    continue   ; matched before too - no new event
+                if (regel.regex != "") {
+                    if !(titel ~= regel.regex)
+                        continue
+                    if (gammal != "" && gammal ~= regel.regex)
+                        continue   ; matched before too - no new event
+                } else if (gammal != "") {
+                    continue       ; exe-only rules act on new windows only
+                }
             } catch {
                 continue   ; broken regex in the config - skip the rule
             }
             nr := DllCall("VirtualDesktopAccessor\GetWindowDesktopNumber", "ptr", hwnd, "int")
-            if (nr >= 0 && nr != regel.mål - 1)
-                DllCall("VirtualDesktopAccessor\MoveWindowToDesktopNumber"
-                    , "ptr", hwnd, "int", regel.mål - 1, "int")
+            if (nr >= 0 && nr != regel.mål - 1) {
+                if (DllCall("VirtualDesktopAccessor\MoveWindowToDesktopNumber"
+                    , "ptr", hwnd, "int", regel.mål - 1, "int") && regel.följ) {
+                    VäxlaTill(regel.mål)
+                    SetTimer(AktiveraFönster.Bind(hwnd), -400)
+                }
+            }
             break
         }
     }
@@ -1066,6 +1101,9 @@ InitTray() {
     språkMeny.Add("Svenska", SättSpråk.Bind("sv"))
     språkMeny.Check(g_språk = "sv" ? "Svenska" : "English")
     A_TrayMenu.Add(T("trayLanguage"), språkMeny)
+    A_TrayMenu.Add(T("trayAutostart"), VäxlaAutostart)
+    if FileExist(AutostartGenväg())
+        A_TrayMenu.Check(T("trayAutostart"))
     A_TrayMenu.Add()
     A_TrayMenu.Add(T("trayRestart"), (*) => Reload())
     A_TrayMenu.Add(T("trayExit"), (*) => ExitApp())
@@ -1078,6 +1116,26 @@ LäsOmKonfig(*) {
     InitTray()          ; the language may have changed in the config file
     UppdateraPilikoner()
     TrayTip(T("configLoaded"), "DeskPilot")
+}
+
+AutostartGenväg() {
+    return A_Startup "\DeskPilot.lnk"
+}
+
+; Tray toggle: create or remove a shortcut in the user's Startup folder.
+VäxlaAutostart(*) {
+    länk := AutostartGenväg()
+    if FileExist(länk) {
+        try FileDelete(länk)
+    } else {
+        try {
+            if A_IsCompiled
+                FileCreateShortcut(A_ScriptFullPath, länk, A_ScriptDir)
+            else
+                FileCreateShortcut(A_AhkPath, länk, A_ScriptDir, '"' A_ScriptFullPath '"')
+        }
+    }
+    InitTray()   ; refresh the check mark
 }
 
 ; Silent tray apps need a trace when something breaks; no dialog, or a
