@@ -18,3 +18,5 @@ First public release of DeskPilot.
 - IPC via the registered window message `DESKPILOT_CMD`.
 - Configuration in an ini file with live reload from the tray menu.
 - English or Swedish UI, switchable from the tray menu (English default).
+- Portable release build (`DeskPilot.exe` + `DeskPilotArrow.exe`) — no
+  AutoHotkey installation required.

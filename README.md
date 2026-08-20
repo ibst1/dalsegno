@@ -54,14 +54,29 @@ per-window rules.
 
 ## Installation
 
+### Option A — portable exe (no AutoHotkey required)
+
+1. Download the latest `DeskPilot-x.y.z.zip` from
+   [Releases](https://github.com/ibst1/deskpilot/releases) and extract it
+   anywhere. It bundles `VirtualDesktopAccessor.dll` (see THIRD-PARTY.txt).
+2. Run `DeskPilot.exe`. A default config file is created on first start.
+
+The exes are unsigned, so SmartScreen may warn on first run
+(*More info → Run anyway*).
+
+### Option B — run the script
+
 1. Clone or download this repository.
 2. Download `VirtualDesktopAccessor.dll` (link above) and place it next to
    `DeskPilot.ahk`.
 3. Run `DeskPilot.ahk`. A default config file is created on first start.
-4. Optional autostart: put a shortcut to the script in the folder that opens
-   when you run `shell:startup`.
-5. The two arrow icons start hidden in the tray overflow — open the `^`
-   chevron and drag them onto the taskbar once; Windows remembers.
+
+### After either option
+
+- Optional autostart: put a shortcut in the folder that opens when you run
+  `shell:startup`.
+- The two arrow icons start hidden in the tray overflow — open the `^`
+  chevron and drag them onto the taskbar once; Windows remembers.
 
 ## Configuration
 

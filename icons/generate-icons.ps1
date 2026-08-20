@@ -101,6 +101,7 @@ Write-Ico "$destDir\d_more.ico" '9+'
 Write-Ico "$destDir\d_unknown.ico" '?'
 Write-Ico "$destDir\pil_va.ico" 'va' 'arrow'
 Write-Ico "$destDir\pil_ho.ico" 'ho' 'arrow'
+Write-Ico "$destDir\app.ico" 'DP'
 
 # previews for inspection
 $p = New-DigitBitmap 256 '3'; $p.Save("$scratch\vd_icon_256.png", [System.Drawing.Imaging.ImageFormat]::Png); $p.Dispose()

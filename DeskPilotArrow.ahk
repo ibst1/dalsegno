@@ -46,7 +46,10 @@ Klick(*) {
 VdaFönster() {
     DetectHiddenWindows true
     SetTitleMatchMode 2
-    return WinExist("DeskPilot.ahk ahk_class AutoHotkey")
+    ; the main script's hidden window is titled with its path: .ahk when run
+    ; as a script, .exe when compiled
+    hwnd := WinExist("DeskPilot.ahk ahk_class AutoHotkey")
+    return hwnd ? hwnd : WinExist("DeskPilot.exe ahk_class AutoHotkey")
 }
 
 ; without the main script the arrow is pointless — vanish after ~6 s (two
