@@ -433,7 +433,12 @@ UppdateraPilikoner() {
     for r in ["va", "ho"] {
         hwnd := WinExist("DeskPilotArrow " r)
         if (g_pilikoner && !hwnd) {
-            try Run('"' A_AhkPath '" "' A_ScriptDir '\DeskPilotArrow.ahk" ' r)
+            ; compiled: A_AhkPath is the exe itself — run the helper exe instead
+            if A_IsCompiled {
+                try Run('"' A_ScriptDir '\DeskPilotArrow.exe" ' r)
+            } else {
+                try Run('"' A_AhkPath '" "' A_ScriptDir '\DeskPilotArrow.ahk" ' r)
+            }
         } else if (!g_pilikoner && hwnd) {
             try WinClose(hwnd)
         }
