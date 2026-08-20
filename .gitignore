@@ -13,5 +13,6 @@ VirtualDesktopAccessor.dll
 # Backups
 *.backup-*
 
-# Build output (attached to GitHub releases instead)
+# Build output (attached to GitHub releases instead) and cached toolchain
 dist/
+build/
