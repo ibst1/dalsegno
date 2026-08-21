@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.0 (2026-08-21)
+
+- Clicking the taskbar name label also opens the desktop picker menu.
+
 ## 1.2.0 (2026-08-21)
 
 - Left-clicking the tray icon opens a desktop picker menu — choose any

@@ -1,5 +1,5 @@
 ;===============================================================================
-; DeskPilot — v1.2.0 (2026-08-21)
+; DeskPilot — v1.3.0 (2026-08-21)
 ;
 ; * OSD showing the desktop name on every desktop switch.
 ; * Tray icon with the active desktop's number (icons\d1.ico - d9.ico).
@@ -1042,11 +1042,13 @@ UppdateraBrickaInre() {
             g_bricka.Destroy()
         skala := A_ScreenDPI / 96
         nyckel := ljust ? "EEEEEE" : "202020"
-        b := Gui("-DPIScale -Caption +ToolWindow +E0x08000000 +E0x20", "VDA namnbricka")
+        ; not click-through: a click on the label opens the desktop picker
+        b := Gui("-DPIScale -Caption +ToolWindow +E0x08000000", "VDA namnbricka")
         b.BackColor := nyckel
         b.MarginX := Round(10 * skala), b.MarginY := Round(3 * skala)
         b.SetFont("s9 q4 c" (ljust ? "1A1A1A" : "F5F5F5"), "Segoe UI Variable Display")
-        b.Add("Text", "Center", rad2 != "" ? rad1 "`n" rad2 : rad1)
+        txt := b.Add("Text", "Center", rad2 != "" ? rad1 "`n" rad2 : rad1)
+        txt.OnEvent("Click", (*) => VisaSkrivbordsväljare())
         b.Show("NoActivate Hide AutoSize")
         WinSetStyle("+0x40000000", b)                          ; WS_CHILD
         DllCall("SetParent", "ptr", b.Hwnd, "ptr", fält)
