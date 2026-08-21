@@ -1,5 +1,5 @@
 ;===============================================================================
-; DeskPilot — v1.3.1 (2026-08-21)
+; DeskPilot — v1.3.2 (2026-08-21)
 ;
 ; * OSD showing the desktop name on every desktop switch.
 ; * Tray icon with the active desktop's number (icons\d1.ico - d9.ico).
@@ -94,7 +94,7 @@ Hotkey("LButton", BrickKlick, "On")   ; click on the name label = desktop picker
 HotIf()
 PollSkrivbord()      ; set the icon right away; the first call shows no OSD
 SetTimer(PollSkrivbord, 250)
-SetTimer(BrickaVakt, 500)   ; keeps the name label placed and visible
+SetTimer(BrickaVakt, 250)   ; keeps the name label placed, visible and on top
 SetTimer(RegelSvep, 1000)   ; applies window rules to new/retitled windows
 
 if A_Args.Length && A_Args[1] = "/show"
@@ -1078,14 +1078,13 @@ UppdateraBrickaInre() {
         DöljBricka()
         return
     }
-    ; if Explorer restarted, the label died with its parent — rebuild
-    if IsObject(g_bricka) && !DllCall("IsWindow", "ptr", g_bricka.Hwnd) {
-        g_bricka := 0
-        g_brickaText := ""
-    }
-    try WinGetPos(, , &fältBredd, &fältHöjd, fält)
+    try WinGetPos(&fältX, &fältY, &fältBredd, &fältHöjd, fält)
     catch
         return
+    if BrickaSkaDöljas(fältY) {
+        DöljBricka()
+        return
+    }
     try ControlGetPos(&ikonX, , , , "TrayNotifyWnd1", fält)
     catch
         ikonX := fältBredd - 260   ; rough fallback if the control disappears
@@ -1094,33 +1093,54 @@ UppdateraBrickaInre() {
     rad1 := s.name != "" ? s.name : T("desktop") " " s.index
     rad2 := s.name != "" ? T("desktop") " " s.index " " T("of") " " s.count : ""
     innehåll := rad1 "|" rad2 "|" ljust
-    if (innehåll != g_brickaText || !IsObject(g_bricka)) {
+    if (innehåll != g_brickaText || !IsObject(g_bricka)
+        || !DllCall("IsWindow", "ptr", g_bricka.Hwnd)) {
         g_brickaText := innehåll
         if IsObject(g_bricka)
-            g_bricka.Destroy()
+            try g_bricka.Destroy()
         skala := A_ScreenDPI / 96
         nyckel := ljust ? "EEEEEE" : "202020"
-        ; click-through (E0x20) is required: without it the label fights the
-        ; taskbar's composition surface and flickers on every guard tick.
-        ; Clicks are caught by an LButton hook hotkey over the label's rect.
-        b := Gui("-DPIScale -Caption +ToolWindow +E0x08000000 +E0x20", "VDA namnbricka")
+        ; a topmost STAND-ALONE window: as a taskbar child the composition
+        ; surface repainted over the label on every tray icon animation
+        ; (OneDrive sync spinner etc.) — a separate top-level window can
+        ; never be painted over by it. Click-through (E0x20); clicks are
+        ; caught by an LButton hook hotkey over the label's rect.
+        b := Gui("-DPIScale -Caption +ToolWindow +AlwaysOnTop +E0x08000000 +E0x20"
+            , "VDA namnbricka")
         b.BackColor := nyckel
         b.MarginX := Round(10 * skala), b.MarginY := Round(3 * skala)
         b.SetFont("s9 q4 c" (ljust ? "1A1A1A" : "F5F5F5"), "Segoe UI Variable Display")
         b.Add("Text", "Center", rad2 != "" ? rad1 "`n" rad2 : rad1)
         b.Show("NoActivate Hide AutoSize")
-        WinSetStyle("+0x40000000", b)                          ; WS_CHILD
-        DllCall("SetParent", "ptr", b.Hwnd, "ptr", fält)
         WinSetTransColor(nyckel, b)
         g_bricka := b
     }
     g_bricka.GetPos(, , &bb, &bh)
-    g_bricka.Show("NoActivate x" (ikonX - bb - Round(12 * A_ScreenDPI / 96))
-        . " y" ((fältHöjd - bh) // 2))
-    ; topmost among the bar's children so the composition surface never
-    ; paints over it
+    g_bricka.Show("NoActivate x" (fältX + ikonX - bb - Round(12 * A_ScreenDPI / 96))
+        . " y" (fältY + (fältHöjd - bh) // 2))
+    ; clicking the taskbar raises it within the topmost band — re-assert
     DllCall("SetWindowPos", "ptr", g_bricka.Hwnd, "ptr", 0
         , "int", 0, "int", 0, "int", 0, "int", 0, "uint", 0x13)   ; TOP, NOMOVE|NOSIZE|NOACTIVATE
+}
+
+; A stand-alone label must handle what a taskbar child got for free:
+; hide when the taskbar is auto-hidden or a fullscreen window covers the
+; primary monitor.
+BrickaSkaDöljas(fältY) {
+    if (fältY + 8 > A_ScreenHeight)
+        return true
+    fg := WinExist("A")
+    if !fg
+        return false
+    try {
+        if WinGetClass(fg) ~= "^(Progman|WorkerW|Shell_TrayWnd|Shell_SecondaryTrayWnd)$"
+            return false
+        WinGetPos(&ax, &ay, &ab, &ah, fg)
+        MonitorGet(MonitorGetPrimary(), &mv, &mö, &mh, &mn)
+        return (ax <= mv && ay <= mö && ax + ab >= mh && ay + ah >= mn)
+    } catch {
+        return false
+    }
 }
 
 DöljBricka() {

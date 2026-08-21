@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.2 (2026-08-21)
+
+- Fix: the name label blinked whenever the taskbar's composition surface
+  repainted (animated tray icons such as the OneDrive sync spinner painted
+  over it). The label is a stand-alone topmost window again — the
+  composition surface cannot paint over a separate top-level window — with
+  the auto-hide/fullscreen guards restored and a faster position guard.
+
 ## 1.3.1 (2026-08-21)
 
 - Fix: docked DisplayPort monitors fire spurious WM_DISPLAYCHANGE events,
