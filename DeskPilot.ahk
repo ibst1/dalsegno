@@ -1,5 +1,5 @@
 ;===============================================================================
-; DeskPilot — v1.3.0 (2026-08-21)
+; DeskPilot — v1.3.1 (2026-08-21)
 ;
 ; * OSD showing the desktop name on every desktop switch.
 ; * Tray icon with the active desktop's number (icons\d1.ico - d9.ico).
@@ -53,6 +53,7 @@ g_menyÖppen := false  ; the title bar menu is currently showing (drives click h
 g_regler := []       ; [{mål, regex}] — windows that should always be moved
 g_kändaFönster := Map()  ; hwnd → title, for the rule sweep's new/changed detection
 g_språk := "en"      ; UI language: "en" or "sv" ([Display] Language)
+g_skärmLäge := SkärmSnapshot()  ; monitor layout at startup (spurious-event filter)
 
 if A_Args.Length && A_Args[1] = "/selftest" {
     s := LäsSkrivbordsStatus()
@@ -88,6 +89,9 @@ UppdateraPilikoner()
 OnMessage(DllCall("RegisterWindowMessage", "str", "DESKPILOT_CMD", "uint"), VdaKommando)
 OnMessage(0x7E, SkärmbytesVakt)   ; WM_DISPLAYCHANGE: restart on monitor changes
 OnMessage(0x404, TrayIkonKlick)   ; AHK_NOTIFYICON: left click = desktop picker
+HotIf(MusÖverBricka)
+Hotkey("LButton", BrickKlick, "On")   ; click on the name label = desktop picker
+HotIf()
 PollSkrivbord()      ; set the icon right away; the first call shows no OSD
 SetTimer(PollSkrivbord, 250)
 SetTimer(BrickaVakt, 500)   ; keeps the name label placed and visible
@@ -526,8 +530,25 @@ SkärmbytesVakt(*) {
     SetTimer(OmstartEfterSkärmbyte, -2500)
 }
 
+; Docked DisplayPort monitors renegotiate periodically, firing spurious
+; WM_DISPLAYCHANGE without any real change — reloading on each caused a
+; restart loop (blinking tray icon/label). Only reload when the monitor
+; layout actually differs from the one this instance started with.
 OmstartEfterSkärmbyte() {
+    if (SkärmSnapshot() = g_skärmLäge)
+        return
     Reload()
+}
+
+SkärmSnapshot() {
+    s := MonitorGetCount() "|" A_ScreenWidth "x" A_ScreenHeight
+    loop MonitorGetCount() {
+        try {
+            MonitorGet(A_Index, &vä, &öv, &hö, &ne)
+            s .= "|" vä "," öv "," hö "," ne
+        }
+    }
+    return s
 }
 
 ; Left click on the tray icon: a picker menu with all desktops. Returning a
@@ -541,6 +562,11 @@ TrayIkonKlick(wParam, lParam, msg, hwnd) {
 }
 
 VisaSkrivbordsväljare() {
+    global g_menyÖppen
+    if g_menyÖppen {   ; a second click closes the open menu instead
+        DllCall("EndMenu")
+        return
+    }
     s := LäsSkrivbordsStatus()
     if (!s || s.index = 0)
         return
@@ -551,7 +577,44 @@ VisaSkrivbordsväljare() {
         if (n = s.index)
             m.Check(NamnFörIndex(n))
     }
+    ; the click never activates us (tray icon / click-through label), so
+    ; claim the foreground or the menu closes instantly
+    TaFörgrund()
+    g_menyÖppen := true
     m.Show()
+    g_menyÖppen := false
+}
+
+; True when the cursor is inside the (visible) name label's rectangle —
+; the label itself is click-through, so hit-testing never reports it.
+MusÖverBricka(*) {
+    try {
+        if (!IsObject(g_bricka) || !DllCall("IsWindowVisible", "ptr", g_bricka.Hwnd))
+            return false
+        CoordMode("Mouse", "Screen")
+        MouseGetPos(&mx, &my)
+        WinGetPos(&bx, &by, &bb, &bh, g_bricka)
+        return (mx >= bx && mx < bx + bb && my >= by && my < by + bh)
+    } catch {
+        return false
+    }
+}
+
+BrickKlick(*) {
+    VisaSkrivbordsväljare()
+}
+
+; Windows' foreground lock denies background processes; borrow rights from
+; the current foreground window's thread and claim the foreground.
+TaFörgrund() {
+    trådVår := DllCall("GetCurrentThreadId", "uint")
+    fg := DllCall("GetForegroundWindow", "ptr")
+    trådFg := fg ? DllCall("GetWindowThreadProcessId", "ptr", fg, "ptr", 0, "uint") : 0
+    if trådFg
+        DllCall("AttachThreadInput", "uint", trådVår, "uint", trådFg, "int", 1)
+    DllCall("SetForegroundWindow", "ptr", A_ScriptHwnd)
+    if trådFg
+        DllCall("AttachThreadInput", "uint", trådVår, "uint", trådFg, "int", 0)
 }
 
 VäljSkrivbord(n, *) {
@@ -692,18 +755,9 @@ VisaFönsterMeny(*) {
         , "wstr", T("menuAlwaysPre") kort T("menuAlwaysPost"))
 
     ; foreground fix: without it the menu closes immediately when Windows'
-    ; foreground lock denies a background process. Attach to the FOREGROUND
-    ; window's thread (it holds the rights) — the target window is not
-    ; enough when it is itself in the background, since our eaten click
-    ; never activated it.
-    trådVår := DllCall("GetCurrentThreadId", "uint")
-    fg := DllCall("GetForegroundWindow", "ptr")
-    trådFg := fg ? DllCall("GetWindowThreadProcessId", "ptr", fg, "ptr", 0, "uint") : 0
-    if trådFg
-        DllCall("AttachThreadInput", "uint", trådVår, "uint", trådFg, "int", 1)
-    DllCall("SetForegroundWindow", "ptr", A_ScriptHwnd)
-    if trådFg
-        DllCall("AttachThreadInput", "uint", trådVår, "uint", trådFg, "int", 0)
+    ; foreground lock denies a background process (our eaten click never
+    ; activated anything)
+    TaFörgrund()
     g_menyÖppen := true
     val := DllCall("TrackPopupMenuEx", "ptr", hSys
         , "uint", 0x182, "int", mx, "int", my, "ptr", A_ScriptHwnd, "ptr", 0, "int")
@@ -998,6 +1052,10 @@ BrickaVakt() {
 ; so only the text shows. -DPIScale keeps all coordinates in physical pixels.
 UppdateraBricka() {
     global g_bricka, g_brickaText
+    ; never touch the label while one of our menus is open: the timer fires
+    ; inside the menu's modal loop, and Show/SetWindowPos dismisses the menu
+    if g_menyÖppen
+        return
     ; the poll and guard timers can interrupt each other mid-rebuild —
     ; without a latch, Destroy() runs before g_bricka is repointed
     static upptagen := false
@@ -1042,13 +1100,14 @@ UppdateraBrickaInre() {
             g_bricka.Destroy()
         skala := A_ScreenDPI / 96
         nyckel := ljust ? "EEEEEE" : "202020"
-        ; not click-through: a click on the label opens the desktop picker
-        b := Gui("-DPIScale -Caption +ToolWindow +E0x08000000", "VDA namnbricka")
+        ; click-through (E0x20) is required: without it the label fights the
+        ; taskbar's composition surface and flickers on every guard tick.
+        ; Clicks are caught by an LButton hook hotkey over the label's rect.
+        b := Gui("-DPIScale -Caption +ToolWindow +E0x08000000 +E0x20", "VDA namnbricka")
         b.BackColor := nyckel
         b.MarginX := Round(10 * skala), b.MarginY := Round(3 * skala)
         b.SetFont("s9 q4 c" (ljust ? "1A1A1A" : "F5F5F5"), "Segoe UI Variable Display")
-        txt := b.Add("Text", "Center", rad2 != "" ? rad1 "`n" rad2 : rad1)
-        txt.OnEvent("Click", (*) => VisaSkrivbordsväljare())
+        b.Add("Text", "Center", rad2 != "" ? rad1 "`n" rad2 : rad1)
         b.Show("NoActivate Hide AutoSize")
         WinSetStyle("+0x40000000", b)                          ; WS_CHILD
         DllCall("SetParent", "ptr", b.Hwnd, "ptr", fält)
