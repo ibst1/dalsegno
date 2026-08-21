@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.1 (2026-08-21)
+
+- Fix: docked DisplayPort monitors fire spurious WM_DISPLAYCHANGE events,
+  which put the display-change restart (1.1.1) into a restart loop —
+  blinking tray icon and name label every few seconds. The restart now only
+  happens when the monitor layout actually differs from the one the running
+  instance started with.
+- Fix: the desktop picker opened from the taskbar name label closed
+  immediately (foreground lock) or was dismissed by the label guard timer.
+  The label is click-through again (anything else flickers next to the
+  taskbar's composition surface); clicks are caught by a hook over the
+  label's rectangle, and the guard pauses while a picker menu is open.
+
 ## 1.3.0 (2026-08-21)
 
 - Clicking the taskbar name label also opens the desktop picker menu.
