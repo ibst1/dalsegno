@@ -1,5 +1,5 @@
 ;===============================================================================
-; DeskPilot — v1.1.0 (2026-08-20)
+; DeskPilot — v1.1.1 (2026-08-21)
 ;
 ; * OSD showing the desktop name on every desktop switch.
 ; * Tray icon with the active desktop's number (icons\d1.ico - d9.ico).
@@ -86,6 +86,7 @@ LäsKonfig()          ; must run before InitTray so the menu gets the right lang
 InitTray()
 UppdateraPilikoner()
 OnMessage(DllCall("RegisterWindowMessage", "str", "DESKPILOT_CMD", "uint"), VdaKommando)
+OnMessage(0x7E, SkärmbytesVakt)   ; WM_DISPLAYCHANGE: restart on monitor changes
 PollSkrivbord()      ; set the icon right away; the first call shows no OSD
 SetTimer(PollSkrivbord, 250)
 SetTimer(BrickaVakt, 500)   ; keeps the name label placed and visible
@@ -514,6 +515,18 @@ BytSkrivbord(mål, från) {
 
 AktiveraFönster(hwnd) {
     try WinActivate(hwnd)
+}
+
+; The system DPI and font metrics are captured at process start, so the
+; name label and OSD render at the wrong size after connecting/disconnecting
+; monitors with a different scale — a clean restart is the simplest correct
+; fix. Debounced: docking fires a burst of WM_DISPLAYCHANGE events.
+SkärmbytesVakt(*) {
+    SetTimer(OmstartEfterSkärmbyte, -2500)
+}
+
+OmstartEfterSkärmbyte() {
+    Reload()
 }
 
 ;--- title bar menu and window rules --------------------------------------------

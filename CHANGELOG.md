@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1 (2026-08-21)
+
+- Restart automatically when the display configuration changes
+  (connect/disconnect of monitors) — the stale DPI captured at startup made
+  the taskbar name label and the OSD render at the wrong size.
+
 ## 1.1.0 (2026-08-20)
 
 - Rules 2.0: `/exe:<process regex>` matches the process name (title regex
