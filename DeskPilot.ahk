@@ -1,5 +1,5 @@
 ;===============================================================================
-; DeskPilot — v1.1.1 (2026-08-21)
+; DeskPilot — v1.2.0 (2026-08-21)
 ;
 ; * OSD showing the desktop name on every desktop switch.
 ; * Tray icon with the active desktop's number (icons\d1.ico - d9.ico).
@@ -87,6 +87,7 @@ InitTray()
 UppdateraPilikoner()
 OnMessage(DllCall("RegisterWindowMessage", "str", "DESKPILOT_CMD", "uint"), VdaKommando)
 OnMessage(0x7E, SkärmbytesVakt)   ; WM_DISPLAYCHANGE: restart on monitor changes
+OnMessage(0x404, TrayIkonKlick)   ; AHK_NOTIFYICON: left click = desktop picker
 PollSkrivbord()      ; set the icon right away; the first call shows no OSD
 SetTimer(PollSkrivbord, 250)
 SetTimer(BrickaVakt, 500)   ; keeps the name label placed and visible
@@ -527,6 +528,34 @@ SkärmbytesVakt(*) {
 
 OmstartEfterSkärmbyte() {
     Reload()
+}
+
+; Left click on the tray icon: a picker menu with all desktops. Returning a
+; value eats the event so the menu's default item does not also fire;
+; right-clicks fall through to AHK's normal tray menu handling.
+TrayIkonKlick(wParam, lParam, msg, hwnd) {
+    if (lParam = 0x202) {   ; WM_LBUTTONUP
+        VisaSkrivbordsväljare()
+        return 0
+    }
+}
+
+VisaSkrivbordsväljare() {
+    s := LäsSkrivbordsStatus()
+    if (!s || s.index = 0)
+        return
+    m := Menu()
+    loop s.count {
+        n := A_Index
+        m.Add(NamnFörIndex(n), VäljSkrivbord.Bind(n))
+        if (n = s.index)
+            m.Check(NamnFörIndex(n))
+    }
+    m.Show()
+}
+
+VäljSkrivbord(n, *) {
+    VäxlaTill(n)
 }
 
 ;--- title bar menu and window rules --------------------------------------------
