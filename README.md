@@ -30,7 +30,8 @@ per-window rules.
   | `Win+Alt+↓` | Open the move menu for the active window (Alt+Tab friendly) |
 
 - **Mouse control** — scroll the mouse wheel over the taskbar to switch
-  desktop; two optional tray arrow icons switch on click.
+  desktop; left-click the numbered tray icon for a desktop picker menu; two
+  optional tray arrow icons switch one step on click.
 - **Title bar menu** — right-click any window's title bar to get the window's
   *real* system menu (including items added by the app itself or tools like
   PowerToys) with three extra items at the bottom: move to desktop, move and

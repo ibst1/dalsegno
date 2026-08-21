@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0 (2026-08-21)
+
+- Left-clicking the tray icon opens a desktop picker menu — choose any
+  desktop to switch to (the current one is check-marked). The name OSD is
+  still available from the tray menu and the ShowName hotkey.
+
 ## 1.1.1 (2026-08-21)
 
 - Restart automatically when the display configuration changes
