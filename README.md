@@ -63,8 +63,11 @@ per-window rules.
    anywhere. It bundles `VirtualDesktopAccessor.dll` (see THIRD-PARTY.txt).
 2. Run `DeskPilot.exe`. A default config file is created on first start.
 
-The exes are unsigned, so SmartScreen may warn on first run
-(*More info → Run anyway*).
+`DeskPilot.exe` is the unmodified official AutoHotkey v2 interpreter,
+renamed — when started it loads the `DeskPilot.ahk` script beside it, and the
+arrow helpers run the same way. All application code ships as readable text,
+and the binary is byte-identical to the official AutoHotkey release (which
+also keeps antivirus false positives away).
 
 ### Option B — run the script
 

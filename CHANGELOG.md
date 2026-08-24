@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.3 (2026-08-24)
+
+- The release zip now ships the unmodified official AutoHotkey v2
+  interpreter renamed to `DeskPilot.exe`, next to the plain-text scripts,
+  instead of Ahk2Exe-compiled binaries. Compiled output was a unique,
+  unsigned exe per release and kept tripping Defender's cloud heuristics
+  on managed machines; the stock interpreter is byte-identical to the
+  official release and keeps its reputation. `DeskPilotArrow.exe` is gone —
+  the arrow helpers run through the interpreter instead.
+
 ## 1.3.2 (2026-08-21)
 
 - Fix: the name label blinked whenever the taskbar's composition surface
