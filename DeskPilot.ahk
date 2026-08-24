@@ -1,5 +1,5 @@
 ;===============================================================================
-; DeskPilot — v1.3.2 (2026-08-21)
+; DeskPilot — v1.3.3 (2026-08-24)
 ;
 ; * OSD showing the desktop name on every desktop switch.
 ; * Tray icon with the active desktop's number (icons\d1.ico - d9.ico).

@@ -1,6 +1,14 @@
 Third-party components
 ======================
 
+AutoHotkey v2 interpreter
+-------------------------
+DeskPilot.exe is the unmodified official AutoHotkey64.exe, renamed; it runs
+the DeskPilot.ahk script beside it (DeskPilotArrow.ahk is run the same way).
+Copyright (c) AutoHotkey Foundation and contributors
+https://github.com/AutoHotkey/AutoHotkey
+Licensed under the GNU General Public License v2.
+
 VirtualDesktopAccessor.dll
 --------------------------
 Copyright (c) Jarkko Pöyry (Ciantic)

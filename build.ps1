@@ -1,7 +1,16 @@
 # build.ps1 - builds the portable DeskPilot release zip into dist\.
-# Downloads the toolchain (Ahk2Exe, AutoHotkey v2 base, VirtualDesktopAccessor.dll)
+# Downloads the toolchain (AutoHotkey v2 base, VirtualDesktopAccessor.dll)
 # into build\ on first run and caches it there. Works in Windows PowerShell 5.1
 # and PowerShell 7 (used by the GitHub Actions release workflow).
+#
+# The zip ships the UNMODIFIED official AutoHotkey64.exe renamed to
+# DeskPilot.exe, next to the plain-text scripts: run with no arguments, the
+# interpreter loads the script matching its own name (DeskPilot.ahk). The
+# arrow helpers run uncompiled via A_AhkPath, so DeskPilotArrow.exe is no
+# longer built. Ahk2Exe-compiled output was a unique unsigned binary per
+# release and kept tripping Defender's cloud/ML heuristics on managed
+# machines; the stock interpreter stays byte-identical to the official
+# release and keeps its reputation.
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -14,15 +23,6 @@ New-Item -ItemType Directory -Force $tools | Out-Null
 $header = (Get-Content (Join-Path $root 'DeskPilot.ahk') -TotalCount 5) -join ' '
 $version = if ($header -match 'v(\d+\.\d+\.\d+)') { $Matches[1] } else { '0.0.0' }
 Write-Host "Building DeskPilot $version"
-
-$ahk2exe = Join-Path $tools 'compiler\Ahk2Exe.exe'
-if (-not (Test-Path $ahk2exe)) {
-    Write-Host 'Downloading Ahk2Exe...'
-    $rel = Invoke-RestMethod 'https://api.github.com/repos/AutoHotkey/Ahk2Exe/releases/latest'
-    $asset = $rel.assets | Where-Object { $_.name -like '*.zip' } | Select-Object -First 1
-    Invoke-WebRequest $asset.browser_download_url -OutFile (Join-Path $tools 'ahk2exe.zip')
-    Expand-Archive (Join-Path $tools 'ahk2exe.zip') (Join-Path $tools 'compiler') -Force
-}
 
 $base = Join-Path $tools 'base\AutoHotkey64.exe'
 if (-not (Test-Path $base)) {
@@ -56,22 +56,17 @@ if (Test-Path $dist) {
 }
 New-Item -ItemType Directory -Force (Join-Path $dist 'icons') | Out-Null
 
-function Compile($in, $out, $icon) {
-    $p = Start-Process -FilePath $ahk2exe -ArgumentList "/in `"$in`" /out `"$out`" /base `"$base`" /icon `"$icon`" /silent verbose" -Wait -PassThru -WindowStyle Hidden
-    if ($p.ExitCode -ne 0 -or -not (Test-Path $out)) {
-        throw "Ahk2Exe failed for $in (exit code $($p.ExitCode))"
-    }
-    Write-Host "Compiled $(Split-Path $out -Leaf)"
-}
-
-Compile (Join-Path $root 'DeskPilot.ahk') (Join-Path $dist 'DeskPilot.exe') (Join-Path $root 'icons\app.ico')
-Compile (Join-Path $root 'DeskPilotArrow.ahk') (Join-Path $dist 'DeskPilotArrow.exe') (Join-Path $root 'icons\pil_ho.ico')
+# the renamed stock interpreter auto-loads DeskPilot.ahk beside it;
+# the arrow helpers are launched uncompiled via A_AhkPath
+Copy-Item $base (Join-Path $dist 'DeskPilot.exe')
+Copy-Item (Join-Path $root 'DeskPilot.ahk') $dist
+Copy-Item (Join-Path $root 'DeskPilotArrow.ahk') $dist
 
 Copy-Item (Join-Path $root 'icons\*.ico') (Join-Path $dist 'icons')
 Copy-Item $dll $dist
 Copy-Item (Join-Path $root 'THIRD-PARTY.txt') $dist
 
 $zip = Join-Path $dist "DeskPilot-$version.zip"
-$innehall = @('DeskPilot.exe', 'DeskPilotArrow.exe', 'icons', 'VirtualDesktopAccessor.dll', 'THIRD-PARTY.txt') | ForEach-Object { Join-Path $dist $_ }
+$innehall = @('DeskPilot.exe', 'DeskPilot.ahk', 'DeskPilotArrow.ahk', 'icons', 'VirtualDesktopAccessor.dll', 'THIRD-PARTY.txt') | ForEach-Object { Join-Path $dist $_ }
 Compress-Archive -Path $innehall -DestinationPath $zip -Force
 Write-Host "Done: $zip"
