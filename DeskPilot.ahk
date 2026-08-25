@@ -1,6 +1,8 @@
 ;===============================================================================
-; DeskPilot — v1.3.3 (2026-08-24)
+; DeskPilot — v1.4.0 (2026-08-25)
 ;
+; * Title bar menu item "Show on all desktops" — pins a window so it follows
+;   you everywhere; checkable, and reflects the window's current state.
 ; * OSD showing the desktop name on every desktop switch.
 ; * Tray icon with the active desktop's number (icons\d1.ico - d9.ico).
 ; * Configurable hotkeys (Virtual desktop assistant config.ini):
@@ -317,6 +319,7 @@ T(k) {
         "moveFailed", "Could not move the window",
         "menuMoveTo", "Move to desktop", "menuMoveFollow", "Move and follow",
         "menuAlwaysPre", "Always move `"", "menuAlwaysPost", "`" to",
+        "menuPin", "Show on all desktops",
         "current", "  (current)",
         "ruleTitle", "New window rule",
         "rulePrompt1", "Regex matching titles of windows that should always be moved to ",
@@ -334,6 +337,7 @@ T(k) {
         "moveFailed", "Kunde inte flytta fönstret",
         "menuMoveTo", "Flytta till skrivbord", "menuMoveFollow", "Flytta och följ efter",
         "menuAlwaysPre", "Flytta alltid `"", "menuAlwaysPost", "`" till",
+        "menuPin", "Visa på alla skrivbord",
         "current", "  (aktuellt)",
         "ruleTitle", "Ny fönsterregel",
         "rulePrompt1", "Regex som matchar titlar på fönster som alltid ska flyttas till ",
@@ -684,7 +688,7 @@ TitelHögerNer(*) {
 ; as WM_SYSCOMMAND. Apps with a fully custom caption menu (Edge/Chrome) get
 ; the click untouched; Shift+right-click shows our menu even there.
 VisaFönsterMeny(*) {
-    static FLYTTA_BAS := 0xBE20, FÖLJ_BAS := 0xBE40, REGEL_BAS := 0xBE60
+    static FLYTTA_BAS := 0xBE20, FÖLJ_BAS := 0xBE40, REGEL_BAS := 0xBE60, PIN_ID := 0xBE10
     global g_menyÖppen
     ; the TrackPopupMenu loop pumps messages, so a new right-click during an
     ; open menu re-enters here and stacks menus — close instead
@@ -753,6 +757,9 @@ VisaFönsterMeny(*) {
     DllCall("AppendMenuW", "ptr", hSys, "uint", 0x10, "uptr", hFölj, "wstr", T("menuMoveFollow"))
     DllCall("AppendMenuW", "ptr", hSys, "uint", 0x10, "uptr", hAlltid
         , "wstr", T("menuAlwaysPre") kort T("menuAlwaysPost"))
+    if g_dllLaddad
+        DllCall("AppendMenuW", "ptr", hSys, "uint", ÄrPinnat(win) ? 0x8 : 0, "uptr", PIN_ID
+            , "wstr", T("menuPin"))   ; MF_CHECKED when already pinned
 
     ; foreground fix: without it the menu closes immediately when Windows'
     ; foreground lock denies a background process (our eaten click never
@@ -780,6 +787,8 @@ VisaFönsterMeny(*) {
         FlyttaFönsterTill(win, val - FÖLJ_BAS, true)
     else if (val > REGEL_BAS && val <= REGEL_BAS + 9)
         NyRegelVal(win, val - REGEL_BAS)
+    else if (val = PIN_ID)
+        VäxlaPinning(win)
     else
         PostMessage(0x112, val, lp, , win)   ; standard/injected items → the window
 }
@@ -800,8 +809,10 @@ RensaVåraPoster(hSys) {
         ; match BOTH languages: leftovers may predate a language switch
         if (txt = "Flytta till skrivbord" || txt = "Flytta och följ efter"
             || SubStr(txt, 1, 14) = "Flytta alltid "
+            || txt = "Visa på alla skrivbord"
             || txt = "Move to desktop" || txt = "Move and follow"
-            || SubStr(txt, 1, 12) = "Always move ") {
+            || SubStr(txt, 1, 12) = "Always move "
+            || txt = "Show on all desktops") {
             DllCall("RemoveMenu", "ptr", hSys, "uint", antal - 1, "uint", 0x400)
             borttaget := true
             continue
@@ -914,6 +925,11 @@ VisaReplikaMeny(win, s, vidFönstret := false) {
     m.Add(T("menuMoveTo"), flytta)
     m.Add(T("menuMoveFollow"), följ)
     m.Add(T("menuAlwaysPre") kort T("menuAlwaysPost"), alltid)
+    if g_dllLaddad {
+        m.Add(T("menuPin"), VäxlaPinning.Bind(win))
+        if ÄrPinnat(win)
+            m.Check(T("menuPin"))
+    }
     if vidFönstret {
         x := 0, y := 0
         try WinGetPos(&x, &y, , , win)
@@ -926,6 +942,33 @@ VisaReplikaMeny(win, s, vidFönstret := false) {
 
 FlyttaMenyVal(win, n, följ, *) {
     FlyttaFönsterTill(win, n, följ)
+}
+
+; Is this window pinned to every desktop? Every caller goes through here, because
+; an older VirtualDesktopAccessor.dll may not export IsPinnedWindow at all — and an
+; unguarded DllCall in the menu builder would take the whole title bar menu down
+; with it, not just the pin item.
+ÄrPinnat(win) {
+    global g_dllLaddad
+    if !g_dllLaddad
+        return false
+    r := 0
+    try r := DllCall("VirtualDesktopAccessor\IsPinnedWindow", "ptr", win, "int")
+    return r = 1
+}
+
+; Toggle "show on all desktops" (window pinning) via the dll. The change is
+; visible instantly, so no OSD feedback is needed.
+VäxlaPinning(win, *) {
+    global g_dllLaddad
+    if (!g_dllLaddad || !WinExist(win))
+        return
+    try {
+        if ÄrPinnat(win)
+            DllCall("VirtualDesktopAccessor\UnPinWindow", "ptr", win)
+        else
+            DllCall("VirtualDesktopAccessor\PinWindow", "ptr", win)
+    }
 }
 
 NyRegelVal(win, n, *) {
