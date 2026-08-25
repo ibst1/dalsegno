@@ -35,8 +35,10 @@ per-window rules.
   click.
 - **Title bar menu** — right-click any window's title bar to get the window's
   *real* system menu (including items added by the app itself or tools like
-  PowerToys) with three extra items at the bottom: move to desktop, move and
-  follow, and *always move windows like this* (creates a rule).
+  PowerToys) with four extra items at the bottom: move to desktop, move and
+  follow, *always move windows like this* (creates a rule), and *show on all
+  desktops* (a checkable toggle that pins the window so it is visible on
+  every desktop).
 - **Window rules** — regex rules that automatically move matching windows to
   a given desktop the moment they appear or change title.
 - **IPC** — other scripts can control desktops via a window message (see below).
