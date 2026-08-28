@@ -109,9 +109,11 @@ key name (`Right`, `F13`, `Numpad1`…). An empty value disables that binding.
 | | `NameInTray` | `1` | Desktop name as text on the taskbar |
 | `[Mouse]` | `Wheel` | `1` | Mouse wheel over the taskbar switches desktop |
 | | `ArrowIcons` | `1` | The two clickable tray arrows |
-| | `TitleMenu` | `1` | Right-click title bar menu |
-| | `TitleMenuExclude` | *(empty)* | Process regex: apps whose title clicks are left completely untouched (menu via Shift+right-click instead) |
-| | `TitleMenuBand` | `(?i)^olk\.exe$` | Process regex: apps whose custom title bars report client area everywhere (new Outlook) — plain right-click in the top ~44 px band shows the menu anyway |
+| | `TitleMenu` | `1` | The window menu (see below) |
+| | `MenuModifier` | `CapsLock` | Held down to open the menu. Any key name — `CapsLock`, `Shift`, `Ctrl`, `§`, `XButton1` |
+| | `MenuButton` | `RButton` | Pressed with the modifier — `RButton`, `MButton`, `XButton1`, `XButton2` |
+| | `MenuWholeWindow` | `1` | Menu opens anywhere in the window; `0` restricts it to the title bar |
+| | `TitleMenuExclude` | *(empty)* | Process regex: apps where the combination passes through untouched |
 | `[Rules]` | `RuleN` | — | Auto-move rules, see below |
 
 > **Note:** the digit prefixes override two Windows taskbar shortcuts for
@@ -166,24 +168,34 @@ Regex facts that matter here (AutoHotkey uses PCRE):
   matching — so if you manually drag a rule window elsewhere it stays there.
   All existing windows are evaluated once when the script starts.
 
-`TitleMenuExclude` and `TitleMenuBand` use the same regex flavor but match
-**process executable names** (e.g. `msedge.exe`), not titles. Example: to
-keep Edge's own title bar menu on plain right-click, set
-`TitleMenuExclude=(?i)^(msedge|chrome)\.exe$` — the move menu is then still
-available with Shift+right-click.
+`TitleMenuExclude` uses the same regex flavor but matches **process
+executable names** (e.g. `msedge.exe`), not titles — for apps that use the
+same combination themselves.
 
-## The title bar menu
+## The window menu
 
-The menu you get on right-click is the window's **real** system menu shown by
-this script (the same technique Explorer uses for taskbar thumbnail menus),
-so anything other software injects — PowerToys' *Always on top*, Edge's
-vertical-tabs toggles — appears and works. The desktop items are appended
-while the menu is open and removed afterwards. Right-clicking again while
-the menu is open closes it.
+Hold **CapsLock** and right-click anywhere in a window. The plain right-click
+is left entirely to the app, so its own context and title bar menus keep
+working exactly as before. Pressing the combination again closes the menu.
 
-Apps whose custom title bars only report a thin caption strip (VS Code) work
-best with a click on the upper edge; Shift+right-click accepts the whole top
-band of any window as title bar.
+The menu is DeskPilot's own. Earlier versions appended the desktop items to
+the window's *real* system menu instead, which had two consequences: the app
+rendered our items inside its own caption menu as well, and taking the plain
+right-click put us in competition with the app for the same click. Together
+those produced double menus, flicker, and menus built for the app's own menu
+popup rather than for the window.
+
+The modifier is read as **physical key state** and is never registered as a
+hotkey prefix. Registering `CapsLock & RButton` as a combination would make
+AutoHotkey hold CapsLock back from other scripts' keyboard hooks, so a
+modifier that another script already owns still works here.
+
+The menu is shown per-monitor DPI aware for as long as it is up. Without that,
+on a desktop with mixed scaling it is drawn at the wrong size and placed by
+virtualized coordinates that resolve against the wrong monitor.
+
+When [DalSegno](https://github.com/ibst1/dalsegno) is running, its per-window
+items (save, move to, forget saved position) appear in the same menu.
 
 ## IPC
 
