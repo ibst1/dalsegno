@@ -101,6 +101,7 @@ PollSkrivbord()      ; set the icon right away; the first call shows no OSD
 SetTimer(PollSkrivbord, 250)
 SetTimer(BrickaVakt, 250)   ; keeps the name label placed, visible and on top
 SetTimer(RegelSvep, 1000)   ; applies window rules to new/retitled windows
+SetTimer(ModifierarVakt, 5000)  ; clears a logically stuck menu modifier
 
 if A_Args.Length && A_Args[1] = "/show"
     VisaOsd()
@@ -231,6 +232,30 @@ LäsKonfig() {
         TrayTip(T("invalidHotkeys") "`n" fel, "DeskPilot", "Iconx")
         try FileAppend(FormatTime() "  Invalid hotkeys: " StrReplace(fel, "`n", " / ") "`n"
             , A_ScriptDir "\error.log", "UTF-8")
+    }
+}
+
+; The menu modifier can get logically stuck: several scripts hook the keyboard
+; here, and when one of them swallows the key-UP event the system keeps the key
+; registered as held. Every plain right-click then passes the criterion and
+; opens our menu. A held modifier is a one-second gesture, so half a minute of
+; continuous "down" is never real - send the missing up-event and reset the
+; state. Keyboard assistant keeps a watchdog for the same phantom.
+ModifierarVakt() {
+    static sedan := 0
+    nere := false
+    try nere := GetKeyState(g_menyModifierare, "P")
+    if !nere {
+        sedan := 0
+        return
+    }
+    if !sedan {
+        sedan := A_TickCount
+        return
+    }
+    if (A_TickCount - sedan > 30000) {
+        try Send("{" g_menyModifierare " up}")
+        sedan := 0
     }
 }
 
