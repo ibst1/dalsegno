@@ -1,0 +1,9 @@
+# User configuration (auto-generated with defaults on first run)
+DalSegno config.ini
+
+# Local state: saved window positions, toggles, language, GUI geometry
+DalSegno positions.ini
+
+# Build output and cached toolchain (if a build pipeline is added later)
+dist/
+build/
