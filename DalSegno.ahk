@@ -10,12 +10,14 @@
 ;  moved right back there. The script's own moves are NEVER saved - the
 ;  Windows event that triggers saving only fires for manual moves.
 ;
-;  A window's identity is normally  program + window class + exact title.
-;  In the config file (tray menu -> Settings) you can add TITLE RULES: all
-;  windows whose title contains a given text then share one saved position
-;  regardless of the rest of the title - that is how the old LIMS move script
-;  worked, and it is needed for e.g. LIMS popup windows that carry a URL or
-;  record id in the title.
+;  A window's identity is normally  program + window class  - so all normal
+;  windows of an app share one position, and the last one you moved defines
+;  it (titles are useless as identity: every new Notepad or Explorer window
+;  has a different title). TITLE RULES in the config file (tray menu ->
+;  Settings) carve out exceptions: all windows whose title contains a given
+;  text form their own group with their own position, regardless of program.
+;  That is how specific popups (e.g. LIMS windows) get their own spots even
+;  though they live in the same browser as everything else.
 ;
 ;  Positions are stored per monitor setup AND computer, so laptop/docked and
 ;  different machines stay separate even though the script lives in OneDrive.
@@ -28,9 +30,12 @@
 ;    § + F10         toggle: move new windows automatically
 ;    § + F5          restart the script
 ;
-;    Ctrl + right-click on a window's title bar opens a DalSegno menu for
-;    that window: save/restore/forget its position, or create a title rule
-;    from it. (Plain right-click is left alone - DeskPilot owns it.)
+;    Right-clicking a window's title bar reaches DalSegno's items in the
+;    window menu: save/restore/forget its position, or create a title rule
+;    from it. When DeskPilot is running the items live inside DeskPilot's
+;    title bar menu (integration over the DALSEGNO_CMD window message);
+;    otherwise DalSegno shows the window's real system menu itself, with
+;    its items appended.
 ;
 ;  The GUI (WebView2, same architecture as Encore/Expanto) shows saved
 ;  positions, open windows and rules. Left-clicking the tray icon opens it.
@@ -83,12 +88,13 @@ LoadConfig()
 ;          the new setup.
 ;   done   the window is fully handled and is never touched again.
 winInfo := Map()
-dupWarned := Map()        ; keys we have already shown a duplicate warning for
 firstScan := true         ; windows that existed before startup are not moved
 PLACEMENT_GRACE_MS := 10000
 
 ; --- GUI (WebView2) - created lazily on first open ----------------------------
 g_uiWin := 0, g_uiCtrl := 0, g_uiCore := 0, g_uiReady := false
+
+g_menuOpen := false   ; the fallback title bar menu is showing (see below)
 
 ; --- Autosave: Windows tells us exactly when a drag ends ----------------------
 ; EVENT_SYSTEM_MOVESIZEEND fires when the user releases a window after moving
@@ -116,11 +122,20 @@ SetTimer(ScanWindows, 800)
 § & F10::ToggleMove()
 § & F5::Reload
 
-; Ctrl + right-click on a title bar: per-window menu (save/restore/forget/
-; create rule). Plain right-click is untouched - DeskPilot uses it.
-#HotIf MouseOverTitlebar()
-^RButton::ShowTitleMenu()
+; Right-click on a title bar shows the window's real system menu with
+; DalSegno's items appended - but ONLY when DeskPilot is not running. When it
+; is, DeskPilot owns that click and shows its enhanced system menu, and it
+; includes DalSegno's items there via the DALSEGNO_CMD message instead.
+#HotIf TitlebarFallbackActive()
+RButton::EatRightDown()
+RButton Up::ShowSystemMenuWithItems()
 #HotIf
+
+; External command interface. DeskPilot (and anything else) talks to us
+; through this registered message: wParam = target window, lParam 0 = query
+; (returns 1 = manageable, +2 = a saved position exists), 1 = save position,
+; 2 = move to saved, 3 = forget, 4 = create title rule in the GUI.
+OnMessage(DllCall("RegisterWindowMessage", "str", "DALSEGNO_CMD", "uint"), ExternalCommand)
 
 ; =============================================================================
 ;  Interface strings (English / Swedish)
@@ -155,8 +170,6 @@ Tr(id) {
         "forgot",         "Forgot the position for:",
         "nothingForget",  "No saved position to forget for the active window.",
         "movedAll",       "{1} windows were moved to their saved positions.",
-        "dupTitle",       "Duplicate windows",
-        "dupText",        "Several windows share the same identity.`nNo new position is saved until only one remains.`n(Save deliberately with § + S.)",
         "noMatch",        "No open window matches that saved position.",
         "rulesSaved",     "Rules saved.",
         "configReloaded", "{1} title rules, {2} ignored programs, {3} ignored titles.",
@@ -176,9 +189,10 @@ Tr(id) {
         § + F10          toggle: move new windows automatically
         § + F5           restart the script
 
-        Ctrl + right-click on a window's title bar opens a menu for
-        that window: save, restore or forget its position, or create
-        a title rule from it.
+        Right-click on a window's title bar to find DalSegno's items
+        in the window menu: save, restore or forget its position, or
+        create a title rule. (They appear inside DeskPilot's menu
+        when DeskPilot is running.)
 
         Positions are also saved automatically every time you drag a
         window and drop it (can be turned off in the menu).
@@ -209,8 +223,6 @@ Tr(id) {
         "forgot",         "Glömde läget för:",
         "nothingForget",  "Inget sparat läge att glömma för det aktiva fönstret.",
         "movedAll",       "{1} fönster flyttades till sina sparade lägen.",
-        "dupTitle",       "Dubbla fönster",
-        "dupText",        "Flera fönster med samma identitet är öppna.`nInget nytt läge sparas förrän bara ett är kvar.`n(Spara medvetet med § + S.)",
         "noMatch",        "Inget öppet fönster matchar det sparade läget.",
         "rulesSaved",     "Regler sparade.",
         "configReloaded", "{1} titelregler, {2} ignorerade program, {3} ignorerade titlar.",
@@ -230,9 +242,9 @@ Tr(id) {
         § + F10          av/på: flytta nya fönster automatiskt
         § + F5           starta om skriptet
 
-        Ctrl + högerklick på ett fönsters titelrad öppnar en meny för
-        just det fönstret: spara, återställ eller glöm läget, eller
-        skapa en titelregel från det.
+        Högerklicka på ett fönsters titelrad så finns DalSegnos poster
+        i fönstermenyn: spara, återställ eller glöm läget, eller skapa
+        en titelregel. (De visas i DeskPilots meny när DeskPilot kör.)
 
         Läget sparas också automatiskt varje gång du drar ett fönster
         och släpper det (kan stängas av i menyn).
@@ -295,7 +307,11 @@ KeyFor(hwnd) {
     for rule in titleRules
         if (rule.regex ? RegExMatch(title, rule.pattern) : InStr(title, rule.pattern))
             return "rule:" rule.alias
-    return rulesOnly ? "" : exe "|" cls "|" title
+    ; Deliberately WITHOUT the title: titles embed documents, tabs and record
+    ; ids, so an exact-title identity would almost never match a new window.
+    ; All normal windows of an app share one position - the last one the user
+    ; moved defines it. Title rules above carve out per-popup exceptions.
+    return rulesOnly ? "" : exe "|" cls
 }
 
 ; UWP apps leave invisible "cloaked" windows behind that would otherwise get
@@ -431,48 +447,30 @@ ScanWindows() {
 }
 
 ; Called by Windows when the user has released a window after moving/resizing.
+; No duplicate guard: the user just dragged THIS window, so this window is
+; the definition - even when more windows of the same app are open.
 OnMoveEnd(hHook, event, hwnd, idObject, idChild, idThread, time) {
-    global autoSaveEnabled, winInfo
+    global autoSaveEnabled
     if (idObject != 0 || !autoSaveEnabled)   ; the window itself, not a child object
         return
-    key := KeyFor(hwnd)
+    ; Deferred out of the event callback, and with Aero snap (dragging to a
+    ; screen edge) the window is resized just AFTER the drag ends - the delay
+    ; makes the snapped geometry what gets stored.
+    SetTimer(AutoSave.Bind(hwnd), -200)
+}
+
+AutoSave(hwnd) {
+    global winInfo
+    key := ""
+    try key := KeyFor(hwnd)
     if (key = "")
         return
-    ; Duplicates: with two windows sharing the same key there is no telling
-    ; which one should define the position - and saving the wrong one would
-    ; drag BOTH there next time. Save nothing until only one remains (or save
-    ; deliberately with § + S).
-    if (CountForKey(key) > 1) {
-        WarnDuplicate(key)
-        return
-    }
-    ; With Aero snap (dragging to a screen edge) the window is resized just
-    ; AFTER the drag ends - wait it out so the snapped position is saved.
-    Sleep 150
     if SavePos(key, hwnd) {
         Toast(Tr("toastSaved"))
         if winInfo.Has(hwnd)
             winInfo[hwnd].done := true   ; do not move back what was just dropped
         PushStateSoon()
     }
-}
-
-CountForKey(key) {
-    n := 0
-    for hwnd in WinGetList()
-        if (KeyFor(hwnd) = key)
-            n++
-    return n
-}
-
-; One tray notice per key per run - otherwise it would repeat on every drag
-; for as long as the duplicate exists.
-WarnDuplicate(key) {
-    global dupWarned
-    if dupWarned.Has(key)
-        return
-    dupWarned[key] := true
-    TrayTip Tr("dupText"), Tr("dupTitle")
 }
 
 ; Small tooltip at the mouse pointer - a TrayTip on every drag would be too
@@ -547,15 +545,56 @@ ApplyAll(*) {
 }
 
 ; =============================================================================
-;  Title bar menu (Ctrl + right-click)
+;  Title bar menu - DalSegno's items in the window's regular system menu
+;
+;  Two roads lead there:
+;  - DeskPilot running: DeskPilot owns title bar right-clicks and shows the
+;    window's real system menu; it queries us over DALSEGNO_CMD and renders
+;    our items inside its menu. Nothing to hook here.
+;  - DeskPilot not running: we take the right-click ourselves and show the
+;    window's real system menu with our items appended at the bottom - the
+;    same technique DeskPilot uses (TrackPopupMenu with TPM_RETURNCMD;
+;    standard items are forwarded to the window as WM_SYSCOMMAND).
 ; =============================================================================
 
+; Hotkey criterion: only when DeskPilot is absent and the mouse is on a
+; title bar. While our menu is open every right-click is eaten (the handler
+; closes the menu) - without that fast path the hit test can time out and
+; let the click through physically.
+TitlebarFallbackActive(*) {
+    global g_menuOpen
+    if g_menuOpen
+        return true
+    if DeskPilotRunning()
+        return false
+    return MouseOverTitlebar()
+}
+
+; Cached briefly: this runs on every right-click, and the check needs
+; DetectHiddenWindows plus a title scan.
+DeskPilotRunning() {
+    static last := 0, val := false
+    if (A_TickCount - last > 2000) {
+        last := A_TickCount
+        prev := A_DetectHiddenWindows
+        DetectHiddenWindows true
+        SetTitleMatchMode 2
+        val := WinExist("\DeskPilot.ahk ahk_class AutoHotkey") ? true : false
+        DetectHiddenWindows prev
+    }
+    return val
+}
+
+EatRightDown(*) {
+    ; eats the right-click so the native menu never shows; the menu comes on
+    ; release, otherwise the button-up can accidentally pick the first row
+}
+
 ; True when the mouse is on a window title bar (WM_NCHITTEST = HTCAPTION).
-; Runs as a hotkey criterion on every Ctrl+right-click, hence
-; SendMessageTimeout with a short deadline so a hung window never freezes
-; the mouse. Same technique as DeskPilot; custom-drawn captions (VS Code,
-; browsers, new Outlook) report HTCLIENT, so the top band is accepted too -
-; the Ctrl modifier already makes the gesture deliberate.
+; Runs as a hotkey criterion on every right-click, hence SendMessageTimeout
+; with a short deadline so a hung window never freezes the mouse. Custom-
+; drawn captions (VS Code, browsers, new Outlook) report HTCLIENT, so the
+; top band is accepted there too.
 MouseOverTitlebar(*) {
     static ownPid := ProcessExist()
     try {
@@ -584,24 +623,120 @@ MouseOverTitlebar(*) {
         return false
 }
 
-ShowTitleMenu() {
+; Shows the window's REAL system menu with our items appended at the bottom.
+; TrackPopupMenu with TPM_RETURNCMD returns the selection to us; standard
+; items (and ones injected by others, e.g. PowerToys) are forwarded to the
+; window as WM_SYSCOMMAND. Same technique as DeskPilot.
+ShowSystemMenuWithItems(*) {
+    static DS_BASE := 0xBE80
+    global g_menuOpen
+    ; TrackPopupMenu pumps messages, so a new right-click during an open
+    ; menu re-enters here and would stack menus - close instead
+    if g_menuOpen {
+        DllCall("EndMenu")
+        return
+    }
     MouseGetPos , , &win
     if (!win || !WinExist(win))
         return
-    key := KeyFor(win)
-    title := "", exe := ""
-    try title := WinGetTitle(win)
-    try exe := WinGetProcessName(win)
-    hasSaved := key != "" && LoadPos(key) != ""
-
-    short := StrLen(title) > 40 ? SubStr(title, 1, 38) "…" : title
-    short := StrReplace(short, "&", "&&")
-    m := Menu()
-    if (short != "") {
-        m.Add(short, (*) => 0)   ; header row: which window this menu is about
-        m.Disable(short)
-        m.Add()
+    CoordMode("Mouse", "Screen")
+    MouseGetPos(&mx, &my)
+    lp := ((my & 0xFFFF) << 16) | (mx & 0xFFFF)
+    hSys := DllCall("GetSystemMenu", "ptr", win, "int", 0, "ptr")
+    if !hSys {
+        ShowFallbackPopup(win)   ; no system menu at all: our own small menu
+        return
     }
+    ; let the window (and any injectors) refresh the menu first
+    DllCall("SendMessageTimeoutW", "ptr", win, "uint", 0x116, "ptr", hSys, "ptr", 0
+        , "uint", 0x2, "uint", 100, "ptr*", &tmp := 0)   ; WM_INITMENU
+    CleanupMenuItems(hSys)   ; leftovers from a killed earlier instance
+
+    key := KeyFor(win)
+    if (key != "") {
+        hasSaved := LoadPos(key) != ""
+        DllCall("AppendMenuW", "ptr", hSys, "uint", 0x800, "uptr", 0, "ptr", 0)  ; separator
+        DllCall("AppendMenuW", "ptr", hSys, "uint", 0, "uptr", DS_BASE + 1, "wstr", Tr("tmSave"))
+        DllCall("AppendMenuW", "ptr", hSys, "uint", hasSaved ? 0 : 0x3, "uptr", DS_BASE + 2, "wstr", Tr("tmMove"))
+        DllCall("AppendMenuW", "ptr", hSys, "uint", hasSaved ? 0 : 0x3, "uptr", DS_BASE + 3, "wstr", Tr("tmForget"))
+        DllCall("AppendMenuW", "ptr", hSys, "uint", 0, "uptr", DS_BASE + 4, "wstr", Tr("tmRule"))
+    }
+
+    ; foreground fix: without it the menu closes immediately when Windows'
+    ; foreground lock denies a background process
+    ClaimForeground()
+    g_menuOpen := true
+    val := DllCall("TrackPopupMenuEx", "ptr", hSys
+        , "uint", 0x182, "int", mx, "int", my, "ptr", A_ScriptHwnd, "ptr", 0, "int")
+    g_menuOpen := false
+    PostMessage(0x0, 0, 0, , A_ScriptHwnd)   ; WM_NULL - classic menu teardown fix
+
+    CleanupMenuItems(hSys)   ; remove our items again
+    if !val
+        return
+    if (val > DS_BASE && val <= DS_BASE + 4)
+        DispatchMenuAction(win, val - DS_BASE)
+    else
+        PostMessage(0x112, val, lp, , win)   ; standard/injected items → the window
+}
+
+; Removes our appended items (and the separator above them) from the end of
+; a system menu. String-based, in both languages, so leftovers from a killed
+; earlier instance or a language switch are cleaned up too.
+CleanupMenuItems(hSys) {
+    removed := false
+    loop {
+        count := DllCall("GetMenuItemCount", "ptr", hSys, "int")
+        if count <= 0
+            return
+        buf := Buffer(512, 0)
+        DllCall("GetMenuStringW", "ptr", hSys, "uint", count - 1, "ptr", buf
+            , "int", 255, "uint", 0x400)   ; MF_BYPOSITION
+        txt := StrGet(buf)
+        if (txt = "Save window position" || txt = "Move to saved position"
+            || txt = "Forget saved position" || txt = "Create title rule…"
+            || txt = "Spara fönstrets läge" || txt = "Flytta till sparat läge"
+            || txt = "Glöm sparat läge" || txt = "Skapa titelregel…") {
+            DllCall("RemoveMenu", "ptr", hSys, "uint", count - 1, "uint", 0x400)
+            removed := true
+            continue
+        }
+        if (removed && txt = "") {
+            DllCall("RemoveMenu", "ptr", hSys, "uint", count - 1, "uint", 0x400)
+            removed := false
+            continue
+        }
+        return
+    }
+}
+
+; Windows' foreground lock denies background processes; borrow rights from
+; the current foreground window's thread and claim the foreground.
+ClaimForeground() {
+    ourThread := DllCall("GetCurrentThreadId", "uint")
+    fg := DllCall("GetForegroundWindow", "ptr")
+    fgThread := fg ? DllCall("GetWindowThreadProcessId", "ptr", fg, "ptr", 0, "uint") : 0
+    if fgThread
+        DllCall("AttachThreadInput", "uint", ourThread, "uint", fgThread, "int", 1)
+    DllCall("SetForegroundWindow", "ptr", A_ScriptHwnd)
+    if fgThread
+        DllCall("AttachThreadInput", "uint", ourThread, "uint", fgThread, "int", 0)
+}
+
+DispatchMenuAction(win, action) {
+    switch action {
+        case 1: TmSave(win)
+        case 2: TmMove(win)
+        case 3: TmForget(win)
+        case 4: TmCreateRuleFromWin(win)
+    }
+}
+
+; Fallback for windows without a system menu: our own small popup.
+ShowFallbackPopup(win) {
+    key := KeyFor(win)
+    hasSaved := key != "" && LoadPos(key) != ""
+    m := Menu()
     if (key != "") {
         m.Add(Tr("tmSave"), (*) => TmSave(win))
         m.Add(Tr("tmMove"), (*) => TmMove(win))
@@ -612,8 +747,29 @@ ShowTitleMenu() {
             m.Disable(Tr("tmForget"))
         m.Add()
     }
-    m.Add(Tr("tmRule"), (*) => TmCreateRule(exe, title))
+    m.Add(Tr("tmRule"), (*) => TmCreateRuleFromWin(win))
     m.Show()
+}
+
+; Handler for the DALSEGNO_CMD registered message (see the registration at
+; the top). Runs in our thread; the query path must stay quick because the
+; sender waits synchronously.
+ExternalCommand(wParam, lParam, msg, hwnd) {
+    target := wParam
+    if (lParam = 0) {   ; capability query
+        key := ""
+        try key := KeyFor(target)
+        if (key = "")
+            return 0
+        return LoadPos(key) != "" ? 3 : 1
+    }
+    switch lParam {
+        case 1: SetTimer(TmSave.Bind(target), -1)
+        case 2: SetTimer(TmMove.Bind(target), -1)
+        case 3: SetTimer(TmForget.Bind(target), -1)
+        case 4: SetTimer(TmCreateRuleFromWin.Bind(target), -1)
+    }
+    return 1
 }
 
 TmSave(hwnd) {
@@ -642,6 +798,13 @@ TmForget(hwnd) {
     try IniDelete(posIni, SectionFor(key))
     TrayTip Tr("forgot") "`n" SubStr(WinGetTitle(hwnd), 1, 60), Tr("appTitle")
     PushStateSoon()
+}
+
+TmCreateRuleFromWin(hwnd) {
+    exe := "", title := ""
+    try exe := WinGetProcessName(hwnd)
+    try title := WinGetTitle(hwnd)
+    TmCreateRule(exe, title)
 }
 
 ; Opens the GUI on the Rules tab with a new rule prefilled from the window:
