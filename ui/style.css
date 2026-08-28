@@ -51,6 +51,10 @@ button.primary { background: var(--accent); border-color: var(--accent2); color:
 button.primary:hover { background: var(--accent2); }
 button.small { padding: 2px 8px; font-size: 12px; }
 th.selcol, td.selcol { width: 28px; text-align: center; }
+.hkrow { display: flex; align-items: center; gap: 12px; margin: 4px 0; }
+.hkcombo { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hkkey { width: 90px; }
+.hklbl { color: var(--text-dim); }
 button.danger-armed { background: var(--red); border-color: #f05050; color: #fff; }
 
 .toggle {

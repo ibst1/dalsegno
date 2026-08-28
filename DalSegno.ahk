@@ -22,9 +22,11 @@
 ;  Positions are stored per monitor setup AND computer, so laptop/docked and
 ;  different machines stay separate even though the script lives in OneDrive.
 ;
-;  Hotkeys - hold the modifier ([Settings] Modifier, CapsLock by default):
+;  Hotkeys - hold the modifier ([Settings] Modifier, CapsLock by default).
+;  Defaults; every key is configurable in [Hotkeys] and on the GUI Settings tab:
 ;    Modifier + D           open the DalSegno window (GUI)
 ;    Modifier + S           save the active window's position
+;    Modifier + A           save all open windows' positions
 ;    Modifier + Backspace   forget the active window's saved position
 ;    Modifier + Home        move every open window to its saved position
 ;    Modifier + F10         toggle: move new windows automatically
@@ -78,6 +80,10 @@ if (g_lang != "en" && g_lang != "sv")
 g_modifier := "CapsLock"       ; held down for every hotkey here ([Settings] Modifier)
 g_autoSaveModOnly := true      ; autosave only when the modifier is held ([Settings] AutoSaveModifierOnly)
 g_menuButton := "RButton"      ; the window menu's button ([Settings] MenuButton)
+; Action hotkeys: key names pressed together with the modifier ([Hotkeys]).
+g_hk := Map("OpenUi", "d", "SaveActive", "s", "SaveAll", "a"
+    , "ApplyAll", "Home", "ForgetActive", "Backspace"
+    , "ToggleMove", "F10", "Reload", "F5")
 g_menuKeys := []
 g_actionKeys := []             ; the plain keys registered under the modifier
 
@@ -155,24 +161,24 @@ SetTimer(ModifierWatchdog, 5000)   ; clears a logically stuck modifier
 ; =============================================================================
 
 Tr(id) {
-    global g_lang, g_modifier
+    global g_lang, g_modifier, g_hk
     static L := Map(
     "en", Map(
         "appTitle",       "DalSegno Window Keeper",
-        "trayOpen",       "Open DalSegno Window Keeper ({mod} + D)",
-        "trayMove",       "Move new windows to saved positions ({mod} + F10)",
+        "trayOpen",       "Open DalSegno Window Keeper ({mod} + {kOpenUi})",
+        "trayMove",       "Move new windows to saved positions ({mod} + {kToggleMove})",
         "trayAutoSave",   "Save position when a window is moved by hand",
         "trayAutoSaveMod", "Save position when a window is moved with {mod} held",
         "traySaveAll",    "Save all open windows' positions",
         "savedAll",       "{1} window positions saved.",
         "trayToasts",     "Show a small toast when a position is saved",
-        "trayApplyAll",   "Move all open windows to their positions ({mod} + Home)",
+        "trayApplyAll",   "Move all open windows to their positions ({mod} + {kApplyAll})",
         "trayLanguage",   "Language",
         "trayConfig",     "Settings…",
         "trayReload",     "Reload settings",
         "trayPositions",  "Open saved positions…",
         "trayHotkeys",    "Hotkeys…",
-        "trayRestart",    "Restart ({mod} + F5)",
+        "trayRestart",    "Restart ({mod} + {kReload})",
         "trayExit",       "Exit",
         "moveOn",         "Automatic moving: ON",
         "moveOff",        "Automatic moving: OFF",
@@ -185,6 +191,8 @@ Tr(id) {
         "menuForget",     "Forget saved position",
         "menuRule",       "Create title rule…",
         "badMenuHotkey",  "MenuButton in the settings is not a valid button:",
+        "badHotkey",      "Not a valid key name:",
+        "dupHotkey",      "Already used by another hotkey:",
         "cannotHandle",   "The active window cannot be managed (no title, ignored, or matches no rule).",
         "cannotSave",     "Could not save - the window is minimized or maximized.",
         "cannotSaveWin",  "Could not save the position (window closed, minimized or maximized?).",
@@ -203,12 +211,13 @@ Tr(id) {
         "hkTitle",        "DalSegno Window Keeper - hotkeys",
         "hkText",         "
         (
-        {mod} + D            open the DalSegno window
-        {mod} + S            save the active window's position
-        {mod} + Backspace    forget the active window's saved position
-        {mod} + Home         move every open window to its saved position
-        {mod} + F10          toggle: move new windows automatically
-        {mod} + F5           restart the script
+        {mod} + {kOpenUi}  -  open the DalSegno window
+        {mod} + {kSaveActive}  -  save the active window's position
+        {mod} + {kSaveAll}  -  save all open windows' positions
+        {mod} + {kForgetActive}  -  forget the active window's saved position
+        {mod} + {kApplyAll}  -  move every open window to its saved position
+        {mod} + {kToggleMove}  -  toggle: move new windows automatically
+        {mod} + {kReload}  -  restart the script
 
         With DeskPilot running, right-click a window's title bar to
         find DalSegno's items in the window menu: save, restore or
@@ -219,20 +228,20 @@ Tr(id) {
         )"),
     "sv", Map(
         "appTitle",       "DalSegno Fönsterlägen",
-        "trayOpen",       "Öppna DalSegno Fönsterlägen ({mod} + D)",
-        "trayMove",       "Flytta nya fönster till sparade lägen ({mod} + F10)",
+        "trayOpen",       "Öppna DalSegno Fönsterlägen ({mod} + {kOpenUi})",
+        "trayMove",       "Flytta nya fönster till sparade lägen ({mod} + {kToggleMove})",
         "trayAutoSave",   "Spara läge när fönster flyttas för hand",
         "trayAutoSaveMod", "Spara läge när fönster flyttas med {mod} nedtryckt",
         "traySaveAll",    "Spara alla öppna fönsters lägen",
         "savedAll",       "{1} fönsterlägen sparade.",
         "trayToasts",     "Visa liten notis när läge sparas",
-        "trayApplyAll",   "Flytta alla öppna fönster till sina lägen ({mod} + Home)",
+        "trayApplyAll",   "Flytta alla öppna fönster till sina lägen ({mod} + {kApplyAll})",
         "trayLanguage",   "Språk",
         "trayConfig",     "Inställningar…",
         "trayReload",     "Läs om inställningar",
         "trayPositions",  "Öppna sparade lägen…",
         "trayHotkeys",    "Kortkommandon…",
-        "trayRestart",    "Starta om ({mod} + F5)",
+        "trayRestart",    "Starta om ({mod} + {kReload})",
         "trayExit",       "Avsluta",
         "moveOn",         "Automatisk flyttning: PÅ",
         "moveOff",        "Automatisk flyttning: AV",
@@ -245,6 +254,8 @@ Tr(id) {
         "menuForget",     "Glöm sparat läge",
         "menuRule",       "Skapa titelregel…",
         "badMenuHotkey",  "MenuButton i inställningarna är inte en giltig knapp:",
+        "badHotkey",      "Ogiltigt tangentnamn:",
+        "dupHotkey",      "Används redan av ett annat kortkommando:",
         "cannotHandle",   "Det aktiva fönstret hanteras inte (saknar titel, är ignorerat, eller matchar ingen regel).",
         "cannotSave",     "Kunde inte spara - fönstret är minimerat eller maximerat.",
         "cannotSaveWin",  "Kunde inte spara läget (fönstret stängt, minimerat eller maximerat?).",
@@ -263,12 +274,13 @@ Tr(id) {
         "hkTitle",        "DalSegno Fönsterlägen - kortkommandon",
         "hkText",         "
         (
-        {mod} + D            öppna DalSegno-fönstret
-        {mod} + S            spara det aktiva fönstrets läge
-        {mod} + Backspace    glöm det aktiva fönstrets sparade läge
-        {mod} + Home         flytta alla öppna fönster till sina sparade lägen
-        {mod} + F10          av/på: flytta nya fönster automatiskt
-        {mod} + F5           starta om skriptet
+        {mod} + {kOpenUi}  -  öppna DalSegno-fönstret
+        {mod} + {kSaveActive}  -  spara det aktiva fönstrets läge
+        {mod} + {kSaveAll}  -  spara alla öppna fönsters lägen
+        {mod} + {kForgetActive}  -  glöm det aktiva fönstrets sparade läge
+        {mod} + {kApplyAll}  -  flytta alla öppna fönster till sina sparade lägen
+        {mod} + {kToggleMove}  -  av/på: flytta nya fönster automatiskt
+        {mod} + {kReload}  -  starta om skriptet
 
         När DeskPilot kör: högerklicka på ett fönsters titelrad så
         finns DalSegnos poster i fönstermenyn: spara, återställ eller
@@ -278,8 +290,13 @@ Tr(id) {
         och släpper det (kan stängas av i menyn).
         )"))
     txt := L[L.Has(g_lang) ? g_lang : "en"][id]
-    ; the modifier is configurable, so the labels carry a placeholder
-    return InStr(txt, "{mod}") ? StrReplace(txt, "{mod}", g_modifier) : txt
+    ; the modifier and the keys are configurable, so labels carry placeholders
+    if InStr(txt, "{mod}")
+        txt := StrReplace(txt, "{mod}", g_modifier)
+    if InStr(txt, "{k")
+        for namn, key in g_hk
+            txt := StrReplace(txt, "{k" namn "}", key != "" ? key : "-")
+    return txt
 }
 
 SetLanguage(lang) {
@@ -672,21 +689,26 @@ ModifierHeld(*) {
         return false
 }
 
-; DalSegno's own actions, on that same modifier. Re-registered after a settings
-; reload, since the modifier can change; the criterion is what changes meaning,
-; so the keys themselves are simply registered once under it.
+; DalSegno's own actions, on that same modifier. The keys come from [Hotkeys]
+; and can change on any settings reload or GUI edit, so whatever was registered
+; last time is switched off first, under the same #HotIf context.
 ApplyActionHotkeys() {
-    global g_actionKeys
-    static actions := [["d", (*) => OpenUi()], ["s", (*) => SaveActive()]
-        , ["Backspace", (*) => ForgetActive()], ["Home", (*) => ApplyAll()]
-        , ["F10", (*) => ToggleMove()], ["F5", (*) => Reload()]]
-    if g_actionKeys.Length          ; the criterion is stateless - register once
-        return
+    global g_actionKeys, g_hk
+    static handlers := Map("OpenUi", (*) => OpenUi(), "SaveActive", (*) => SaveActive()
+        , "SaveAll", (*) => SaveAll(), "ApplyAll", (*) => ApplyAll()
+        , "ForgetActive", (*) => ForgetActive()
+        , "ToggleMove", (*) => ToggleMove(), "Reload", (*) => Reload())
     HotIf(ModifierHeld)
-    for a in actions {
+    for k in g_actionKeys
+        try Hotkey(k, "Off")
+    g_actionKeys := []
+    for namn, handler in handlers {
+        key := g_hk.Has(namn) ? g_hk[namn] : ""
+        if (key = "")
+            continue           ; empty = deliberately disabled
         try {
-            Hotkey(a[1], a[2], "On")
-            g_actionKeys.Push(a[1])
+            Hotkey(key, handler, "On")
+            g_actionKeys.Push(key)
         }
     }
     HotIf()
@@ -943,6 +965,18 @@ MenuButton = RButton
 ; always available: modifier+S, the window menu, and Save all in the GUI/tray.
 AutoSaveModifierOnly = 1
 
+[Hotkeys]
+; Keys pressed together with the Modifier. AutoHotkey key names (letters,
+; F1-F24, Home, Backspace, ...). Empty = disabled. Also editable on the
+; GUI's Settings tab.
+OpenUi = d
+SaveActive = s
+SaveAll = a
+ApplyAll = Home
+ForgetActive = Backspace
+ToggleMove = F10
+Reload = F5
+
 [TitleRules]
 ; One rule per line:   alias = text
 ;
@@ -989,10 +1023,12 @@ SplitConfigLine(line) {
 
 LoadConfig() {
     global ignoreExe, ignoreTitles, titleRules, rulesOnly, configIni
-    global g_modifier, g_menuButton, g_autoSaveModOnly
+    global g_modifier, g_menuButton, g_autoSaveModOnly, g_hk
     rulesOnly := IniRead(configIni, "Settings", "RulesOnly", 0) = 1
     g_modifier := Trim(IniRead(configIni, "Settings", "Modifier", "CapsLock"))
     g_autoSaveModOnly := IniRead(configIni, "Settings", "AutoSaveModifierOnly", 1) = 1
+    for namn in ["OpenUi", "SaveActive", "SaveAll", "ApplyAll", "ForgetActive", "ToggleMove", "Reload"]
+        g_hk[namn] := Trim(IniRead(configIni, "Hotkeys", namn, g_hk[namn]))
     g_menuButton := Trim(IniRead(configIni, "Settings", "MenuButton", "RButton"))
     try
         GetKeyState(g_modifier, "P")   ; read on every keypress - verify once here
@@ -1329,6 +1365,8 @@ UiMessage(sender, args) {
             UiSaveRules(msg)
         case "setLang":
             SetLanguage(msg["lang"])
+        case "setHotkey":
+            UiSetHotkey(msg["name"], msg["key"])
         case "openPositions":
             OpenPositionsFile()
         case "openConfig":
@@ -1347,7 +1385,7 @@ PushStateSoon() {
 
 PushState() {
     global g_uiReady, moveEnabled, autoSaveEnabled, notifyEnabled, rulesOnly, g_lang
-    global g_autoSaveModOnly, g_modifier
+    global g_autoSaveModOnly, g_modifier, g_hk
     global titleRules, ignoreExe, ignoreTitles
     if !g_uiReady
         return
@@ -1356,7 +1394,8 @@ PushState() {
         rules.Push(Map("alias", r.alias, "pattern", r.pattern, "regex", r.regex ? 1 : 0))
     state := Map("settings", Map("move", moveEnabled ? 1 : 0, "autosave", autoSaveEnabled ? 1 : 0
             , "notify", notifyEnabled ? 1 : 0, "rulesOnly", rulesOnly ? 1 : 0, "lang", g_lang
-            , "modOnly", g_autoSaveModOnly ? 1 : 0, "modifier", g_modifier)
+            , "modOnly", g_autoSaveModOnly ? 1 : 0, "modifier", g_modifier
+            , "hotkeys", g_hk)
         , "currentSetup", SetupKey()
         , "positions", ListPositions()
         , "rules", rules
@@ -1431,6 +1470,39 @@ UiForget(section) {
     if !RegExMatch(section, "^K[0-9A-F]{8}_")   ; never touch [General]/[Window]
         return
     try IniDelete(posIni, section)
+    PushState()
+}
+
+; A hotkey edited in the GUI. Validated here so a typo cannot silently kill
+; the key: the name must be a known action, the key must parse as a hotkey,
+; and no other action may already use it. An empty key disables the action.
+UiSetHotkey(namn, key) {
+    global g_hk, configIni
+    if !g_hk.Has(namn)
+        return
+    key := Trim(key)
+    if (key != "") {
+        for annat, k in g_hk
+            if (annat != namn && k != "" && StrLower(k) = StrLower(key)) {
+                TrayTip Tr("dupHotkey") " " key, Tr("appTitle")
+                PushState()
+                return
+            }
+        try {
+            HotIf(ModifierHeld)
+            Hotkey(key, (*) => 0, "Off")   ; syntax probe, never enabled
+            HotIf()
+        } catch {
+            HotIf()
+            TrayTip Tr("badHotkey") " " key, Tr("appTitle")
+            PushState()
+            return
+        }
+    }
+    g_hk[namn] := key
+    IniWrite(key, configIni, "Hotkeys", namn)
+    ApplyActionHotkeys()
+    BuildTrayMenu()   ; the tray labels name the keys
     PushState()
 }
 
