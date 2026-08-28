@@ -53,16 +53,18 @@ The GUI is a WebView2 page (`ui/`), same architecture as Encore and Expanto.
 
 ## Title bar menu
 
-DalSegno's per-window items live in the window's regular title bar menu
-(right-click the title bar): save the window's position, move it to the
-saved one, forget it, or **create a title rule** with the window's title
-prefilled in the GUI — trim the pattern down to the stable part and save.
+With [DeskPilot](../DeskPilot) running, DalSegno's per-window items live in
+the regular title bar menu (right-click the title bar) as a *DalSegno*
+submenu of DeskPilot's enhanced system menu: save the window's position,
+move it to the saved one, forget it, or **create a title rule** with the
+window's title prefilled in the GUI — trim the pattern down to the stable
+part and save. The two scripts talk over the `DALSEGNO_CMD` registered
+window message.
 
-When [DeskPilot](../DeskPilot) is running, DeskPilot owns that right-click
-and shows its enhanced system menu — DalSegno's items appear there as a
-*DalSegno* submenu (the two scripts talk over the `DALSEGNO_CMD` registered
-window message). Without DeskPilot, DalSegno shows the window's real system
-menu itself, with its items appended at the bottom.
+DalSegno deliberately never hooks title bar clicks itself — two scripts
+with mouse hooks on the same button race each other, which produced double
+and misplaced menus. Without DeskPilot the same actions are available in
+the GUI (Open windows tab) and through the hotkeys.
 
 ## Hotkeys
 
@@ -76,7 +78,7 @@ menu itself, with its items appended at the bottom.
 | § + Home | move every open window to its saved position |
 | § + F10 | toggle automatic moving |
 | § + F5 | restart the script |
-| Right-click a title bar | window menu with DalSegno items: save/restore/forget/create rule |
+| Right-click a title bar (with DeskPilot) | window menu with DalSegno items: save/restore/forget/create rule |
 
 ## Files
 

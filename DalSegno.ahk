@@ -30,12 +30,10 @@
 ;    § + F10         toggle: move new windows automatically
 ;    § + F5          restart the script
 ;
-;    Right-clicking a window's title bar reaches DalSegno's items in the
-;    window menu: save/restore/forget its position, or create a title rule
-;    from it. When DeskPilot is running the items live inside DeskPilot's
-;    title bar menu (integration over the DALSEGNO_CMD window message);
-;    otherwise DalSegno shows the window's real system menu itself, with
-;    its items appended.
+;    With DeskPilot running, right-clicking a window's title bar shows
+;    DalSegno's items as a submenu of DeskPilot's window menu:
+;    save/restore/forget the position, or create a title rule from the
+;    window (integration over the DALSEGNO_CMD window message).
 ;
 ;  The GUI (WebView2, same architecture as Encore/Expanto) shows saved
 ;  positions, open windows and rules. Left-clicking the tray icon opens it.
@@ -94,8 +92,6 @@ PLACEMENT_GRACE_MS := 10000
 ; --- GUI (WebView2) - created lazily on first open ----------------------------
 g_uiWin := 0, g_uiCtrl := 0, g_uiCore := 0, g_uiReady := false
 
-g_menuOpen := false   ; the fallback title bar menu is showing (see below)
-
 ; --- Autosave: Windows tells us exactly when a drag ends ----------------------
 ; EVENT_SYSTEM_MOVESIZEEND fires when the user releases a window after moving
 ; or resizing it - but NOT when the script itself calls WinMove. So no logic
@@ -122,19 +118,16 @@ SetTimer(ScanWindows, 800)
 § & F10::ToggleMove()
 § & F5::Reload
 
-; Right-click on a title bar shows the window's real system menu with
-; DalSegno's items appended - but ONLY when DeskPilot is not running. When it
-; is, DeskPilot owns that click and shows its enhanced system menu, and it
-; includes DalSegno's items there via the DALSEGNO_CMD message instead.
-#HotIf TitlebarFallbackActive()
-RButton::EatRightDown()
-RButton Up::ShowSystemMenuWithItems()
-#HotIf
-
-; External command interface. DeskPilot (and anything else) talks to us
-; through this registered message: wParam = target window, lParam 0 = query
-; (returns 1 = manageable, +2 = a saved position exists), 1 = save position,
-; 2 = move to saved, 3 = forget, 4 = create title rule in the GUI.
+; External command interface. DeskPilot shows DalSegno's per-window items in
+; its title bar menu and talks to us through this registered message:
+; wParam = target window, lParam 0 = query (returns 1 = manageable, +2 = a
+; saved position exists), 1 = save position, 2 = move to saved, 3 = forget,
+; 4 = create title rule in the GUI.
+;
+; DalSegno deliberately does NOT hook title bar clicks itself: two scripts
+; with mouse hooks on the same button race each other (hook order depends on
+; start order, and criteria time out when a main thread is busy), which
+; produced double menus and an unthemed light menu. One owner - DeskPilot.
 OnMessage(DllCall("RegisterWindowMessage", "str", "DALSEGNO_CMD", "uint"), ExternalCommand)
 
 ; =============================================================================
@@ -189,10 +182,9 @@ Tr(id) {
         § + F10          toggle: move new windows automatically
         § + F5           restart the script
 
-        Right-click on a window's title bar to find DalSegno's items
-        in the window menu: save, restore or forget its position, or
-        create a title rule. (They appear inside DeskPilot's menu
-        when DeskPilot is running.)
+        With DeskPilot running, right-click a window's title bar to
+        find DalSegno's items in the window menu: save, restore or
+        forget its position, or create a title rule.
 
         Positions are also saved automatically every time you drag a
         window and drop it (can be turned off in the menu).
@@ -242,9 +234,9 @@ Tr(id) {
         § + F10          av/på: flytta nya fönster automatiskt
         § + F5           starta om skriptet
 
-        Högerklicka på ett fönsters titelrad så finns DalSegnos poster
-        i fönstermenyn: spara, återställ eller glöm läget, eller skapa
-        en titelregel. (De visas i DeskPilots meny när DeskPilot kör.)
+        När DeskPilot kör: högerklicka på ett fönsters titelrad så
+        finns DalSegnos poster i fönstermenyn: spara, återställ eller
+        glöm läget, eller skapa en titelregel.
 
         Läget sparas också automatiskt varje gång du drar ett fönster
         och släpper det (kan stängas av i menyn).
@@ -547,209 +539,12 @@ ApplyAll(*) {
 ; =============================================================================
 ;  Title bar menu - DalSegno's items in the window's regular system menu
 ;
-;  Two roads lead there:
-;  - DeskPilot running: DeskPilot owns title bar right-clicks and shows the
-;    window's real system menu; it queries us over DALSEGNO_CMD and renders
-;    our items inside its menu. Nothing to hook here.
-;  - DeskPilot not running: we take the right-click ourselves and show the
-;    window's real system menu with our items appended at the bottom - the
-;    same technique DeskPilot uses (TrackPopupMenu with TPM_RETURNCMD;
-;    standard items are forwarded to the window as WM_SYSCOMMAND).
+;  DeskPilot owns title bar right-clicks and shows the window's real system
+;  menu; it queries us over DALSEGNO_CMD and renders our items inside its
+;  menu, then delivers the selection back. Without DeskPilot the items are
+;  reached through the GUI and the hotkeys instead - DalSegno never hooks
+;  the mouse itself (see the note at the OnMessage registration).
 ; =============================================================================
-
-; Hotkey criterion: only when DeskPilot is absent and the mouse is on a
-; title bar. While our menu is open every right-click is eaten (the handler
-; closes the menu) - without that fast path the hit test can time out and
-; let the click through physically.
-TitlebarFallbackActive(*) {
-    global g_menuOpen
-    if g_menuOpen
-        return true
-    if DeskPilotRunning()
-        return false
-    return MouseOverTitlebar()
-}
-
-; Cached briefly: this runs on every right-click, and the check needs
-; DetectHiddenWindows plus a title scan.
-DeskPilotRunning() {
-    static last := 0, val := false
-    if (A_TickCount - last > 2000) {
-        last := A_TickCount
-        prev := A_DetectHiddenWindows
-        DetectHiddenWindows true
-        SetTitleMatchMode 2
-        val := WinExist("\DeskPilot.ahk ahk_class AutoHotkey") ? true : false
-        DetectHiddenWindows prev
-    }
-    return val
-}
-
-EatRightDown(*) {
-    ; eats the right-click so the native menu never shows; the menu comes on
-    ; release, otherwise the button-up can accidentally pick the first row
-}
-
-; True when the mouse is on a window title bar (WM_NCHITTEST = HTCAPTION).
-; Runs as a hotkey criterion on every right-click, hence SendMessageTimeout
-; with a short deadline so a hung window never freezes the mouse. Custom-
-; drawn captions (VS Code, browsers, new Outlook) report HTCLIENT, so the
-; top band is accepted there too.
-MouseOverTitlebar(*) {
-    static ownPid := ProcessExist()
-    try {
-        MouseGetPos , , &win
-        if !win
-            return false
-        if WinGetClass(win) ~= "^(Shell_TrayWnd|Shell_SecondaryTrayWnd|Progman|WorkerW|#32768)$"
-            return false   ; #32768 = open menus - never touch them
-        if WinGetPID(win) = ownPid
-            return false
-        CoordMode("Mouse", "Screen")
-        MouseGetPos(&mx, &my)
-        res := 0
-        if !DllCall("SendMessageTimeoutW", "ptr", win, "uint", 0x84, "ptr", 0
-            , "ptr", ((my & 0xFFFF) << 16) | (mx & 0xFFFF)
-            , "uint", 0x2, "uint", 50, "ptr*", &res)   ; SMTO_ABORTIFHUNG
-            return false
-        if (res = 2)   ; HTCAPTION
-            return true
-        if (res = 1) {   ; HTCLIENT: accept the top band for custom captions
-            WinGetPos(, &wy, , , win)
-            return (my - wy) <= Round(44 * A_ScreenDPI / 96)
-        }
-        return false
-    } catch
-        return false
-}
-
-; Shows the window's REAL system menu with our items appended at the bottom.
-; TrackPopupMenu with TPM_RETURNCMD returns the selection to us; standard
-; items (and ones injected by others, e.g. PowerToys) are forwarded to the
-; window as WM_SYSCOMMAND. Same technique as DeskPilot.
-ShowSystemMenuWithItems(*) {
-    static DS_BASE := 0xBE80
-    global g_menuOpen
-    ; TrackPopupMenu pumps messages, so a new right-click during an open
-    ; menu re-enters here and would stack menus - close instead
-    if g_menuOpen {
-        DllCall("EndMenu")
-        return
-    }
-    MouseGetPos , , &win
-    if (!win || !WinExist(win))
-        return
-    CoordMode("Mouse", "Screen")
-    MouseGetPos(&mx, &my)
-    lp := ((my & 0xFFFF) << 16) | (mx & 0xFFFF)
-    hSys := DllCall("GetSystemMenu", "ptr", win, "int", 0, "ptr")
-    if !hSys {
-        ShowFallbackPopup(win)   ; no system menu at all: our own small menu
-        return
-    }
-    ; let the window (and any injectors) refresh the menu first
-    DllCall("SendMessageTimeoutW", "ptr", win, "uint", 0x116, "ptr", hSys, "ptr", 0
-        , "uint", 0x2, "uint", 100, "ptr*", &tmp := 0)   ; WM_INITMENU
-    CleanupMenuItems(hSys)   ; leftovers from a killed earlier instance
-
-    key := KeyFor(win)
-    if (key != "") {
-        hasSaved := LoadPos(key) != ""
-        DllCall("AppendMenuW", "ptr", hSys, "uint", 0x800, "uptr", 0, "ptr", 0)  ; separator
-        DllCall("AppendMenuW", "ptr", hSys, "uint", 0, "uptr", DS_BASE + 1, "wstr", Tr("tmSave"))
-        DllCall("AppendMenuW", "ptr", hSys, "uint", hasSaved ? 0 : 0x3, "uptr", DS_BASE + 2, "wstr", Tr("tmMove"))
-        DllCall("AppendMenuW", "ptr", hSys, "uint", hasSaved ? 0 : 0x3, "uptr", DS_BASE + 3, "wstr", Tr("tmForget"))
-        DllCall("AppendMenuW", "ptr", hSys, "uint", 0, "uptr", DS_BASE + 4, "wstr", Tr("tmRule"))
-    }
-
-    ; foreground fix: without it the menu closes immediately when Windows'
-    ; foreground lock denies a background process
-    ClaimForeground()
-    g_menuOpen := true
-    val := DllCall("TrackPopupMenuEx", "ptr", hSys
-        , "uint", 0x182, "int", mx, "int", my, "ptr", A_ScriptHwnd, "ptr", 0, "int")
-    g_menuOpen := false
-    PostMessage(0x0, 0, 0, , A_ScriptHwnd)   ; WM_NULL - classic menu teardown fix
-
-    CleanupMenuItems(hSys)   ; remove our items again
-    if !val
-        return
-    if (val > DS_BASE && val <= DS_BASE + 4)
-        DispatchMenuAction(win, val - DS_BASE)
-    else
-        PostMessage(0x112, val, lp, , win)   ; standard/injected items → the window
-}
-
-; Removes our appended items (and the separator above them) from the end of
-; a system menu. String-based, in both languages, so leftovers from a killed
-; earlier instance or a language switch are cleaned up too.
-CleanupMenuItems(hSys) {
-    removed := false
-    loop {
-        count := DllCall("GetMenuItemCount", "ptr", hSys, "int")
-        if count <= 0
-            return
-        buf := Buffer(512, 0)
-        DllCall("GetMenuStringW", "ptr", hSys, "uint", count - 1, "ptr", buf
-            , "int", 255, "uint", 0x400)   ; MF_BYPOSITION
-        txt := StrGet(buf)
-        if (txt = "Save window position" || txt = "Move to saved position"
-            || txt = "Forget saved position" || txt = "Create title rule…"
-            || txt = "Spara fönstrets läge" || txt = "Flytta till sparat läge"
-            || txt = "Glöm sparat läge" || txt = "Skapa titelregel…") {
-            DllCall("RemoveMenu", "ptr", hSys, "uint", count - 1, "uint", 0x400)
-            removed := true
-            continue
-        }
-        if (removed && txt = "") {
-            DllCall("RemoveMenu", "ptr", hSys, "uint", count - 1, "uint", 0x400)
-            removed := false
-            continue
-        }
-        return
-    }
-}
-
-; Windows' foreground lock denies background processes; borrow rights from
-; the current foreground window's thread and claim the foreground.
-ClaimForeground() {
-    ourThread := DllCall("GetCurrentThreadId", "uint")
-    fg := DllCall("GetForegroundWindow", "ptr")
-    fgThread := fg ? DllCall("GetWindowThreadProcessId", "ptr", fg, "ptr", 0, "uint") : 0
-    if fgThread
-        DllCall("AttachThreadInput", "uint", ourThread, "uint", fgThread, "int", 1)
-    DllCall("SetForegroundWindow", "ptr", A_ScriptHwnd)
-    if fgThread
-        DllCall("AttachThreadInput", "uint", ourThread, "uint", fgThread, "int", 0)
-}
-
-DispatchMenuAction(win, action) {
-    switch action {
-        case 1: TmSave(win)
-        case 2: TmMove(win)
-        case 3: TmForget(win)
-        case 4: TmCreateRuleFromWin(win)
-    }
-}
-
-; Fallback for windows without a system menu: our own small popup.
-ShowFallbackPopup(win) {
-    key := KeyFor(win)
-    hasSaved := key != "" && LoadPos(key) != ""
-    m := Menu()
-    if (key != "") {
-        m.Add(Tr("tmSave"), (*) => TmSave(win))
-        m.Add(Tr("tmMove"), (*) => TmMove(win))
-        if !hasSaved
-            m.Disable(Tr("tmMove"))
-        m.Add(Tr("tmForget"), (*) => TmForget(win))
-        if !hasSaved
-            m.Disable(Tr("tmForget"))
-        m.Add()
-    }
-    m.Add(Tr("tmRule"), (*) => TmCreateRuleFromWin(win))
-    m.Show()
-}
 
 ; Handler for the DALSEGNO_CMD registered message (see the registration at
 ; the top). Runs in our thread; the query path must stay quick because the
