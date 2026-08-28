@@ -7,8 +7,8 @@ Drag a window where you want it and drop it — the position is saved
 automatically. The next time a window with the same identity opens, DalSegno
 moves it right back there. Works with every program.
 
-Built for (but not limited to) applications that keep opening popup windows in
-the wrong place, such as LabVantage LIMS.
+Built for (but not limited to) applications that keep opening popup windows
+in the wrong place.
 
 ## How it works
 
@@ -26,8 +26,8 @@ the wrong place, such as LabVantage LIMS.
   a different title.) **Title rules** carve out exceptions: all windows
   whose title contains a given text (or matches a regex) form their own
   group with its own position, regardless of program — that is how specific
-  popups (e.g. LIMS windows) get their own spots even though they live in
-  the same browser as everything else.
+  popups get their own spots even though they live in the same browser as
+  everything else.
 - **Per monitor setup and computer**: positions are keyed by monitor count +
   virtual desktop width + computer name, so laptop/docked layouts and
   different machines never overwrite each other. On docking, open windows
@@ -131,7 +131,7 @@ alias2 = re:pattern  ; regular expression
 
 ## Notes
 
-- If the old **LIMS move** script runs at the same time and the LIMS titles
+- If another window-moving script runs at the same time and the same titles
   are added as title rules here, both scripts will fight over the same
   windows. Disable automatic moving in one of them.
 - The WebView2 profile lives in `%LOCALAPPDATA%\DalSegno\WebView2` (a shared

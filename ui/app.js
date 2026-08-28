@@ -31,7 +31,9 @@ const STR = {
     tabRules: 'Rules',
     setupLabel: 'Monitor setup:',
     thisSetup: ' (this)',
-    openIni: 'Open the ini file…',
+    openIni: 'Open the saved positions file…',
+    filesH: 'Files',
+    forgetSel: 'Forget selected',
     thWindow: 'Window', thIdentity: 'Identity', thWidth: 'Width', thHeight: 'Height',
     posEmpty: 'No saved positions for this monitor setup yet. Drag a window where you want it, or save with § + S.',
     badgeRule: 'rule', badgeStd: 'standard',
@@ -42,14 +44,15 @@ const STR = {
     savedYes: '✓ saved',
     saveBtn: 'Save position', saveTip: "Save the window's current position",
     moveHere: 'Move there', moveTip: 'Move the window to its saved position',
+    ruleBtn: 'Rule…', ruleRowTip: 'Create a title rule prefilled from this window',
     winsEmpty: 'No manageable windows found.',
     rulesH: 'Title rules',
-    rulesHelp: 'Windows whose title contains the text (or matches the regular expression) share one saved position, regardless of program and the rest of the title. Needed for windows with varying titles, e.g. LIMS popups.',
+    rulesHelp: 'Windows whose title contains the text (or matches the regular expression) share one saved position, regardless of program and the rest of the title. Needed for windows with varying titles, e.g. popups with a record id in the title.',
     thAlias: 'Name (alias)', thPattern: 'Text / pattern',
     aliasPh: 'alias', patternPh: 'text found in the title',
     addRule: '+ Add rule',
     rulesEmpty: 'No title rules.',
-    onlyRules: 'Manage <b>only</b> windows that match a title rule (like the old LIMS move)',
+    onlyRules: 'Manage <b>only</b> windows that match a title rule',
     ignoreH: 'Ignore',
     ignExeHelp: 'Programs (one exe name per line):',
     ignTitleHelp: 'Titles containing (one text per line):',
@@ -80,7 +83,9 @@ const STR = {
     tabRules: 'Regler',
     setupLabel: 'Skärmuppsättning:',
     thisSetup: ' (denna)',
-    openIni: 'Öppna ini-filen…',
+    openIni: 'Öppna filen med sparade lägen…',
+    filesH: 'Filer',
+    forgetSel: 'Glöm markerade',
     thWindow: 'Fönster', thIdentity: 'Identitet', thWidth: 'Bredd', thHeight: 'Höjd',
     posEmpty: 'Inga sparade lägen för den här skärmuppsättningen ännu. Dra ett fönster dit du vill ha det, eller spara med § + S.',
     badgeRule: 'regel', badgeStd: 'standard',
@@ -91,14 +96,15 @@ const STR = {
     savedYes: '✓ finns',
     saveBtn: 'Spara läge', saveTip: 'Spara fönstrets nuvarande läge',
     moveHere: 'Flytta hit', moveTip: 'Flytta fönstret till det sparade läget',
+    ruleBtn: 'Regel…', ruleRowTip: 'Skapa en titelregel förifylld från det här fönstret',
     winsEmpty: 'Inga hanterbara fönster hittades.',
     rulesH: 'Titelregler',
-    rulesHelp: 'Fönster vars titel innehåller texten (eller matchar det reguljära uttrycket) delar ett gemensamt sparat läge, oavsett program och resten av titeln. Behövs för fönster med varierande titlar, t.ex. LIMS-popupfönster.',
+    rulesHelp: 'Fönster vars titel innehåller texten (eller matchar det reguljära uttrycket) delar ett gemensamt sparat läge, oavsett program och resten av titeln. Behövs för fönster med varierande titlar, t.ex. popupfönster med ett ärende-id i titeln.',
     thAlias: 'Namn (alias)', thPattern: 'Textbit / mönster',
     aliasPh: 'alias', patternPh: 'textbit i titeln',
     addRule: '+ Lägg till regel',
     rulesEmpty: 'Inga titelregler.',
-    onlyRules: 'Hantera <b>endast</b> fönster som matchar en titelregel (som gamla LIMS move)',
+    onlyRules: 'Hantera <b>endast</b> fönster som matchar en titelregel',
     ignoreH: 'Ignorera',
     ignExeHelp: 'Program (ett exenamn per rad):',
     ignTitleHelp: 'Titlar som innehåller (en text per rad):',
@@ -163,6 +169,8 @@ function localizeStatic() {
   $('tabBtnRules').textContent = t('tabRules');
   $('lblSetup').textContent = t('setupLabel');
   $('btnOpenPositions').textContent = t('openIni');
+  $('filesH').textContent = t('filesH');
+  updateForgetSel();
   $('thWindow').textContent = t('thWindow');
   $('thIdentity').textContent = t('thIdentity');
   $('thWidth').textContent = t('thWidth');
@@ -220,6 +228,14 @@ document.querySelectorAll('#tabs .tab').forEach(btn => {
 });
 
 // ── saved positions ────────────────────────────────────────────────────
+const selPos = new Set();   // sections ticked for bulk forget
+
+function updateForgetSel() {
+  const b = $('btnForgetSel');
+  b.disabled = !selPos.size;
+  b.textContent = t('forgetSel') + (selPos.size ? ` (${selPos.size})` : '');
+}
+
 function renderPositions() {
   const sel = $('setupSel');
   sel.innerHTML = setupList().map(s =>
@@ -229,13 +245,16 @@ function renderPositions() {
   const rows = st.positions.filter(p => p.setup === curSetup);
   const body = $('posBody');
   if (!rows.length) {
-    body.innerHTML = `<tr class="empty-row"><td colspan="7">${esc(t('posEmpty'))}</td></tr>`;
+    body.innerHTML = `<tr class="empty-row"><td colspan="8">${esc(t('posEmpty'))}</td></tr>`;
+    selPos.clear();
+    updateForgetSel();
     return;
   }
   const isCur = curSetup === st.currentSetup;
   body.innerHTML = rows.map(p => {
     const rule = p.key.startsWith('rule:') ? p.key.slice(5) : '';
     return `<tr data-section="${esc(p.section)}" data-key="${esc(p.key)}">
+      <td class="selcol"><input type="checkbox" class="rowsel"${selPos.has(p.section) ? ' checked' : ''}></td>
       <td class="ellip" title="${esc(p.key)}">${esc(p.info || p.key)}</td>
       <td>${rule ? `<span class="badge rule">${esc(t('badgeRule'))}: ${esc(rule)}</span>`
                  : `<span class="badge">${esc(t('badgeStd'))}</span>`}</td>
@@ -246,9 +265,33 @@ function renderPositions() {
         <button class="small act-forget">${esc(t('forget'))}</button>
       </td></tr>`;
   }).join('');
+  // the state can be re-pushed at any moment (autosave elsewhere), so the
+  // selection lives outside the DOM and is pruned to the rows still shown
+  const shown = new Set(rows.map(p => p.section));
+  for (const s of [...selPos]) if (!shown.has(s)) selPos.delete(s);
+  $('selAllPos').checked = rows.length > 0 && rows.every(p => selPos.has(p.section));
+  updateForgetSel();
 }
 $('setupSel').addEventListener('change', e => { curSetup = e.target.value; renderPositions(); });
 $('btnOpenPositions').addEventListener('click', () => post({ action: 'openPositions' }));
+$('posBody').addEventListener('change', e => {
+  if (!e.target.classList.contains('rowsel')) return;
+  const sec = e.target.closest('tr').dataset.section;
+  if (e.target.checked) selPos.add(sec); else selPos.delete(sec);
+  $('selAllPos').checked = [...$('posBody').querySelectorAll('.rowsel')].every(c => c.checked);
+  updateForgetSel();
+});
+$('selAllPos').addEventListener('change', e => {
+  $('posBody').querySelectorAll('tr[data-section]').forEach(tr => {
+    if (e.target.checked) selPos.add(tr.dataset.section); else selPos.delete(tr.dataset.section);
+  });
+  renderPositions();
+});
+$('btnForgetSel').addEventListener('click', () => {
+  if (!selPos.size) return;
+  post({ action: 'forgetMany', sections: [...selPos] });
+  selPos.clear();
+});
 
 $('posBody').addEventListener('click', e => {
   const tr = e.target.closest('tr');
@@ -291,6 +334,7 @@ function renderWindows() {
         <button class="small act-save" title="${esc(t('saveTip'))}">${esc(t('saveBtn'))}</button>
         <button class="small act-movewin" ${w.saved ? '' : 'disabled'}
           title="${esc(t('moveTip'))}">${esc(t('moveHere'))}</button>
+        <button class="small act-rule" title="${esc(t('ruleRowTip'))}">${esc(t('ruleBtn'))}</button>
       </td></tr>`).join('');
 }
 $('btnRefresh').addEventListener('click', () => post({ action: 'refresh' }));
@@ -300,6 +344,16 @@ $('winBody').addEventListener('click', e => {
   const hwnd = Number(tr.dataset.hwnd);
   if (e.target.classList.contains('act-save')) post({ action: 'saveWin', hwnd });
   else if (e.target.classList.contains('act-movewin')) post({ action: 'moveWin', hwnd });
+  else if (e.target.classList.contains('act-rule')) {
+    // same prefill as the window menu's "Create title rule" - the alias is
+    // derived exactly like TmCreateRule does on the AHK side, and the row
+    // already carries exe and title, so no round-trip is needed
+    const w = st.windows.find(x => Number(x.hwnd) === hwnd);
+    if (w) prefillRule({
+      alias: String(w.exe).replace(/\.exe$/i, '').toLowerCase().replace(/[^a-z0-9]/g, ''),
+      pattern: w.title
+    });
+  }
 });
 
 // ── rules ──────────────────────────────────────────────────────────────

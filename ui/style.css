@@ -50,6 +50,7 @@ button:disabled { opacity: .45; cursor: default; }
 button.primary { background: var(--accent); border-color: var(--accent2); color: #1e1e1e; font-weight: 600; }
 button.primary:hover { background: var(--accent2); }
 button.small { padding: 2px 8px; font-size: 12px; }
+th.selcol, td.selcol { width: 28px; text-align: center; }
 button.danger-armed { background: var(--red); border-color: #f05050; color: #fff; }
 
 .toggle {
