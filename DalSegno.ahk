@@ -16,8 +16,8 @@
 ;  has a different title). TITLE RULES in the config file (tray menu ->
 ;  Settings) carve out exceptions: all windows whose title contains a given
 ;  text form their own group with their own position, regardless of program.
-;  That is how specific popups (e.g. LIMS windows) get their own spots even
-;  though they live in the same browser as everything else.
+;  That is how specific popups get their own spots even though they live
+;  in the same browser as everything else.
 ;
 ;  Positions are stored per monitor setup AND computer, so laptop/docked and
 ;  different machines stay separate even though the script lives in OneDrive.
@@ -45,9 +45,9 @@
 ;  Interface language (English/Swedish) is selectable in the GUI and the
 ;  tray menu.
 ;
-;  NOTE: if LIMS move runs at the same time and the LIMS titles are added as
-;  title rules here, both scripts will fight over the same windows. Disable
-;  automatic moving in one of them.
+;  NOTE: if another window-moving script runs at the same time and the same
+;  titles are added as title rules here, both scripts will fight over the
+;  same windows. Disable automatic moving in one of them.
 ; =============================================================================
 
 #Include "lib\WebView2.ahk"
@@ -91,10 +91,10 @@ LoadConfig()
 ; --- State --------------------------------------------------------------------
 ; winInfo: hwnd -> { seen, setup, done }
 ;   seen   tick when the window was first noticed. New windows get
-;          PLACEMENT_GRACE_MS to receive their real title - LIMS popups and
-;          others open with a temporary title that changes shortly after, and
-;          without the grace period they would be stamped done before the
-;          title becomes recognizable.
+;          PLACEMENT_GRACE_MS to receive their real title - many popups open
+;          with a temporary title that changes shortly after, and without
+;          the grace period they would be stamped done before the title
+;          becomes recognizable.
 ;   setup  the monitor setup the window was placed under. When it changes
 ;          (docking), done is reset so the window gets its saved position for
 ;          the new setup.
@@ -464,7 +464,7 @@ ScanWindows() {
         if MoveToSaved(hwnd, key)
             info.done := true
         ; else: no saved position yet. Keep trying during the grace period -
-        ; the title may change into one that HAS a position (LIMS popups).
+        ; the title may change into one that HAS a position (late titles).
     }
     ; Prune closed windows so the map does not grow all day.
     stale := []
@@ -923,8 +923,8 @@ CreateConfigTemplate() {
 ; ═══════════════════════════════════════════════════════════════════════════
 
 [Settings]
-; RulesOnly = 1 means ONLY windows matching a title rule below are managed
-; (like the old LIMS move script). Default 0 = all windows are managed.
+; RulesOnly = 1 means ONLY windows matching a title rule below are managed.
+; Default 0 = all windows are managed.
 RulesOnly = 0
 ; Modifier: held down for every DalSegno hotkey - the keyboard ones (D, S,
 ; Backspace, Home, F10, F5) and the window menu alike. It is read as physical
@@ -949,27 +949,13 @@ AutoSaveModifierOnly = 1
 ;   The text is matched anywhere in the title, regardless of program. All
 ;   windows matching the same rule SHARE one saved position even when the
 ;   rest of the title differs. Needed for windows with varying titles, e.g.
-;   LIMS popups with a URL or record id in the title.
+;   popups with a URL or record id in the title.
 ;
 ;   The alias is the rule's name. Renaming it loses the rule's saved
 ;   position. Write  alias = re:pattern  for a regular expression.
 ;
-; Remove the semicolon for the LIMS windows you want handled here (then
-; disable automatic moving in LIMS move so the scripts do not fight over
-; the same windows):
-;patienthistory  = MED_PatientHistoryPopup
-;preview         = Förhandsgranska
-;attachments     = Manuellt tillagda bilagor
-;comments        = Kommentarer
-;referral        = Remissregistrering
-;diagnosticsgene = MED_DiagnosticsGenePopup
-;reqregresgene   = ReqRegResGenePopup
-;reqregreschem   = ReqRegResChemPopup
-;inquiryoverview = MED_InquiryOverview
-;inquiry         = InquiryPopup
-;answerreport    = AnswerReport
-;textsummary     = Text Summary
-;anamnesis       = Anamnestext
+; Example - remove the semicolon to activate:
+;preview = Print preview
 
 [IgnoreExe]
 ; Programs whose windows must never be touched. One per line: x = exename
@@ -1331,6 +1317,8 @@ UiMessage(sender, args) {
             PushState()
         case "forget":
             UiForget(msg["section"])
+        case "forgetMany":
+            UiForgetMany(msg["sections"])
         case "moveKey":
             UiMoveKey(msg["key"])
         case "saveWin":
@@ -1443,6 +1431,17 @@ UiForget(section) {
     if !RegExMatch(section, "^K[0-9A-F]{8}_")   ; never touch [General]/[Window]
         return
     try IniDelete(posIni, section)
+    PushState()
+}
+
+; Bulk variant of UiForget: one state push for the whole batch.
+UiForgetMany(sections) {
+    global posIni
+    for sec in sections {
+        if !RegExMatch(sec, "^K[0-9A-F]{8}_")   ; never touch [General]/[Window]
+            continue
+        try IniDelete(posIni, sec)
+    }
     PushState()
 }
 

@@ -27,11 +27,12 @@
     <div class="pane-head">
       <label><span id="lblSetup"></span>&nbsp;<select id="setupSel"></select></label>
       <span class="spacer"></span>
-      <button id="btnOpenPositions" class="small"></button>
+      <button id="btnForgetSel" class="small" disabled></button>
     </div>
     <div class="tablewrap">
       <table>
         <thead><tr>
+          <th class="selcol"><input type="checkbox" id="selAllPos"></th>
           <th id="thWindow"></th><th id="thIdentity"></th>
           <th style="text-align:right">X</th><th style="text-align:right">Y</th>
           <th style="text-align:right" id="thWidth"></th>
@@ -110,6 +111,9 @@
       <p class="help" id="langHelp"></p>
       <label class="radio"><input type="radio" name="lang" value="en"> English</label>
       <label class="radio"><input type="radio" name="lang" value="sv"> Svenska</label>
+
+      <h2 id="filesH"></h2>
+      <button id="btnOpenPositions" class="small"></button>
     </div>
   </section>
 
