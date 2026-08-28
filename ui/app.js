@@ -20,6 +20,18 @@ const STR = {
     tglSave: 'Save position on manual move',
     tglModOnly: 'Only when {mod} is held while dropping',
     modOnlyHelp: 'Saving becomes a deliberate gesture: a sloppy drag cannot overwrite a carefully placed position. Deliberate saves ({mod} + S, the window menu, Save all) always work.',
+    thWindowTip: 'The program and title as they were when this position was saved.',
+    thIdentityTip: 'What the position is stored under - that is, which windows share it. "standard" means all windows of the same program and window class; "rule" means all windows whose title matches that title rule.',
+    thXTip: 'Distance from the left edge of the desktop, in pixels.',
+    thYTip: 'Distance from the top edge of the desktop, in pixels.',
+    thWidthTip: 'Window width in pixels.',
+    thHeightTip: 'Window height in pixels.',
+    selColTip: 'Tick rows to forget them in one go.',
+    thProgramTip: 'Executable name of the process owning the window.',
+    thTitleTip: 'The window title right now. Title rules match against this.',
+    thSavedTip: 'Whether a position is stored for this window’s identity in the current monitor setup.',
+    thAliasTip: 'The name of the rule. It also names the saved position, so renaming it loses that position.',
+    thPatternTip: 'Text matched anywhere in the title, or re:pattern for a regular expression.',
     behaveH: 'Behavior',
     hkH: 'Hotkeys',
     hkHelp: 'Pressed together with {mod}. AutoHotkey key names (d, F10, Home, Backspace…). Leave empty to disable one.',
@@ -62,6 +74,7 @@ const STR = {
     addRule: '+ Add rule',
     rulesEmpty: 'No title rules.',
     onlyRules: 'Manage <b>only</b> windows that match a title rule',
+    onlyRulesHelp: 'Off (default): every window is managed. A window that matches no rule is identified by its program and window class, so all windows of the same program share one position - the rules above are refinements that break specific windows out into their own. On: only windows matching a rule are touched at all; everything else is left alone, with no saving and no moving. Use it to manage a handful of specific windows and nothing else.',
     ignoreH: 'Ignore',
     ignExeHelp: 'Programs (one exe name per line):',
     ignTitleHelp: 'Titles containing (one text per line):',
@@ -81,6 +94,18 @@ const STR = {
     tglSave: 'Spara läge vid manuell flytt',
     tglModOnly: 'Bara när {mod} hålls nere vid släppet',
     modOnlyHelp: 'Sparandet blir en avsiktlig gest: en slarvig flytt kan inte skriva över ett omsorgsfullt placerat läge. Avsiktliga sparningar ({mod} + S, fönstermenyn, Spara alla) fungerar alltid.',
+    thWindowTip: 'Programmet och titeln som de såg ut när läget sparades.',
+    thIdentityTip: 'Vad läget sparas under - alltså vilka fönster som delar det. "standard" betyder alla fönster i samma program och fönsterklass; "regel" betyder alla fönster vars titel matchar den titelregeln.',
+    thXTip: 'Avstånd från skrivbordets vänsterkant, i bildpunkter.',
+    thYTip: 'Avstånd från skrivbordets överkant, i bildpunkter.',
+    thWidthTip: 'Fönstrets bredd i bildpunkter.',
+    thHeightTip: 'Fönstrets höjd i bildpunkter.',
+    selColTip: 'Kryssa i rader för att glömma dem i ett svep.',
+    thProgramTip: 'Namnet på programfilen som äger fönstret.',
+    thTitleTip: 'Fönstrets titel just nu. Titelregler matchas mot den.',
+    thSavedTip: 'Om det finns ett sparat läge för fönstrets identitet i den aktuella skärmuppsättningen.',
+    thAliasTip: 'Regelns namn. Det namnger även det sparade läget, så att byta namn förlorar läget.',
+    thPatternTip: 'Text som matchas var som helst i titeln, eller re:mönster för ett reguljärt uttryck.',
     behaveH: 'Beteende',
     hkH: 'Kortkommandon',
     hkHelp: 'Trycks tillsammans med {mod}. AutoHotkey-tangentnamn (d, F10, Home, Backspace…). Lämna tomt för att stänga av ett.',
@@ -123,6 +148,7 @@ const STR = {
     addRule: '+ Lägg till regel',
     rulesEmpty: 'Inga titelregler.',
     onlyRules: 'Hantera <b>endast</b> fönster som matchar en titelregel',
+    onlyRulesHelp: 'Av (standard): alla fönster hanteras. Ett fönster som inte matchar någon regel identifieras av sitt program och sin fönsterklass, så alla fönster i samma program delar ett läge - reglerna ovan är förfiningar som bryter ut enskilda fönster till egna lägen. På: bara fönster som matchar en regel rörs över huvud taget; allt annat lämnas i fred, utan sparande och utan flyttning. Använd det när du bara vill styra en handfull specifika fönster.',
     ignoreH: 'Ignorera',
     ignExeHelp: 'Program (ett exenamn per rad):',
     ignTitleHelp: 'Titlar som innehåller (en text per rad):',
@@ -196,6 +222,15 @@ function localizeStatic() {
   $('thIdentity').textContent = t('thIdentity');
   $('thWidth').textContent = t('thWidth');
   $('thHeight').textContent = t('thHeight');
+  // column tips: the headers are terse by necessity, their meaning is not
+  [['thWindow', 'thWindowTip'], ['thIdentity', 'thIdentityTip'],
+   ['thX', 'thXTip'], ['thY', 'thYTip'],
+   ['thWidth', 'thWidthTip'], ['thHeight', 'thHeightTip'],
+   ['thProgram', 'thProgramTip'], ['thTitle', 'thTitleTip'],
+   ['thIdentity2', 'thIdentityTip'], ['thSaved', 'thSavedTip'],
+   ['thAlias', 'thAliasTip'], ['thPattern', 'thPatternTip']
+  ].forEach(([id, tip]) => { const el = $(id); if (el) el.title = t(tip); });
+  document.querySelectorAll('th.selcol').forEach(el => { el.title = t('selColTip'); });
   $('winsHint').textContent = t('winsHint');
   $('btnRefresh').textContent = t('refresh');
   $('thProgram').textContent = t('thProgram');
@@ -208,6 +243,7 @@ function localizeStatic() {
   $('thPattern').textContent = t('thPattern');
   $('btnAddRule').textContent = t('addRule');
   $('lblOnlyRules').innerHTML = t('onlyRules');
+  $('onlyRulesHelp').textContent = t('onlyRulesHelp');
   $('ignoreH').textContent = t('ignoreH');
   $('ignExeHelp').textContent = t('ignExeHelp');
   $('ignTitleHelp').textContent = t('ignTitleHelp');
