@@ -35,12 +35,12 @@ the wrong place, such as LabVantage LIMS.
 - New windows get a 10-second grace period to receive their real title
   (browser popups often retitle shortly after opening).
 - If several windows share one identity, nothing is auto-saved until only one
-  remains (you can still save deliberately with § + S).
+  remains (you can still save deliberately with CapsLock + S).
 - Minimized and maximized windows are never saved or restored.
 
 ## GUI
 
-Left-click the tray icon (or press § + D). Four tabs:
+Left-click the tray icon (or press CapsLock + D). Four tabs:
 
 - **Saved positions** — every saved position per monitor setup, with
   *Move now* and *Forget* per row.
@@ -51,34 +51,45 @@ Left-click the tray icon (or press § + D). Four tabs:
 
 The GUI is a WebView2 page (`ui/`), same architecture as Encore and Expanto.
 
-## Title bar menu
+## Window menu
 
-With [DeskPilot](../DeskPilot) running, DalSegno's per-window items live in
-the regular title bar menu (right-click the title bar) as a *DalSegno*
-submenu of DeskPilot's enhanced system menu: save the window's position,
-move it to the saved one, forget it, or **create a title rule** with the
-window's title prefilled in the GUI — trim the pattern down to the stable
-part and save. The two scripts talk over the `DALSEGNO_CMD` registered
-window message.
+Hold **CapsLock** and right-click a window: save its position, move it to the
+saved one, forget it, or **create a title rule** with the window's title
+prefilled in the GUI — trim the pattern down to the stable part and save.
 
-DalSegno deliberately never hooks title bar clicks itself — two scripts
-with mouse hooks on the same button race each other, which produced double
-and misplaced menus. Without DeskPilot the same actions are available in
-the GUI (Open windows tab) and through the hotkeys.
+With [DeskPilot](https://github.com/ibst1/deskpilot) running, these items
+appear as a *DalSegno* submenu inside its larger window menu instead, on the
+same combination. The two scripts talk over the `DALSEGNO_CMD` registered
+window message, and DalSegno stands down from the mouse button while DeskPilot
+is there: two scripts hooking the same button race each other, which produced
+double and misplaced menus.
+
+The modifier is read as **physical key state** and is never registered as a
+hotkey prefix. Registering `CapsLock & RButton` as a combination would make
+AutoHotkey hold CapsLock back from other scripts' keyboard hooks — which is
+exactly what broke this when the modifier was `§` and two scripts claimed it.
+Reading the state instead means the modifier can be a key another script
+already owns.
 
 ## Hotkeys
 
-`§` is the key in the top-left corner on Nordic keyboards.
+Hold the modifier — `CapsLock` by default, set with `Modifier` in the settings.
 
 | Hotkey | Action |
 | --- | --- |
-| § + D | open the DalSegno window |
-| § + S | save the active window's position |
-| § + Backspace | forget the active window's saved position (current setup) |
-| § + Home | move every open window to its saved position |
-| § + F10 | toggle automatic moving |
-| § + F5 | restart the script |
-| Right-click a title bar (with DeskPilot) | window menu with DalSegno items: save/restore/forget/create rule |
+| CapsLock + D | open the DalSegno window |
+| CapsLock + S | save the active window's position |
+| CapsLock + Backspace | forget the active window's saved position (current setup) |
+| CapsLock + Home | move every open window to its saved position |
+| CapsLock + F10 | toggle automatic moving |
+| CapsLock + F5 | restart the script |
+| CapsLock + right-click | window menu: save/restore/forget/create rule |
+
+These are registered as plain keys under a criterion that checks whether the
+modifier is physically down, not as `CapsLock & key` combinations — see the
+window menu section for why. One consequence worth knowing: if the script's
+main thread is busy the criterion can time out, and the key then falls through
+as an ordinary keystroke rather than firing the action.
 
 ## Files
 
