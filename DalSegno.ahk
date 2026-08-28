@@ -22,13 +22,18 @@
 ;  Positions are stored per monitor setup AND computer, so laptop/docked and
 ;  different machines stay separate even though the script lives in OneDrive.
 ;
-;  Hotkeys (§ = the key in the top-left corner on Nordic keyboards):
-;    § + D           open the DalSegno window (GUI)
-;    § + S           save the active window's position
-;    § + Backspace   forget the active window's saved position
-;    § + Home        move every open window to its saved position
-;    § + F10         toggle: move new windows automatically
-;    § + F5          restart the script
+;  Hotkeys - hold the modifier ([Settings] Modifier, CapsLock by default):
+;    Modifier + D           open the DalSegno window (GUI)
+;    Modifier + S           save the active window's position
+;    Modifier + Backspace   forget the active window's saved position
+;    Modifier + Home        move every open window to its saved position
+;    Modifier + F10         toggle: move new windows automatically
+;    Modifier + F5          restart the script
+;
+;  The modifier is never registered as a hotkey prefix ("CapsLock & d"). Doing
+;  that makes AHK hold the key back from other scripts' hooks, and CapsLock
+;  belongs to Keyboard assistant - so instead the plain keys are registered
+;  under a criterion that reads the modifier's PHYSICAL state.
 ;
 ;    With DeskPilot running, right-clicking a window's title bar shows
 ;    DalSegno's items as a submenu of DeskPilot's window menu:
@@ -64,8 +69,16 @@ notifyEnabled   := IniRead(posIni, "General", "Notify", 1) = 1
 
 ; Interface language: "en" or "sv". First run follows the system UI language.
 g_lang := IniRead(posIni, "General", "Language", "")
+
 if (g_lang != "en" && g_lang != "sv")
     g_lang := SubStr(A_Language, -2) = "1d" ? "sv" : "en"   ; 041d/081d = Swedish
+
+; The window menu's trigger ([Settings] MenuModifier / MenuButton) and what we
+; registered from it. Declared before LoadConfig() below, which reads them.
+g_modifier := "CapsLock"       ; held down for every hotkey here ([Settings] Modifier)
+g_menuButton := "RButton"      ; the window menu's button ([Settings] MenuButton)
+g_menuKeys := []
+g_actionKeys := []             ; the plain keys registered under the modifier
 
 ; --- Config (reloaded via the tray menu or the GUI) ---------------------------
 ignoreExe    := []   ; exe names never to touch
@@ -110,13 +123,11 @@ OnExit((*) => (DllCall("UnhookWinEvent", "ptr", winEventHook), 0))
 
 SetTimer(ScanWindows, 800)
 
+g_menuOpen := false   ; our own window menu is showing (drives click handling)
+
 ; --- Hotkeys ------------------------------------------------------------------
-§ & d::OpenUi()
-§ & s::SaveActive()
-§ & Backspace::ForgetActive()
-§ & Home::ApplyAll()
-§ & F10::ToggleMove()
-§ & F5::Reload
+; registered by ApplyActionHotkeys(), from LoadConfig() - see the file header
+; for why they are plain keys under a criterion rather than "Modifier & key"
 
 ; External command interface. DeskPilot shows DalSegno's per-window items in
 ; its title bar menu and talks to us through this registered message:
@@ -124,32 +135,39 @@ SetTimer(ScanWindows, 800)
 ; saved position exists), 1 = save position, 2 = move to saved, 3 = forget,
 ; 4 = create title rule in the GUI.
 ;
-; DalSegno deliberately does NOT hook title bar clicks itself: two scripts
-; with mouse hooks on the same button race each other (hook order depends on
-; start order, and criteria time out when a main thread is busy), which
-; produced double menus and an unthemed light menu. One owner - DeskPilot.
+; Exactly ONE script may hook the mouse button: two hooks on the same button
+; race each other (hook order depends on start order, and criteria time out
+; when a main thread is busy), which produced double menus and an unthemed
+; light menu. So ownership is decided by presence, not by configuration -
+; DeskPilot wins whenever it is running, and MenyÄgarskap below switches our
+; own hotkey off for as long as that is the case. Alone, we serve the menu
+; ourselves; together, DeskPilot renders our items inside its menu through
+; the message registered here.
 OnMessage(DllCall("RegisterWindowMessage", "str", "DALSEGNO_CMD", "uint"), ExternalCommand)
+
+MenuOwnership()
+SetTimer(MenuOwnership, 2000)
 
 ; =============================================================================
 ;  Interface strings (English / Swedish)
 ; =============================================================================
 
 Tr(id) {
-    global g_lang
+    global g_lang, g_modifier
     static L := Map(
     "en", Map(
         "appTitle",       "DalSegno Window Keeper",
-        "trayOpen",       "Open DalSegno Window Keeper (§ + D)",
-        "trayMove",       "Move new windows to saved positions (§ + F10)",
+        "trayOpen",       "Open DalSegno Window Keeper ({mod} + D)",
+        "trayMove",       "Move new windows to saved positions ({mod} + F10)",
         "trayAutoSave",   "Save position when a window is moved by hand",
         "trayToasts",     "Show a small toast when a position is saved",
-        "trayApplyAll",   "Move all open windows to their positions (§ + Home)",
+        "trayApplyAll",   "Move all open windows to their positions ({mod} + Home)",
         "trayLanguage",   "Language",
         "trayConfig",     "Settings…",
         "trayReload",     "Reload settings",
         "trayPositions",  "Open saved positions…",
         "trayHotkeys",    "Hotkeys…",
-        "trayRestart",    "Restart (§ + F5)",
+        "trayRestart",    "Restart ({mod} + F5)",
         "trayExit",       "Exit",
         "moveOn",         "Automatic moving: ON",
         "moveOff",        "Automatic moving: OFF",
@@ -157,6 +175,11 @@ Tr(id) {
         "autoSaveOff",    "Saving on manual move: OFF",
         "toastSaved",     "Window position saved",
         "savedTitle",     "Position saved",
+        "menuSave",       "Save window position",
+        "menuMove",       "Move to saved position",
+        "menuForget",     "Forget saved position",
+        "menuRule",       "Create title rule…",
+        "badMenuHotkey",  "MenuButton in the settings is not a valid button:",
         "cannotHandle",   "The active window cannot be managed (no title, ignored, or matches no rule).",
         "cannotSave",     "Could not save - the window is minimized or maximized.",
         "cannotSaveWin",  "Could not save the position (window closed, minimized or maximized?).",
@@ -175,12 +198,12 @@ Tr(id) {
         "hkTitle",        "DalSegno Window Keeper - hotkeys",
         "hkText",         "
         (
-        § + D            open the DalSegno window
-        § + S            save the active window's position
-        § + Backspace    forget the active window's saved position
-        § + Home         move every open window to its saved position
-        § + F10          toggle: move new windows automatically
-        § + F5           restart the script
+        {mod} + D            open the DalSegno window
+        {mod} + S            save the active window's position
+        {mod} + Backspace    forget the active window's saved position
+        {mod} + Home         move every open window to its saved position
+        {mod} + F10          toggle: move new windows automatically
+        {mod} + F5           restart the script
 
         With DeskPilot running, right-click a window's title bar to
         find DalSegno's items in the window menu: save, restore or
@@ -191,17 +214,17 @@ Tr(id) {
         )"),
     "sv", Map(
         "appTitle",       "DalSegno Fönsterlägen",
-        "trayOpen",       "Öppna DalSegno Fönsterlägen (§ + D)",
-        "trayMove",       "Flytta nya fönster till sparade lägen (§ + F10)",
+        "trayOpen",       "Öppna DalSegno Fönsterlägen ({mod} + D)",
+        "trayMove",       "Flytta nya fönster till sparade lägen ({mod} + F10)",
         "trayAutoSave",   "Spara läge när fönster flyttas för hand",
         "trayToasts",     "Visa liten notis när läge sparas",
-        "trayApplyAll",   "Flytta alla öppna fönster till sina lägen (§ + Home)",
+        "trayApplyAll",   "Flytta alla öppna fönster till sina lägen ({mod} + Home)",
         "trayLanguage",   "Språk",
         "trayConfig",     "Inställningar…",
         "trayReload",     "Läs om inställningar",
         "trayPositions",  "Öppna sparade lägen…",
         "trayHotkeys",    "Kortkommandon…",
-        "trayRestart",    "Starta om (§ + F5)",
+        "trayRestart",    "Starta om ({mod} + F5)",
         "trayExit",       "Avsluta",
         "moveOn",         "Automatisk flyttning: PÅ",
         "moveOff",        "Automatisk flyttning: AV",
@@ -209,6 +232,11 @@ Tr(id) {
         "autoSaveOff",    "Sparar läge vid manuell flytt: AV",
         "toastSaved",     "Fönsterläge sparat",
         "savedTitle",     "Läge sparat",
+        "menuSave",       "Spara fönstrets läge",
+        "menuMove",       "Flytta till sparat läge",
+        "menuForget",     "Glöm sparat läge",
+        "menuRule",       "Skapa titelregel…",
+        "badMenuHotkey",  "MenuButton i inställningarna är inte en giltig knapp:",
         "cannotHandle",   "Det aktiva fönstret hanteras inte (saknar titel, är ignorerat, eller matchar ingen regel).",
         "cannotSave",     "Kunde inte spara - fönstret är minimerat eller maximerat.",
         "cannotSaveWin",  "Kunde inte spara läget (fönstret stängt, minimerat eller maximerat?).",
@@ -227,12 +255,12 @@ Tr(id) {
         "hkTitle",        "DalSegno Fönsterlägen - kortkommandon",
         "hkText",         "
         (
-        § + D            öppna DalSegno-fönstret
-        § + S            spara det aktiva fönstrets läge
-        § + Backspace    glöm det aktiva fönstrets sparade läge
-        § + Home         flytta alla öppna fönster till sina sparade lägen
-        § + F10          av/på: flytta nya fönster automatiskt
-        § + F5           starta om skriptet
+        {mod} + D            öppna DalSegno-fönstret
+        {mod} + S            spara det aktiva fönstrets läge
+        {mod} + Backspace    glöm det aktiva fönstrets sparade läge
+        {mod} + Home         flytta alla öppna fönster till sina sparade lägen
+        {mod} + F10          av/på: flytta nya fönster automatiskt
+        {mod} + F5           starta om skriptet
 
         När DeskPilot kör: högerklicka på ett fönsters titelrad så
         finns DalSegnos poster i fönstermenyn: spara, återställ eller
@@ -241,7 +269,9 @@ Tr(id) {
         Läget sparas också automatiskt varje gång du drar ett fönster
         och släpper det (kan stängas av i menyn).
         )"))
-    return L[L.Has(g_lang) ? g_lang : "en"][id]
+    txt := L[L.Has(g_lang) ? g_lang : "en"][id]
+    ; the modifier is configurable, so the labels carry a placeholder
+    return InStr(txt, "{mod}") ? StrReplace(txt, "{mod}", g_modifier) : txt
 }
 
 SetLanguage(lang) {
@@ -546,6 +576,197 @@ ApplyAll(*) {
 ;  the mouse itself (see the note at the OnMessage registration).
 ; =============================================================================
 
+; --- Our own window menu, used only when DeskPilot is not running ---------
+
+; DeskPilot's hidden main window, titled with its script path (.ahk when run
+; as a script, .exe when compiled) - the same handshake DeskPilotArrow uses.
+DeskPilotWindow() {
+    prev := A_DetectHiddenWindows
+    DetectHiddenWindows true
+    SetTitleMatchMode 2
+    hwnd := WinExist("DeskPilot.ahk ahk_class AutoHotkey")
+    if !hwnd
+        hwnd := WinExist("DeskPilot.exe ahk_class AutoHotkey")
+    DetectHiddenWindows prev
+    return hwnd
+}
+
+; Claim the menu combination only while DeskPilot is absent. Polled rather
+; than checked inside the hotkey criterion: a criterion runs on the input
+; thread for every click, and a slow one there is exactly what makes clicks
+; leak through to the app.
+MenuOwnership() {
+    static owned := ""
+    mine := !DeskPilotWindow()
+    if (mine = owned)
+        return
+    owned := mine
+    ApplyMenuHotkey(mine)
+}
+
+; True while the configured modifier is physically down. Reading the physical
+; state is what lets the modifier be a key another script already hooks: we
+; never ask to receive its events, we just look at it.
+ModifierHeld(*) {
+    try
+        return GetKeyState(g_modifier, "P")
+    catch
+        return false
+}
+
+; DalSegno's own actions, on that same modifier. Re-registered after a settings
+; reload, since the modifier can change; the criterion is what changes meaning,
+; so the keys themselves are simply registered once under it.
+ApplyActionHotkeys() {
+    global g_actionKeys
+    static actions := [["d", (*) => OpenUi()], ["s", (*) => SaveActive()]
+        , ["Backspace", (*) => ForgetActive()], ["Home", (*) => ApplyAll()]
+        , ["F10", (*) => ToggleMove()], ["F5", (*) => Reload()]]
+    if g_actionKeys.Length          ; the criterion is stateless - register once
+        return
+    HotIf(ModifierHeld)
+    for a in actions {
+        try {
+            Hotkey(a[1], a[2], "On")
+            g_actionKeys.Push(a[1])
+        }
+    }
+    HotIf()
+}
+
+; (Re)registers the BUTTON. The modifier is never registered as a hotkey
+; prefix - it is read as physical key state in MouseOverWindow, so it can be a
+; key another script already owns (CapsLock belongs to Keyboard assistant).
+; Registering it as a prefix is what killed §: two scripts both claiming it
+; means the first hook in the chain swallows the press and the second never
+; sees it. Called on ownership changes and after a settings reload, since the
+; button can change too - whatever was registered last time is switched off
+; first, under the same #HotIf context it was created in.
+ApplyMenuHotkey(mine := "") {
+    global g_menuKeys, g_menuButton
+    static lastMine := false
+    if (mine = "")
+        mine := lastMine
+    lastMine := mine
+    HotIf(MouseOverWindow)
+    for k in g_menuKeys
+        try Hotkey(k, "Off")
+    g_menuKeys := []
+    if (mine && g_menuButton != "") {
+        try {
+            Hotkey(g_menuButton, MenuKeyDown, "On")
+            Hotkey(g_menuButton " Up", ShowWindowMenu, "On")
+            g_menuKeys := [g_menuButton, g_menuButton " Up"]
+        } catch {
+            try Hotkey(g_menuButton, "Off")   ; the down half may have taken
+            TrayTip Tr("badMenuHotkey") "`n" g_menuButton, Tr("appTitle")
+        }
+    }
+    HotIf()
+}
+
+; True when the cursor is over a window we can offer the menu for. Kept cheap
+; deliberately - no cross-process messages.
+MouseOverWindow(*) {
+    static ownPid := DllCall("GetCurrentProcessId")
+    if g_menuOpen
+        return true            ; while our menu is up, eat every press
+    if !ModifierHeld()
+        return false           ; cheapest exit - this runs on every right-click
+    try {
+        MouseGetPos , , &win
+        if !win
+            return false
+        if WinGetClass(win) ~= "^(Shell_TrayWnd|Shell_SecondaryTrayWnd|Progman|WorkerW|#32768)$"
+            return false
+        if WinGetPID(win) = ownPid
+            return false
+        if (WinGetExStyle(win) & 0x8000000)      ; WS_EX_NOACTIVATE - menus, OSDs
+            return false
+        ; an app's own menu popup has no title and no system menu; a real
+        ; window has at least one of the two
+        if (WinGetTitle(win) = ""
+            && !DllCall("GetSystemMenu", "ptr", win, "int", 0, "ptr"))
+            return false
+        cloaked := 0                              ; parked on another desktop
+        try DllCall("dwmapi\DwmGetWindowAttribute", "ptr", win, "uint", 14
+            , "uint*", &cloaked, "uint", 4)
+        return !cloaked
+    } catch {
+        return false
+    }
+}
+
+MenuKeyDown(*) {
+    ; eats the click so the app never sees it; the menu comes on release,
+    ; otherwise the button-up can accidentally pick the first row
+}
+
+ShowWindowMenu(*) {
+    global g_menuOpen
+    Critical "On"
+    if g_menuOpen {
+        Critical "Off"
+        DllCall("EndMenu")
+        return
+    }
+    g_menuOpen := true
+    Critical "Off"
+    try {
+        MouseGetPos , , &win
+        if (!win || !WinExist(win))
+            return
+        key := ""
+        try key := KeyFor(win)
+        if (key = "")
+            return
+        hasPos := LoadPos(key) != ""
+        m := Menu()
+        m.Add(Tr("menuSave"), (*) => SetTimer(TmSave.Bind(win), -1))
+        m.Add(Tr("menuMove"), (*) => SetTimer(TmMove.Bind(win), -1))
+        m.Add(Tr("menuForget"), (*) => SetTimer(TmForget.Bind(win), -1))
+        m.Add()
+        m.Add(Tr("menuRule"), (*) => SetTimer(TmCreateRuleFromWin.Bind(win), -1))
+        if !hasPos {
+            m.Disable(Tr("menuMove"))
+            m.Disable(Tr("menuForget"))
+        }
+        ; the eaten click never activated anything, so without claiming the
+        ; foreground Windows' foreground lock closes the menu immediately
+        TakeForeground()
+        ; A menu is rendered - and the coordinates handed to it interpreted -
+        ; in the calling thread's DPI awareness. This script is SYSTEM DPI
+        ; aware, and on this machine that inflates every monitor except the
+        ; primary one by 1.5x (monitor 3 reports x=5760 instead of 3840), so
+        ; the menu came out the wrong size and landed off-screen everywhere
+        ; but on the primary. Per-monitor for the duration of the menu only;
+        ; the saved window positions keep using the script's normal space, so
+        ; nothing already stored changes meaning.
+        prevDpi := DllCall("SetThreadDpiAwarenessContext", "ptr", -4, "ptr")
+        try
+            m.Show()
+        finally {
+            if prevDpi
+                DllCall("SetThreadDpiAwarenessContext", "ptr", prevDpi, "ptr")
+        }
+    } finally {
+        g_menuOpen := false
+    }
+}
+
+; Windows' foreground lock denies background processes; borrow rights from the
+; current foreground window's thread and claim the foreground.
+TakeForeground() {
+    ourThread := DllCall("GetCurrentThreadId", "uint")
+    fg := DllCall("GetForegroundWindow", "ptr")
+    fgThread := fg ? DllCall("GetWindowThreadProcessId", "ptr", fg, "ptr", 0, "uint") : 0
+    if fgThread
+        DllCall("AttachThreadInput", "uint", ourThread, "uint", fgThread, "int", 1)
+    DllCall("SetForegroundWindow", "ptr", A_ScriptHwnd)
+    if fgThread
+        DllCall("AttachThreadInput", "uint", ourThread, "uint", fgThread, "int", 0)
+}
+
 ; Handler for the DALSEGNO_CMD registered message (see the registration at
 ; the top). Runs in our thread; the query path must stay quick because the
 ; sender waits synchronously.
@@ -647,6 +868,16 @@ CreateConfigTemplate() {
 ; RulesOnly = 1 means ONLY windows matching a title rule below are managed
 ; (like the old LIMS move script). Default 0 = all windows are managed.
 RulesOnly = 0
+; Modifier: held down for every DalSegno hotkey - the keyboard ones (D, S,
+; Backspace, Home, F10, F5) and the window menu alike. It is read as physical
+; key state and never registered as a hotkey prefix, so it can be a key another
+; script already owns: CapsLock works alongside Keyboard assistant.
+; MenuButton: pressed with the modifier to open the window menu (save, move,
+; forget position, create rule). That menu is only served when DeskPilot is NOT
+; running; when it is, the same combination opens its larger menu with these
+; items inside it.
+Modifier = CapsLock
+MenuButton = RButton
 
 [TitleRules]
 ; One rule per line:   alias = text
@@ -708,7 +939,16 @@ SplitConfigLine(line) {
 
 LoadConfig() {
     global ignoreExe, ignoreTitles, titleRules, rulesOnly, configIni
+    global g_modifier, g_menuButton
     rulesOnly := IniRead(configIni, "Settings", "RulesOnly", 0) = 1
+    g_modifier := Trim(IniRead(configIni, "Settings", "Modifier", "CapsLock"))
+    g_menuButton := Trim(IniRead(configIni, "Settings", "MenuButton", "RButton"))
+    try
+        GetKeyState(g_modifier, "P")   ; read on every keypress - verify once here
+    catch
+        g_modifier := "CapsLock"
+    ApplyMenuHotkey()
+    ApplyActionHotkeys()
     ignoreExe := []
     ignoreTitles := []
     titleRules := []
