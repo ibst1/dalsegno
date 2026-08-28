@@ -76,6 +76,7 @@ if (g_lang != "en" && g_lang != "sv")
 ; The window menu's trigger ([Settings] MenuModifier / MenuButton) and what we
 ; registered from it. Declared before LoadConfig() below, which reads them.
 g_modifier := "CapsLock"       ; held down for every hotkey here ([Settings] Modifier)
+g_autoSaveModOnly := true      ; autosave only when the modifier is held ([Settings] AutoSaveModifierOnly)
 g_menuButton := "RButton"      ; the window menu's button ([Settings] MenuButton)
 g_menuKeys := []
 g_actionKeys := []             ; the plain keys registered under the modifier
@@ -161,6 +162,9 @@ Tr(id) {
         "trayOpen",       "Open DalSegno Window Keeper ({mod} + D)",
         "trayMove",       "Move new windows to saved positions ({mod} + F10)",
         "trayAutoSave",   "Save position when a window is moved by hand",
+        "trayAutoSaveMod", "Save position when a window is moved with {mod} held",
+        "traySaveAll",    "Save all open windows' positions",
+        "savedAll",       "{1} window positions saved.",
         "trayToasts",     "Show a small toast when a position is saved",
         "trayApplyAll",   "Move all open windows to their positions ({mod} + Home)",
         "trayLanguage",   "Language",
@@ -218,6 +222,9 @@ Tr(id) {
         "trayOpen",       "Öppna DalSegno Fönsterlägen ({mod} + D)",
         "trayMove",       "Flytta nya fönster till sparade lägen ({mod} + F10)",
         "trayAutoSave",   "Spara läge när fönster flyttas för hand",
+        "trayAutoSaveMod", "Spara läge när fönster flyttas med {mod} nedtryckt",
+        "traySaveAll",    "Spara alla öppna fönsters lägen",
+        "savedAll",       "{1} fönsterlägen sparade.",
         "trayToasts",     "Visa liten notis när läge sparas",
         "trayApplyAll",   "Flytta alla öppna fönster till sina lägen ({mod} + Home)",
         "trayLanguage",   "Språk",
@@ -476,6 +483,13 @@ OnMoveEnd(hHook, event, hwnd, idObject, idChild, idThread, time) {
     global autoSaveEnabled
     if (idObject != 0 || !autoSaveEnabled)   ; the window itself, not a child object
         return
+    ; default: a drag only saves when the modifier is held while dropping -
+    ; saving is then a deliberate gesture, and a sloppy move can no longer
+    ; overwrite a position that was placed with care. The state is read HERE,
+    ; at the drop, not after the Aero-snap delay below - the user lets go of
+    ; the key as soon as the window is down.
+    if (g_autoSaveModOnly && !ModifierHeld())
+        return
     ; Deferred out of the event callback, and with Aero snap (dragging to a
     ; screen edge) the window is resized just AFTER the drag ends - the delay
     ; makes the snapped geometry what gets stored.
@@ -546,6 +560,27 @@ ForgetActive() {
     }
     try IniDelete(posIni, SectionFor(key))
     TrayTip Tr("forgot") "`n" SubStr(WinGetTitle(hwnd), 1, 60), Tr("appTitle")
+    PushStateSoon()
+}
+
+; Saves the position of every open manageable window - a snapshot of the
+; current layout, the counterpart of ApplyAll. Windows that cannot be saved
+; (minimized/maximized, no identity) are skipped silently; the toast carries
+; the count of what was actually stored.
+SaveAll(*) {
+    global winInfo
+    n := 0
+    for hwnd in WinGetList() {
+        key := KeyFor(hwnd)
+        if (key = "")
+            continue
+        if SavePos(key, hwnd) {
+            n++
+            if winInfo.Has(hwnd)
+                winInfo[hwnd].done := true   ; what was just saved must not be moved back
+        }
+    }
+    TrayTip Format(Tr("savedAll"), n), Tr("appTitle")
     PushStateSoon()
 }
 
@@ -901,6 +936,12 @@ RulesOnly = 0
 ; items inside it.
 Modifier = CapsLock
 MenuButton = RButton
+; AutoSaveModifierOnly = 1 (default): a hand-moved window only gets its
+; position saved when the modifier is held while dropping it - saving is a
+; deliberate gesture, and a sloppy move cannot overwrite a careful position.
+; Set 0 to save on every manual move (the old behavior). Deliberate saves are
+; always available: modifier+S, the window menu, and Save all in the GUI/tray.
+AutoSaveModifierOnly = 1
 
 [TitleRules]
 ; One rule per line:   alias = text
@@ -962,9 +1003,10 @@ SplitConfigLine(line) {
 
 LoadConfig() {
     global ignoreExe, ignoreTitles, titleRules, rulesOnly, configIni
-    global g_modifier, g_menuButton
+    global g_modifier, g_menuButton, g_autoSaveModOnly
     rulesOnly := IniRead(configIni, "Settings", "RulesOnly", 0) = 1
     g_modifier := Trim(IniRead(configIni, "Settings", "Modifier", "CapsLock"))
+    g_autoSaveModOnly := IniRead(configIni, "Settings", "AutoSaveModifierOnly", 1) = 1
     g_menuButton := Trim(IniRead(configIni, "Settings", "MenuButton", "RButton"))
     try
         GetKeyState(g_modifier, "P")   ; read on every keypress - verify once here
@@ -1054,7 +1096,7 @@ BuildTrayMenu() {
     global g_lblMove, g_lblAutoSave, g_lblToasts, g_lang
     global moveEnabled, autoSaveEnabled, notifyEnabled
     g_lblMove := Tr("trayMove")
-    g_lblAutoSave := Tr("trayAutoSave")
+    g_lblAutoSave := Tr(g_autoSaveModOnly ? "trayAutoSaveMod" : "trayAutoSave")
     g_lblToasts := Tr("trayToasts")
 
     langMenu := Menu()
@@ -1071,6 +1113,7 @@ BuildTrayMenu() {
     tray.Add(g_lblAutoSave, (*) => ToggleAutoSave())
     tray.Add(g_lblToasts, (*) => ToggleToasts())
     tray.Add()
+    tray.Add(Tr("traySaveAll"), SaveAll)
     tray.Add(Tr("trayApplyAll"), ApplyAll)
     tray.Add()
     tray.Add(Tr("trayConfig"), OpenConfigFile)
@@ -1283,6 +1326,9 @@ UiMessage(sender, args) {
         case "applyAll":
             ApplyAll()
             PushState()
+        case "saveAll":
+            SaveAll()
+            PushState()
         case "forget":
             UiForget(msg["section"])
         case "moveKey":
@@ -1313,6 +1359,7 @@ PushStateSoon() {
 
 PushState() {
     global g_uiReady, moveEnabled, autoSaveEnabled, notifyEnabled, rulesOnly, g_lang
+    global g_autoSaveModOnly, g_modifier
     global titleRules, ignoreExe, ignoreTitles
     if !g_uiReady
         return
@@ -1320,7 +1367,8 @@ PushState() {
     for r in titleRules
         rules.Push(Map("alias", r.alias, "pattern", r.pattern, "regex", r.regex ? 1 : 0))
     state := Map("settings", Map("move", moveEnabled ? 1 : 0, "autosave", autoSaveEnabled ? 1 : 0
-            , "notify", notifyEnabled ? 1 : 0, "rulesOnly", rulesOnly ? 1 : 0, "lang", g_lang)
+            , "notify", notifyEnabled ? 1 : 0, "rulesOnly", rulesOnly ? 1 : 0, "lang", g_lang
+            , "modOnly", g_autoSaveModOnly ? 1 : 0, "modifier", g_modifier)
         , "currentSetup", SetupKey()
         , "positions", ListPositions()
         , "rules", rules
