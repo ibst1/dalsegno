@@ -53,7 +53,10 @@ const STR = {
     openConfig: 'Open the config file…',
     status: (n, total, s) => `${n} saved positions for this monitor setup · ${total} total · setup: ${s}`,
     paused: '⏸ automatic moving is off',
-    delRuleTip: 'Remove the rule'
+    delRuleTip: 'Remove the rule',
+    tabSettings: 'Settings',
+    langH: 'Language',
+    langHelp: 'Applies to this window, the tray menu and notifications.'
   },
   sv: {
     appSub: 'Fönsterlägen',
@@ -94,7 +97,10 @@ const STR = {
     openConfig: 'Öppna konfigfilen…',
     status: (n, total, s) => `${n} sparade lägen för denna skärmuppsättning · ${total} totalt · uppsättning: ${s}`,
     paused: '⏸ automatisk flyttning är avstängd',
-    delRuleTip: 'Ta bort regeln'
+    delRuleTip: 'Ta bort regeln',
+    tabSettings: 'Inställningar',
+    langH: 'Språk',
+    langHelp: 'Gäller det här fönstret, tray-menyn och notiserna.'
   }
 };
 function t(id) { return (STR[lang] || STR.en)[id] ?? STR.en[id] ?? id; }
@@ -161,7 +167,10 @@ function localizeStatic() {
   $('rulesDirty').textContent = t('unsaved');
   $('btnOpenConfig').textContent = t('openConfig');
   $('appname').innerHTML = `DalSegno <span class="sub">${esc(t('appSub'))}</span>`;
-  $('langSel').value = lang;
+  $('tabBtnSettings').textContent = t('tabSettings');
+  $('langH').textContent = t('langH');
+  $('langHelp').textContent = t('langHelp');
+  document.querySelectorAll('input[name=lang]').forEach(r => { r.checked = r.value === lang; });
 }
 
 // ── topbar ─────────────────────────────────────────────────────────────
@@ -174,7 +183,8 @@ $('tglMove').addEventListener('change', e => post({ action: 'toggle', name: 'mov
 $('tglSave').addEventListener('change', e => post({ action: 'toggle', name: 'autosave', value: e.target.checked ? 1 : 0 }));
 $('tglNotify').addEventListener('change', e => post({ action: 'toggle', name: 'notify', value: e.target.checked ? 1 : 0 }));
 $('btnApplyAll').addEventListener('click', () => post({ action: 'applyAll' }));
-$('langSel').addEventListener('change', e => post({ action: 'setLang', lang: e.target.value }));
+document.querySelectorAll('input[name=lang]').forEach(r =>
+  r.addEventListener('change', e => { if (e.target.checked) post({ action: 'setLang', lang: e.target.value }); }));
 
 // ── tabs ───────────────────────────────────────────────────────────────
 document.querySelectorAll('#tabs .tab').forEach(btn => {
@@ -333,6 +343,20 @@ function renderStatus() {
   $('statusPause').innerHTML = st.settings.move ? ''
     : `<span class="warn">${esc(t('paused'))}</span>`;
 }
+
+// ── prefill from the title bar menu ("Create title rule…") ─────────────
+window.prefillRule = function (r) {
+  $('tabBtnRules').click();
+  const empty = $('rulesBody').querySelector('.empty-row');
+  if (empty) empty.remove();
+  $('rulesBody').insertAdjacentHTML('beforeend',
+    ruleRow({ alias: r.alias || '', pattern: r.pattern || '', regex: 0 }));
+  setRulesDirty(true);
+  const rows = $('rulesBody').querySelectorAll('tr');
+  const input = rows[rows.length - 1].querySelector('.r-pattern');
+  input.focus();
+  input.select();   // the title is prefilled whole - trim it to the stable part
+};
 
 // ── start ──────────────────────────────────────────────────────────────
 post({ action: 'ready' });

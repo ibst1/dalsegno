@@ -13,10 +13,6 @@
   <label class="toggle"><input type="checkbox" id="tglSave"> <span id="lblSave"></span></label>
   <label class="toggle"><input type="checkbox" id="tglNotify"> <span id="lblNotify"></span></label>
   <span class="spacer"></span>
-  <select id="langSel" title="Language / Språk">
-    <option value="en">English</option>
-    <option value="sv">Svenska</option>
-  </select>
   <button id="btnApplyAll" class="primary"></button>
 </div>
 
@@ -24,6 +20,7 @@
   <button class="tab active" data-tab="positions" id="tabBtnPositions"></button>
   <button class="tab" data-tab="windows" id="tabBtnWindows"></button>
   <button class="tab" data-tab="rules" id="tabBtnRules"></button>
+  <button class="tab" data-tab="settings" id="tabBtnSettings"></button>
 </div>
 
 <div id="main">
@@ -99,6 +96,15 @@
         <span class="spacer"></span>
         <button id="btnOpenConfig" class="small"></button>
       </div>
+    </div>
+  </section>
+
+  <section id="tab-settings" class="tabpane">
+    <div class="inner">
+      <h2 id="langH"></h2>
+      <p class="help" id="langHelp"></p>
+      <label class="radio"><input type="radio" name="lang" value="en"> English</label>
+      <label class="radio"><input type="radio" name="lang" value="sv"> Svenska</label>
     </div>
   </section>
 

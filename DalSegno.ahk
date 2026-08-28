@@ -28,6 +28,10 @@
 ;    § + F10         toggle: move new windows automatically
 ;    § + F5          restart the script
 ;
+;    Ctrl + right-click on a window's title bar opens a DalSegno menu for
+;    that window: save/restore/forget its position, or create a title rule
+;    from it. (Plain right-click is left alone - DeskPilot owns it.)
+;
 ;  The GUI (WebView2, same architecture as Encore/Expanto) shows saved
 ;  positions, open windows and rules. Left-clicking the tray icon opens it.
 ;  Interface language (English/Swedish) is selectable in the GUI and the
@@ -97,7 +101,10 @@ winEventHook := DllCall("SetWinEventHook",
     "uint", 0, "uint", 0,
     "uint", 0x2,                       ; OUTOFCONTEXT | SKIPOWNPROCESS
     "ptr")
-OnExit((*) => DllCall("UnhookWinEvent", "ptr", winEventHook))
+; NOTE: the callback must return 0/empty - a nonzero return value tells AHK
+; to CANCEL the exit (UnhookWinEvent returns 1 on success, which silently
+; made the script refuse to close until the trailing 0 was added).
+OnExit((*) => (DllCall("UnhookWinEvent", "ptr", winEventHook), 0))
 
 SetTimer(ScanWindows, 800)
 
@@ -108,6 +115,12 @@ SetTimer(ScanWindows, 800)
 § & Home::ApplyAll()
 § & F10::ToggleMove()
 § & F5::Reload
+
+; Ctrl + right-click on a title bar: per-window menu (save/restore/forget/
+; create rule). Plain right-click is untouched - DeskPilot uses it.
+#HotIf MouseOverTitlebar()
+^RButton::ShowTitleMenu()
+#HotIf
 
 ; =============================================================================
 ;  Interface strings (English / Swedish)
@@ -149,6 +162,10 @@ Tr(id) {
         "configReloaded", "{1} title rules, {2} ignored programs, {3} ignored titles.",
         "configReloadedTitle", "Settings reloaded",
         "uiFail",         "Could not start the GUI (WebView2 runtime missing?).",
+        "tmSave",         "Save window position",
+        "tmMove",         "Move to saved position",
+        "tmForget",       "Forget saved position",
+        "tmRule",         "Create title rule…",
         "hkTitle",        "DalSegno Window Keeper - hotkeys",
         "hkText",         "
         (
@@ -158,6 +175,10 @@ Tr(id) {
         § + Home         move every open window to its saved position
         § + F10          toggle: move new windows automatically
         § + F5           restart the script
+
+        Ctrl + right-click on a window's title bar opens a menu for
+        that window: save, restore or forget its position, or create
+        a title rule from it.
 
         Positions are also saved automatically every time you drag a
         window and drop it (can be turned off in the menu).
@@ -195,6 +216,10 @@ Tr(id) {
         "configReloaded", "{1} titelregler, {2} ignorerade program, {3} ignorerade titlar.",
         "configReloadedTitle", "Inställningar omlästa",
         "uiFail",         "Kunde inte starta GUI:t (saknas WebView2-runtime?).",
+        "tmSave",         "Spara fönstrets läge",
+        "tmMove",         "Flytta till sparat läge",
+        "tmForget",       "Glöm sparat läge",
+        "tmRule",         "Skapa titelregel…",
         "hkTitle",        "DalSegno Fönsterlägen - kortkommandon",
         "hkText",         "
         (
@@ -204,6 +229,10 @@ Tr(id) {
         § + Home         flytta alla öppna fönster till sina sparade lägen
         § + F10          av/på: flytta nya fönster automatiskt
         § + F5           starta om skriptet
+
+        Ctrl + högerklick på ett fönsters titelrad öppnar en meny för
+        just det fönstret: spara, återställ eller glöm läget, eller
+        skapa en titelregel från det.
 
         Läget sparas också automatiskt varje gång du drar ett fönster
         och släpper det (kan stängas av i menyn).
@@ -515,6 +544,125 @@ ApplyAll(*) {
         }
     }
     TrayTip Format(Tr("movedAll"), n), Tr("appTitle")
+}
+
+; =============================================================================
+;  Title bar menu (Ctrl + right-click)
+; =============================================================================
+
+; True when the mouse is on a window title bar (WM_NCHITTEST = HTCAPTION).
+; Runs as a hotkey criterion on every Ctrl+right-click, hence
+; SendMessageTimeout with a short deadline so a hung window never freezes
+; the mouse. Same technique as DeskPilot; custom-drawn captions (VS Code,
+; browsers, new Outlook) report HTCLIENT, so the top band is accepted too -
+; the Ctrl modifier already makes the gesture deliberate.
+MouseOverTitlebar(*) {
+    static ownPid := ProcessExist()
+    try {
+        MouseGetPos , , &win
+        if !win
+            return false
+        if WinGetClass(win) ~= "^(Shell_TrayWnd|Shell_SecondaryTrayWnd|Progman|WorkerW|#32768)$"
+            return false   ; #32768 = open menus - never touch them
+        if WinGetPID(win) = ownPid
+            return false
+        CoordMode("Mouse", "Screen")
+        MouseGetPos(&mx, &my)
+        res := 0
+        if !DllCall("SendMessageTimeoutW", "ptr", win, "uint", 0x84, "ptr", 0
+            , "ptr", ((my & 0xFFFF) << 16) | (mx & 0xFFFF)
+            , "uint", 0x2, "uint", 50, "ptr*", &res)   ; SMTO_ABORTIFHUNG
+            return false
+        if (res = 2)   ; HTCAPTION
+            return true
+        if (res = 1) {   ; HTCLIENT: accept the top band for custom captions
+            WinGetPos(, &wy, , , win)
+            return (my - wy) <= Round(44 * A_ScreenDPI / 96)
+        }
+        return false
+    } catch
+        return false
+}
+
+ShowTitleMenu() {
+    MouseGetPos , , &win
+    if (!win || !WinExist(win))
+        return
+    key := KeyFor(win)
+    title := "", exe := ""
+    try title := WinGetTitle(win)
+    try exe := WinGetProcessName(win)
+    hasSaved := key != "" && LoadPos(key) != ""
+
+    short := StrLen(title) > 40 ? SubStr(title, 1, 38) "…" : title
+    short := StrReplace(short, "&", "&&")
+    m := Menu()
+    if (short != "") {
+        m.Add(short, (*) => 0)   ; header row: which window this menu is about
+        m.Disable(short)
+        m.Add()
+    }
+    if (key != "") {
+        m.Add(Tr("tmSave"), (*) => TmSave(win))
+        m.Add(Tr("tmMove"), (*) => TmMove(win))
+        if !hasSaved
+            m.Disable(Tr("tmMove"))
+        m.Add(Tr("tmForget"), (*) => TmForget(win))
+        if !hasSaved
+            m.Disable(Tr("tmForget"))
+        m.Add()
+    }
+    m.Add(Tr("tmRule"), (*) => TmCreateRule(exe, title))
+    m.Show()
+}
+
+TmSave(hwnd) {
+    global winInfo
+    key := KeyFor(hwnd)
+    if (key != "" && SavePos(key, hwnd)) {
+        if winInfo.Has(hwnd)
+            winInfo[hwnd].done := true
+        try TrayTip SubStr(WinGetTitle(hwnd), 1, 60), Tr("savedTitle")
+        PushStateSoon()
+    } else
+        TrayTip Tr("cannotSaveWin"), Tr("appTitle")
+}
+
+TmMove(hwnd) {
+    key := KeyFor(hwnd)
+    if (key != "")
+        MoveToSaved(hwnd, key)
+}
+
+TmForget(hwnd) {
+    global posIni
+    key := KeyFor(hwnd)
+    if (key = "" || LoadPos(key) = "")
+        return
+    try IniDelete(posIni, SectionFor(key))
+    TrayTip Tr("forgot") "`n" SubStr(WinGetTitle(hwnd), 1, 60), Tr("appTitle")
+    PushStateSoon()
+}
+
+; Opens the GUI on the Rules tab with a new rule prefilled from the window:
+; the title as pattern, the exe name (sans .exe) as alias suggestion. The
+; user trims the pattern down to the stable part and saves.
+TmCreateRule(exe, title) {
+    global g_uiReady
+    alias := RegExReplace(StrLower(RegExReplace(exe, "i)\.exe$", "")), "[^a-z0-9]", "")
+    payload := JSON.Dump(Map("alias", alias, "pattern", title))
+    OpenUi()
+    attempts := 0
+    trySend() {
+        global g_uiReady
+        if g_uiReady {
+            UiSend("window.prefillRule(" payload ")")
+            return
+        }
+        if (++attempts <= 25)   ; the GUI needs a moment on first open
+            SetTimer(trySend, -200)
+    }
+    SetTimer(trySend, -200)
 }
 
 ; =============================================================================
