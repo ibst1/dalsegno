@@ -147,6 +147,7 @@ OnMessage(DllCall("RegisterWindowMessage", "str", "DALSEGNO_CMD", "uint"), Exter
 
 MenuOwnership()
 SetTimer(MenuOwnership, 2000)
+SetTimer(ModifierWatchdog, 5000)   ; clears a logically stuck modifier
 
 ; =============================================================================
 ;  Interface strings (English / Swedish)
@@ -602,6 +603,28 @@ MenuOwnership() {
         return
     owned := mine
     ApplyMenuHotkey(mine)
+}
+
+; The modifier can get logically stuck (a keyboard hook swallowing the key-UP
+; leaves the system convinced it is held). With it stuck, every press of d, s,
+; Home... fires an action instead of typing, and every right-click opens the
+; menu. A real hold is seconds long, so after half a minute of continuous
+; "down" the missing up-event is sent to reset the state.
+ModifierWatchdog() {
+    static since := 0
+    down := ModifierHeld()
+    if !down {
+        since := 0
+        return
+    }
+    if !since {
+        since := A_TickCount
+        return
+    }
+    if (A_TickCount - since > 30000) {
+        try Send("{" g_modifier " up}")
+        since := 0
+    }
 }
 
 ; True while the configured modifier is physically down. Reading the physical
