@@ -18,9 +18,12 @@ const STR = {
     appSub: 'Window Keeper',
     tglMove: 'Move new windows automatically',
     tglSave: 'Save on manual move',
+    tglSaveMod: 'Save on move with {mod} held',
     tglNotify: 'Toasts',
+    saveAll: 'Save all now',
+    saveAllTip: "Save every open window's current position",
     applyAll: 'Move all now',
-    applyAllTip: 'Move every open window to its saved position (§ + Home)',
+    applyAllTip: 'Move every open window to its saved position ({mod} + Home)',
     tabPositions: 'Saved positions',
     tabWindows: 'Open windows',
     tabRules: 'Rules',
@@ -62,9 +65,12 @@ const STR = {
     appSub: 'Fönsterlägen',
     tglMove: 'Flytta nya fönster automatiskt',
     tglSave: 'Spara vid manuell flytt',
+    tglSaveMod: 'Spara vid flytt med {mod} nedtryckt',
     tglNotify: 'Notiser',
+    saveAll: 'Spara alla nu',
+    saveAllTip: 'Spara alla öppna fönsters nuvarande lägen',
     applyAll: 'Flytta alla nu',
-    applyAllTip: 'Flytta alla öppna fönster till sina sparade lägen (§ + Home)',
+    applyAllTip: 'Flytta alla öppna fönster till sina sparade lägen ({mod} + Home)',
     tabPositions: 'Sparade lägen',
     tabWindows: 'Öppna fönster',
     tabRules: 'Regler',
@@ -103,7 +109,11 @@ const STR = {
     langHelp: 'Gäller det här fönstret, tray-menyn och notiserna.'
   }
 };
-function t(id) { return (STR[lang] || STR.en)[id] ?? STR.en[id] ?? id; }
+function t(id) {
+  const s = (STR[lang] || STR.en)[id] ?? STR.en[id] ?? id;
+  const mod = (st && st.settings && st.settings.modifier) || 'CapsLock';
+  return s.replace('{mod}', mod);
+}
 
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -135,8 +145,10 @@ function setupList() {
 function localizeStatic() {
   document.documentElement.lang = lang;
   $('lblMove').textContent = t('tglMove');
-  $('lblSave').textContent = t('tglSave');
+  $('lblSave').textContent = t(st && st.settings && st.settings.modOnly ? 'tglSaveMod' : 'tglSave');
   $('lblNotify').textContent = t('tglNotify');
+  $('btnSaveAll').textContent = t('saveAll');
+  $('btnSaveAll').title = t('saveAllTip');
   $('btnApplyAll').textContent = t('applyAll');
   $('btnApplyAll').title = t('applyAllTip');
   $('tabBtnPositions').textContent = t('tabPositions');
@@ -182,6 +194,7 @@ function renderTopbar() {
 $('tglMove').addEventListener('change', e => post({ action: 'toggle', name: 'move', value: e.target.checked ? 1 : 0 }));
 $('tglSave').addEventListener('change', e => post({ action: 'toggle', name: 'autosave', value: e.target.checked ? 1 : 0 }));
 $('tglNotify').addEventListener('change', e => post({ action: 'toggle', name: 'notify', value: e.target.checked ? 1 : 0 }));
+$('btnSaveAll').addEventListener('click', () => post({ action: 'saveAll' }));
 $('btnApplyAll').addEventListener('click', () => post({ action: 'applyAll' }));
 document.querySelectorAll('input[name=lang]').forEach(r =>
   r.addEventListener('change', e => { if (e.target.checked) post({ action: 'setLang', lang: e.target.value }); }));
