@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DalSegno Window Keeper</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="topbar">
+  <span id="logo">𝄋</span><span id="appname">DalSegno</span>
+  <label class="toggle"><input type="checkbox" id="tglMove"> <span id="lblMove"></span></label>
+  <label class="toggle"><input type="checkbox" id="tglSave"> <span id="lblSave"></span></label>
+  <label class="toggle"><input type="checkbox" id="tglNotify"> <span id="lblNotify"></span></label>
+  <span class="spacer"></span>
+  <select id="langSel" title="Language / Språk">
+    <option value="en">English</option>
+    <option value="sv">Svenska</option>
+  </select>
+  <button id="btnApplyAll" class="primary"></button>
+</div>
+
+<div id="tabs">
+  <button class="tab active" data-tab="positions" id="tabBtnPositions"></button>
+  <button class="tab" data-tab="windows" id="tabBtnWindows"></button>
+  <button class="tab" data-tab="rules" id="tabBtnRules"></button>
+</div>
+
+<div id="main">
+
+  <section id="tab-positions" class="tabpane active">
+    <div class="pane-head">
+      <label><span id="lblSetup"></span>&nbsp;<select id="setupSel"></select></label>
+      <span class="spacer"></span>
+      <button id="btnOpenPositions" class="small"></button>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr>
+          <th id="thWindow"></th><th id="thIdentity"></th>
+          <th style="text-align:right">X</th><th style="text-align:right">Y</th>
+          <th style="text-align:right" id="thWidth"></th>
+          <th style="text-align:right" id="thHeight"></th>
+          <th></th>
+        </tr></thead>
+        <tbody id="posBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="tab-windows" class="tabpane">
+    <div class="pane-head">
+      <span class="hint" id="winsHint"></span>
+      <span class="spacer"></span>
+      <button id="btnRefresh" class="small"></button>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr>
+          <th id="thProgram"></th><th id="thTitle"></th>
+          <th id="thIdentity2"></th><th id="thSaved"></th><th></th>
+        </tr></thead>
+        <tbody id="winBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="tab-rules" class="tabpane">
+    <div class="inner">
+      <h2 id="rulesH"></h2>
+      <p class="help" id="rulesHelp"></p>
+      <table id="rulesTable">
+        <thead><tr>
+          <th id="thAlias"></th><th id="thPattern"></th>
+          <th style="text-align:center">Regex</th><th></th>
+        </tr></thead>
+        <tbody id="rulesBody"></tbody>
+      </table>
+      <p><button id="btnAddRule" class="small"></button></p>
+
+      <label class="toggle" style="margin-top:8px"><input type="checkbox" id="tglOnlyRules">
+        <span id="lblOnlyRules"></span></label>
+
+      <h2 id="ignoreH"></h2>
+      <div class="ignore-grid">
+        <div>
+          <p class="help" id="ignExeHelp"></p>
+          <textarea id="txtIgnoreExe" spellcheck="false" placeholder="mstsc.exe"></textarea>
+        </div>
+        <div>
+          <p class="help" id="ignTitleHelp"></p>
+          <textarea id="txtIgnoreTitle" spellcheck="false" placeholder="Bildfönster"></textarea>
+        </div>
+      </div>
+
+      <div id="rulesFooter">
+        <button id="btnSaveRules" class="primary"></button>
+        <span id="rulesDirty" hidden></span>
+        <span class="spacer"></span>
+        <button id="btnOpenConfig" class="small"></button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div id="statusbar"><span id="status"></span><span class="spacer"></span><span id="statusPause"></span></div>
+
+<script src="app.js"></script>
+</body>
+</html>
