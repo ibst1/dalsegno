@@ -20,10 +20,14 @@ the wrong place, such as LabVantage LIMS.
   identity has a saved position is moved there (twice, so the size sticks when
   crossing monitors with different scaling). Windows that were already open
   when the script started are left alone.
-- **Identity** is `program + window class + exact title` by default. **Title
-  rules** make all windows whose title contains a given text (or matches a
-  regex) share one identity regardless of program — needed for windows with
-  varying titles (URLs, record ids).
+- **Identity** is `program + window class` by default: all normal windows of
+  an app share one position, and the last one you moved defines it. (Exact
+  titles are useless as identity — every new Notepad or Explorer window has
+  a different title.) **Title rules** carve out exceptions: all windows
+  whose title contains a given text (or matches a regex) form their own
+  group with its own position, regardless of program — that is how specific
+  popups (e.g. LIMS windows) get their own spots even though they live in
+  the same browser as everything else.
 - **Per monitor setup and computer**: positions are keyed by monitor count +
   virtual desktop width + computer name, so laptop/docked layouts and
   different machines never overwrite each other. On docking, open windows
@@ -49,11 +53,16 @@ The GUI is a WebView2 page (`ui/`), same architecture as Encore and Expanto.
 
 ## Title bar menu
 
-Ctrl + right-click on any window's title bar opens a DalSegno menu for that
-window: save its position, move it to the saved one, forget it, or **create a
-title rule** with the window's title prefilled in the GUI — trim the pattern
-down to the stable part and save. Plain right-click is left untouched
-(DeskPilot uses it).
+DalSegno's per-window items live in the window's regular title bar menu
+(right-click the title bar): save the window's position, move it to the
+saved one, forget it, or **create a title rule** with the window's title
+prefilled in the GUI — trim the pattern down to the stable part and save.
+
+When [DeskPilot](../DeskPilot) is running, DeskPilot owns that right-click
+and shows its enhanced system menu — DalSegno's items appear there as a
+*DalSegno* submenu (the two scripts talk over the `DALSEGNO_CMD` registered
+window message). Without DeskPilot, DalSegno shows the window's real system
+menu itself, with its items appended at the bottom.
 
 ## Hotkeys
 
@@ -67,7 +76,7 @@ down to the stable part and save. Plain right-click is left untouched
 | § + Home | move every open window to its saved position |
 | § + F10 | toggle automatic moving |
 | § + F5 | restart the script |
-| Ctrl + right-click a title bar | per-window menu: save/restore/forget/create rule |
+| Right-click a title bar | window menu with DalSegno items: save/restore/forget/create rule |
 
 ## Files
 
