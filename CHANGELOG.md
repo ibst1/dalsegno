@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.5.0 (2026-08-28)
+
+- The window menu moved from plain right-click to **CapsLock+right-click**
+  (`MenuModifier` / `MenuButton`), and opens anywhere in the window rather
+  than on the title bar only (`MenuWholeWindow`). The plain right-click is
+  left to the app.
+- The menu is now DeskPilot's own instead of the window's real system menu
+  with our items appended. Appending to another process's `HMENU` meant the
+  app rendered our items inside its own caption menu too, and competing for
+  the plain right-click leaked clicks whenever the menu's modal loop blocked
+  the hotkey criterion — between them that caused double menus, flicker, and
+  menus built for the app's own menu popup instead of for the window.
+- Fix: the menu was drawn at the wrong size and opened off-screen on every
+  monitor whose scaling differs from the primary one. It is now shown
+  per-monitor DPI aware; the script stays system DPI aware elsewhere, which
+  is what the taskbar label and the OSD are built on.
+- The modifier is read as physical key state rather than registered as a
+  hotkey prefix, so it can be a key another script already hooks — a prefix
+  registration makes AutoHotkey hold that key back from other hooks, which
+  broke the combination outright when two scripts claimed the same key.
+- `TitleMenuBand` is gone: with the menu no longer tied to the title bar
+  there is no band to special-case.
+
+## 1.4.0 (2026-08-25)
+
+- Show a window on all desktops (window pinning) from the menu.
+
 ## 1.3.3 (2026-08-24)
 
 - The release zip now ships the unmodified official AutoHotkey v2

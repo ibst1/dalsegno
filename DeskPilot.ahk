@@ -1,5 +1,5 @@
 ;===============================================================================
-; DeskPilot — v1.4.0 (2026-08-25)
+; DeskPilot — v1.5.0 (2026-08-28)
 ;
 ; * Title bar menu item "Show on all desktops" — pins a window so it follows
 ;   you everywhere; checkable, and reflects the window's current state.
@@ -48,9 +48,12 @@ g_brickaText := ""   ; last rendered label content (avoids needless redraws)
 g_namnITray := true
 g_rullhjul := true   ; mouse wheel over the taskbar switches desktop
 g_pilikoner := true  ; two tray icons (Skrivbordspil.ahk) that switch desktop
-g_titelmeny := true  ; right-click on a window title bar shows the move menu
-g_egenMeny := ""     ; process regex for apps whose title clicks are left untouched
-g_bandAppar := "(?i)^olk\.exe$"  ; apps where plain clicks in the top band also count
+g_titelmeny := true  ; the modifier+right-click window menu is enabled
+g_menyModifierare := "CapsLock" ; held down while right-clicking ([Mouse] MenuModifier)
+g_menyKnapp := "RButton"        ; the button itself ([Mouse] MenuButton)
+g_menyTangenter := []           ; what we actually registered, so a reload can undo it
+g_egenMeny := ""     ; process regex for apps left completely untouched
+g_helaFönstret := true  ; the menu opens anywhere in the window, not just the title bar
 g_menyÖppen := false  ; the title bar menu is currently showing (drives click handling)
 g_regler := []       ; [{mål, regex}] — windows that should always be moved
 g_kändaFönster := Map()  ; hwnd → title, for the rule sweep's new/changed detection
@@ -165,7 +168,8 @@ PollSkrivbord() {
 
 LäsKonfig() {
     global g_regKortkommandon, g_namnITray, g_brickaText, g_rullhjul, g_pilikoner
-    global g_titelmeny, g_egenMeny, g_bandAppar, g_språk
+    global g_titelmeny, g_egenMeny, g_helaFönstret, g_språk
+    global g_menyModifierare, g_menyKnapp, g_menyTangenter
     if !FileExist(g_konfigFil)
         SkrivStandardKonfig()
     g_språk := IniRead(g_konfigFil, "Display", "Language", "en") = "sv" ? "sv" : "en"
@@ -181,13 +185,7 @@ LäsKonfig() {
     Hotkey("WheelDown", RullaNästa, g_rullhjul ? "On" : "Off")
     HotIf()
     g_egenMeny := IniRead(g_konfigFil, "Mouse", "TitleMenuExclude", "")
-    g_bandAppar := IniRead(g_konfigFil, "Mouse", "TitleMenuBand", "(?i)^olk\.exe$")
-    HotIf(MusÖverTitelrad)
-    Hotkey("RButton", TitelHögerNer, g_titelmeny ? "On" : "Off")
-    Hotkey("RButton Up", VisaFönsterMeny, g_titelmeny ? "On" : "Off")
-    Hotkey("+RButton", TitelHögerNer, g_titelmeny ? "On" : "Off")
-    Hotkey("+RButton Up", VisaFönsterMeny, g_titelmeny ? "On" : "Off")
-    HotIf()
+    g_helaFönstret := IniRead(g_konfigFil, "Mouse", "MenuWholeWindow", "1") != "0"
     LäsRegler()
     for tangent in g_regKortkommandon
         try Hotkey(tangent, "Off")
@@ -218,11 +216,56 @@ LäsKonfig() {
         loop 9
             Registrera(p[1], pre . A_Index, p[3](A_Index), &fel)
     }
+    g_menyModifierare := Trim(IniRead(g_konfigFil, "Mouse", "MenuModifier", "CapsLock"))
+    g_menyKnapp := Trim(IniRead(g_konfigFil, "Mouse", "MenuButton", "RButton"))
+    ; the modifier is read on every click, so a bad name would throw there and
+    ; silently kill the menu - check it once, here, where it can be reported
+    try
+        GetKeyState(g_menyModifierare, "P")
+    catch {
+        fel .= "MenuModifier: " g_menyModifierare "`n"
+        g_menyModifierare := "CapsLock"
+    }
+    fel .= TillämpaMenyKortkommando()
     if fel != "" {
         TrayTip(T("invalidHotkeys") "`n" fel, "DeskPilot", "Iconx")
         try FileAppend(FormatTime() "  Invalid hotkeys: " StrReplace(fel, "`n", " / ") "`n"
             , A_ScriptDir "\error.log", "UTF-8")
     }
+}
+
+; Registers the BUTTON only. The modifier is never registered as a compound
+; prefix ("CapsLock & RButton"), it is read as physical key state in the
+; criterion below - because registering a prefix makes AHK hold that key's
+; events back from other scripts' hooks. That is exactly what killed § the
+; moment DalSegno also claimed it (the first hook in the chain swallowed the
+; press and the second never saw it, and § stopped typing at the same time),
+; and it would break Keyboard assistant's CapsLock navigation layer the same
+; way. Expanto reaches the same conclusion in its CapsHeld predicate.
+;
+; The button is configurable too, so a reload can change it and not just its
+; state - whatever was registered last time has to be switched off first, and
+; under the same #HotIf context it was created in, or the Off would address the
+; criterion-less variant instead.
+TillämpaMenyKortkommando() {
+    global g_menyTangenter, g_menyKnapp
+    fel := ""
+    HotIf(MusÖverMålFönster)
+    for tangent in g_menyTangenter
+        try Hotkey(tangent, "Off")
+    g_menyTangenter := []
+    if (g_titelmeny && g_menyKnapp != "") {
+        try {
+            Hotkey(g_menyKnapp, MenyHögerNer, "On")
+            Hotkey(g_menyKnapp " Up", VisaFönsterMeny, "On")
+            g_menyTangenter := [g_menyKnapp, g_menyKnapp " Up"]
+        } catch {
+            fel .= "MenuButton: " g_menyKnapp "`n"
+            try Hotkey(g_menyKnapp, "Off")   ; the down half may have taken
+        }
+    }
+    HotIf()
+    return fel
 }
 
 Registrera(namn, tangent, hanterare, &fel) {
@@ -280,20 +323,25 @@ Wheel=1
 ; ArrowIcons=1: two extra tray icons (left/right arrow) that switch desktop
 ; on click. Drag them out of the icon overflow (the ^ chevron) once.
 ArrowIcons=1
-; TitleMenu=1: right-clicking a window title bar shows the window's real
-; system menu - including the app's and e.g. PowerToys' own additions (Edge
-; puts its special items in exactly that menu) - with the desktop move items
-; at the bottom. TitleMenuExclude: process names (regex) for apps where the
-; right-click should instead pass through completely untouched (the move
-; menu is then reached with Shift+right-click). Empty = no exclusions.
+; TitleMenu=1: the window menu (DeskPilot's items, plus DalSegno's when that
+; script is running) is enabled. The plain right-click is left to the app, so
+; app title bar menus keep working exactly as before.
+; TitleMenuExclude: process names (regex) for apps where the combination
+; should pass through untouched. Empty = no exclusions.
 TitleMenu=1
 TitleMenuExclude=
-; TitleMenuBand: apps (process regex) with a custom-drawn title bar that
-; reports client area everywhere (e.g. the new Outlook) - there a plain
-; right-click in the window's top band (about 44 px) always shows the move
-; menu. Note: any app-specific right-click menus inside that band (e.g. the
-; search box's) cannot be reached there.
-TitleMenuBand=(?i)^olk\.exe$
+; MenuModifier / MenuButton: hold the modifier and press the button. The
+; modifier is read as physical key state, never registered as a hotkey prefix,
+; so it can be a key other scripts already use - CapsLock works alongside
+; Keyboard assistant's navigation layer and Expanto. Any key name works:
+; CapsLock, Shift, Ctrl, §, XButton1. The button may be RButton, MButton,
+; XButton1, XButton2.
+MenuModifier=CapsLock
+MenuButton=RButton
+; MenuWholeWindow=1: the combination opens the menu anywhere in the window.
+; Set to 0 to restrict it to the title bar (and the top ~44 px band of apps
+; with custom-drawn title bars).
+MenuWholeWindow=1
 
 [Rules]
 ; Windows that should always be moved to a specific desktop. Easiest to
@@ -326,6 +374,8 @@ T(k) {
         "rulePrompt2", ".`nPre-filled: the exact current title. Tip: (?i) = case-insensitive.",
         "ruleInvalid", "Invalid regex – the rule was not saved",
         "ruleSaved", "Rule saved → ",
+        "dsSave", "Save window position", "dsMove", "Move to saved position",
+        "dsForget", "Forget saved position", "dsRule", "Create title rule…",
         "trayShowName", "Show desktop name", "trayOpenConfig", "Open configuration",
         "trayReloadConfig", "Reload configuration", "trayLanguage", "Language",
         "trayAutostart", "Start with Windows",
@@ -344,6 +394,8 @@ T(k) {
         "rulePrompt2", ".`nFörifyllt: exakt nuvarande titel. Tips: (?i) = skiftlägesokänslig.",
         "ruleInvalid", "Ogiltig regex – regeln sparades inte",
         "ruleSaved", "Regel sparad → ",
+        "dsSave", "Spara fönstrets läge", "dsMove", "Flytta till sparat läge",
+        "dsForget", "Glöm sparat läge", "dsRule", "Skapa titelregel…",
         "trayShowName", "Visa skrivbordsnamn", "trayOpenConfig", "Öppna konfigurationen",
         "trayReloadConfig", "Läs om konfigurationen", "trayLanguage", "Språk",
         "trayAutostart", "Starta med Windows",
@@ -410,7 +462,7 @@ VisaFlyttMenyHotkey(*) {
     s := LäsSkrivbordsStatus()
     if (!s || s.index = 0)
         return
-    VisaReplikaMeny(win, s, true)
+    VisaFönstermenyn(win, s, true)
 }
 
 VäxlaTill(mål, *) {
@@ -627,10 +679,11 @@ VäljSkrivbord(n, *) {
 
 ;--- title bar menu and window rules --------------------------------------------
 
-; True when the mouse is on a window title bar (WM_NCHITTEST = HTCAPTION).
-; Runs as a hotkey criterion for every right-click — hence SendMessageTimeout
-; with a short deadline so a hung window never freezes the mouse.
-MusÖverTitelrad(hk := "", *) {
+; True when the mouse is over a window we can offer the menu for. Runs as a
+; hotkey criterion for every press of the menu combination, so everything here
+; has to be quick — hence SendMessageTimeout with a short deadline in the title bar
+; mode, so a hung window never freezes the mouse.
+MusÖverMålFönster(hk := "", *) {
     static egenPid := DllCall("GetCurrentProcessId")
     ; while our menu is open: eat ALL right-clicks (the handler closes the
     ; menu). Without this fast path the hit test below can time out and let
@@ -638,19 +691,50 @@ MusÖverTitelrad(hk := "", *) {
     ; the system menu on top of ours.
     if g_menyÖppen
         return true
+    ; the whole point of the physical read: no hook on the modifier, so no
+    ; collision with whoever else uses it. Also the cheapest possible exit -
+    ; this runs on every single right-click in the system, and for all but the
+    ; held-modifier case it must cost nothing and let the click through.
+    try {
+        if !GetKeyState(g_menyModifierare, "P")
+            return false
+    } catch
+        return false
     try {
         MouseGetPos , , &win
         if !win
             return false
         if WinGetClass(win) ~= "^(Shell_TrayWnd|Shell_SecondaryTrayWnd|Progman|WorkerW|#32768)$"
             return false   ; #32768 = open menus - never touch them
+        ; ...but only the CLASSIC menu class is #32768. Apps draw their own
+        ; caption menus as ordinary popups - Chromium as Chrome_WidgetWin_1,
+        ; Terminal as a XAML popup - so the class test above sails straight
+        ; past them. Treating one as a target window ate the click meant to
+        ; dismiss it and stacked our menu on top of the app's own (the double
+        ; menu, and the flicker when the two fought over the foreground); the
+        ; popup has no title, so the rule item read: Always move "" to.
+        if !ÄrRiktigtFönster(win)
+            return false
         if WinGetPID(win) = egenPid
             return false
-        ; apps with their own caption menu (Edge/Chrome): let plain right-
-        ; clicks pass PHYSICALLY untouched (synthetic NC clicks are ignored
-        ; by Chromium); only the Shift variant is captured there
-        if (!InStr(hk, "+") && ÄrEgenMenyApp(win))
+        ; windows parked on OTHER virtual desktops stay WS_VISIBLE but are
+        ; DWM-cloaked, and WindowFromPoint happily returns such ghosts lying
+        ; above the visible window in the z-order: the user clicks the window
+        ; they SEE, we would target the invisible one (menu for the wrong
+        ; window, e.g. a Terminal on another desktop). Physical clicks are
+        ; routed past cloaked windows by the OS, so letting the click pass
+        ; through reaches the window the user actually clicked.
+        if ÄrCloakad(win)
             return false
+        if ÄrEgenMenyApp(win)   ; TitleMenuExclude - leave these apps alone
+            return false
+        ; the menu is no longer tied to the title bar: the combination opens
+        ; it anywhere in the window. That also retires the cross-process
+        ; WM_NCHITTEST below, whose lparam sat in OUR DPI-virtualized coordinate
+        ; space and was therefore meaningless to a per-monitor-aware app - the
+        ; reason hit tests came back arbitrary on a mixed-DPI desktop.
+        if g_helaFönstret
+            return true
         CoordMode("Mouse", "Screen")
         MouseGetPos(&mx, &my)
         res := 0
@@ -661,14 +745,13 @@ MusÖverTitelrad(hk := "", *) {
         if (res = 2)   ; HTCAPTION
             return true
         ; the top band: apps with custom-drawn title bars (VS Code, the new
-        ; Outlook) report HTCLIENT there, sometimes everywhere. The Shift
-        ; variant accepts the band for all windows; plain clicks only for
-        ; the band apps (TitleMenuBand).
+        ; Outlook) report HTCLIENT there, sometimes everywhere, so the band
+        ; is accepted for every window.
         if (res = 1) {
             WinGetPos(, &wy, , , win)
             if ((my - wy) > Round(44 * A_ScreenDPI / 96))
                 return false
-            return InStr(hk, "+") ? true : ÄrBandApp(win)
+            return true   ; Shift is the only variant, and it takes the band
         }
         return false
     } catch {
@@ -676,168 +759,126 @@ MusÖverTitelrad(hk := "", *) {
     }
 }
 
-TitelHögerNer(*) {
-    ; eats the right-click so the native menu never shows; the menu comes on
+MenyHögerNer(*) {
+    ; eats the click so the app never sees it; the menu comes on
     ; release, otherwise the button-up can accidentally pick the first row
 }
 
-; Shows the window's REAL system menu with our move items temporarily
-; appended at the bottom — the same technique Explorer uses for its taskbar
-; thumbnail menus: TrackPopupMenu with TPM_RETURNCMD returns the selection
-; to us; standard items (and injected ones, e.g. PowerToys) are forwarded
-; as WM_SYSCOMMAND. Apps with a fully custom caption menu (Edge/Chrome) get
-; the click untouched; Shift+right-click shows our menu even there.
+; Our own window menu, on the configured combination (default CapsLock held
+; with a right-click, see [Mouse] MenuModifier). It deliberately no longer touches
+; the window's real system menu: appending our items to another process's HMENU
+; meant the app rendered them inside its own caption menu too (Edge's menu grew
+; by exactly our four rows), and taking the plain right-click leaked clicks
+; whenever our menu's modal loop blocked the hotkey criterion - which is what
+; produced the double menus, the flicker, and menus built for the app's own
+; menu popup. The combination is ours alone, so none of that can arise.
 VisaFönsterMeny(*) {
-    static FLYTTA_BAS := 0xBE20, FÖLJ_BAS := 0xBE40, REGEL_BAS := 0xBE60, PIN_ID := 0xBE10
     global g_menyÖppen
-    ; the TrackPopupMenu loop pumps messages, so a new right-click during an
-    ; open menu re-enters here and stacks menus — close instead
+    ; the menu's message loop lets a second press re-enter here;
+    ; close instead of stacking. The check-and-set runs under Critical so a
+    ; second thread cannot slip in between the test and the assignment.
+    Critical "On"
     if g_menyÖppen {
+        Critical "Off"
         DllCall("EndMenu")
         return
     }
-    MouseGetPos , , &win
-    if (!win || !WinExist(win))
-        return
-    s := LäsSkrivbordsStatus()
-    if (!s || s.index = 0)
-        return
-    CoordMode("Mouse", "Screen")
-    MouseGetPos(&mx, &my)
-    lp := ((my & 0xFFFF) << 16) | (mx & 0xFFFF)
-    ; band clicks (e.g. Outlook) go straight to our menu. Re-sending the
-    ; click to interactive elements was tried and reverted: the new
-    ; Outlook's band is window frame at the composition layer, so re-sent
-    ; clicks made the system show the app's own light system menu over ours.
-    hSys := DllCall("GetSystemMenu", "ptr", win, "int", 0, "ptr")
-    if !hSys {
-        VisaReplikaMeny(win, s)
-        return
-    }
-    ; let the window (and any injectors) refresh the menu, then adjust the
-    ; standard items' states to the window's current state
-    DllCall("SendMessageTimeoutW", "ptr", win, "uint", 0x116, "ptr", hSys, "ptr", 0
-        , "uint", 0x2, "uint", 100, "ptr*", &tmp := 0)   ; WM_INITMENU
-    JusteraStandardLägen(win, hSys)
-    RensaVåraPoster(hSys)   ; clean up any leftovers from a previous instance
-
-    ; the X bitmap on the Stäng row renders clipped/squeezed in some windows
-    ; (VS Code) when we show the menu — remove it temporarily
-    stängBmp := 0
-    mii := Buffer(80, 0)
-    NumPut("UInt", 80, mii, 0)
-    NumPut("UInt", 0x80, mii, 4)                    ; MIIM_BITMAP
-    if DllCall("GetMenuItemInfoW", "ptr", hSys, "uint", 0xF060, "int", 0, "ptr", mii) {
-        stängBmp := NumGet(mii, 72, "Ptr")
-        if (stängBmp != 0) {
-            NumPut("Ptr", 0, mii, 72)
-            DllCall("SetMenuItemInfoW", "ptr", hSys, "uint", 0xF060, "int", 0, "ptr", mii)
-        }
-    }
-
-    hFlytta := DllCall("CreatePopupMenu", "ptr")
-    hFölj := DllCall("CreatePopupMenu", "ptr")
-    hAlltid := DllCall("CreatePopupMenu", "ptr")
-    loop Min(s.count, 9) {
-        n := A_Index
-        grå := n = s.index ? 0x1 : 0     ; MF_GRAYED on the current desktop
-        DllCall("AppendMenuW", "ptr", hFlytta, "uint", grå, "uptr", FLYTTA_BAS + n
-            , "wstr", NamnFörIndex(n))
-        DllCall("AppendMenuW", "ptr", hFölj, "uint", grå, "uptr", FÖLJ_BAS + n
-            , "wstr", NamnFörIndex(n))
-        DllCall("AppendMenuW", "ptr", hAlltid, "uint", 0, "uptr", REGEL_BAS + n
-            , "wstr", NamnFörIndex(n))
-    }
-    titel := ""
-    try titel := WinGetTitle(win)
-    kort := StrLen(titel) > 40 ? SubStr(titel, 1, 38) "…" : titel
-    kort := StrReplace(kort, "&", "&&")
-    DllCall("AppendMenuW", "ptr", hSys, "uint", 0x800, "uptr", 0, "ptr", 0)   ; separator
-    DllCall("AppendMenuW", "ptr", hSys, "uint", 0x10, "uptr", hFlytta, "wstr", T("menuMoveTo"))
-    DllCall("AppendMenuW", "ptr", hSys, "uint", 0x10, "uptr", hFölj, "wstr", T("menuMoveFollow"))
-    DllCall("AppendMenuW", "ptr", hSys, "uint", 0x10, "uptr", hAlltid
-        , "wstr", T("menuAlwaysPre") kort T("menuAlwaysPost"))
-    if g_dllLaddad
-        DllCall("AppendMenuW", "ptr", hSys, "uint", ÄrPinnat(win) ? 0x8 : 0, "uptr", PIN_ID
-            , "wstr", T("menuPin"))   ; MF_CHECKED when already pinned
-
-    ; foreground fix: without it the menu closes immediately when Windows'
-    ; foreground lock denies a background process (our eaten click never
-    ; activated anything)
-    TaFörgrund()
     g_menyÖppen := true
-    val := DllCall("TrackPopupMenuEx", "ptr", hSys
-        , "uint", 0x182, "int", mx, "int", my, "ptr", A_ScriptHwnd, "ptr", 0, "int")
-    g_menyÖppen := false
-    PostMessage(0x0, 0, 0, , A_ScriptHwnd)   ; WM_NULL - classic menu teardown fix
-
-    RensaVåraPoster(hSys)                 ; remove our items again
-    if (stängBmp != 0) {                  ; restore the Stäng row's bitmap
-        NumPut("Ptr", stängBmp, mii, 72)
-        DllCall("SetMenuItemInfoW", "ptr", hSys, "uint", 0xF060, "int", 0, "ptr", mii)
+    Critical "Off"
+    try {
+        MouseGetPos , , &win
+        if (!win || !WinExist(win))
+            return
+        if !ÄrRiktigtFönster(win)   ; an app's own menu popup - not our target
+            return
+        s := LäsSkrivbordsStatus()
+        if (!s || s.index = 0)
+            return
+        VisaFönstermenyn(win, s)
+    } finally {
+        g_menyÖppen := false
     }
-    for h in [hFlytta, hFölj, hAlltid]
-        DllCall("DestroyMenu", "ptr", h)
-
-    if !val
-        return
-    if (val > FLYTTA_BAS && val <= FLYTTA_BAS + 9)
-        FlyttaFönsterTill(win, val - FLYTTA_BAS, false)
-    else if (val > FÖLJ_BAS && val <= FÖLJ_BAS + 9)
-        FlyttaFönsterTill(win, val - FÖLJ_BAS, true)
-    else if (val > REGEL_BAS && val <= REGEL_BAS + 9)
-        NyRegelVal(win, val - REGEL_BAS)
-    else if (val = PIN_ID)
-        VäxlaPinning(win)
-    else
-        PostMessage(0x112, val, lp, , win)   ; standard/injected items → the window
 }
 
-; Removes our appended items (and the separator) from the end of a system
-; menu. String-based so leftovers from a killed earlier instance are also
-; cleaned up.
-RensaVåraPoster(hSys) {
-    borttaget := false
-    loop {
-        antal := DllCall("GetMenuItemCount", "ptr", hSys, "int")
-        if antal <= 0
-            return
-        buf := Buffer(512, 0)
-        DllCall("GetMenuStringW", "ptr", hSys, "uint", antal - 1, "ptr", buf
-            , "int", 255, "uint", 0x400)
-        txt := StrGet(buf)
-        ; match BOTH languages: leftovers may predate a language switch
-        if (txt = "Flytta till skrivbord" || txt = "Flytta och följ efter"
-            || SubStr(txt, 1, 14) = "Flytta alltid "
-            || txt = "Visa på alla skrivbord"
-            || txt = "Move to desktop" || txt = "Move and follow"
-            || SubStr(txt, 1, 12) = "Always move "
-            || txt = "Show on all desktops") {
-            DllCall("RemoveMenu", "ptr", hSys, "uint", antal - 1, "uint", 0x400)
-            borttaget := true
-            continue
-        }
-        if (borttaget && txt = "") {
-            DllCall("RemoveMenu", "ptr", hSys, "uint", antal - 1, "uint", 0x400)
-            borttaget := false
-            continue
-        }
-        return
+; ─── DalSegno integration ────────────────────────────────────────────────
+; DalSegno (the window position keeper) exposes a command interface over the
+; DALSEGNO_CMD registered message: wParam = target window, lParam 0 = query
+; (returns 1 = manageable, +2 = saved position exists), 1 = save position,
+; 2 = move to saved, 3 = forget, 4 = create title rule.
+
+; The hwnd is cached: the full hidden-window title scan is too slow to run
+; on every menu open, and the whole query sits in the gap between the eaten
+; click and the menu appearing. Misses are cached too (rescan at most every
+; 3 s) - without DalSegno running, the scan would otherwise run on every
+; single right-click.
+DalSegnoFönster() {
+    static cached := 0, senast := 0
+    prev := A_DetectHiddenWindows
+    DetectHiddenWindows true
+    if (cached && WinExist(cached)) {   ; the main window is hidden
+        DetectHiddenWindows prev
+        return cached
     }
+    cached := 0
+    if (A_TickCount - senast > 3000) {
+        senast := A_TickCount
+        SetTitleMatchMode 2
+        cached := WinExist("\DalSegno.ahk ahk_class AutoHotkey")
+    }
+    DetectHiddenWindows prev
+    return cached
+}
+
+DalSegnoFlaggor(win) {
+    ds := DalSegnoFönster()
+    if !ds
+        return 0
+    static msg := DllCall("RegisterWindowMessage", "str", "DALSEGNO_CMD", "uint")
+    res := 0
+    if !DllCall("SendMessageTimeoutW", "ptr", ds, "uint", msg, "ptr", win, "ptr", 0
+        , "uint", 0x2, "uint", 120, "ptr*", &res)   ; SMTO_ABORTIFHUNG
+        return 0
+    return res
+}
+
+DalSegnoKommando(win, åtgärd) {
+    ds := DalSegnoFönster()
+    if !ds
+        return
+    static msg := DllCall("RegisterWindowMessage", "str", "DALSEGNO_CMD", "uint")
+    try PostMessage(msg, win, åtgärd, , ds)
+}
+
+; Tells an app's own menu popup from a real window. Style bits are NOT usable
+; for this: Claude's window is 0x14C70000 - a real window with WS_CAPTION but
+; WITHOUT WS_SYSMENU, even though GetSystemMenu serves it a menu just fine, so
+; demanding those bits turned away legitimate windows. What every observed
+; popup had in common instead: no title at all (the rule item came out as
+; Always move "" to) and no system menu of its own. Every real window we want
+; the menu for has a title, so the pair is safe.
+ÄrRiktigtFönster(hwnd) {
+    try {
+        if (WinGetExStyle(hwnd) & 0x8000000)       ; WS_EX_NOACTIVATE - menus, OSDs
+            return false
+        if (WinGetTitle(hwnd) != "")
+            return true
+        return DllCall("GetSystemMenu", "ptr", hwnd, "int", 0, "ptr") != 0
+    } catch
+        return false
+}
+
+; DWM-cloaked = invisible despite WS_VISIBLE: windows parked on other
+; virtual desktops, UWP ghosts. See the check in MusÖverMålFönster.
+ÄrCloakad(hwnd) {
+    cloaked := 0
+    try DllCall("dwmapi\DwmGetWindowAttribute", "ptr", hwnd, "uint", 14, "uint*", &cloaked, "uint", 4)
+    return cloaked != 0
 }
 
 ÄrEgenMenyApp(win) {
     if g_egenMeny = ""
         return false
     try return WinGetProcessName(win) ~= g_egenMeny
-    catch
-        return false
-}
-
-ÄrBandApp(win) {
-    if g_bandAppar = ""
-        return false
-    try return WinGetProcessName(win) ~= g_bandAppar
     catch
         return false
 }
@@ -886,25 +927,10 @@ VdaGuid(s) {
     return buf
 }
 
-JusteraStandardLägen(win, hSys) {
-    stil := 0
-    try stil := WinGetStyle(win)
-    ärMax := (stil & 0x1000000) != 0    ; WS_MAXIMIZE
-    ärMin := (stil & 0x20000000) != 0   ; WS_MINIMIZE
-    på := (id, ok) => DllCall("EnableMenuItem", "ptr", hSys, "uint", id
-        , "uint", ok ? 0 : 0x3)          ; MF_ENABLED / MF_GRAYED|MF_DISABLED
-    på(0xF120, ärMax || ärMin)                            ; Restore
-    på(0xF010, !ärMax)                                    ; Move
-    på(0xF000, (stil & 0x40000) && !ärMax && !ärMin)      ; Size
-    på(0xF020, (stil & 0x20000) && !ärMin)                ; Minimize
-    på(0xF030, (stil & 0x10000) && !ärMax)                ; Maximize
-    ; no SetMenuDefaultItem: the bold marking rendered a squeezed Stäng row
-    ; in VS Code windows (any default set by the app itself is left alone)
-}
-
-; The bare move menu. Used as fallback for windows without a system menu,
-; and by the MoveMenu hotkey (anchored near the window instead of the mouse).
-VisaReplikaMeny(win, s, vidFönstret := false) {
+; The window menu: DeskPilot's own items, plus DalSegno's when that script is
+; running. Shown at the mouse for Shift+right-click, anchored near the window
+; for the MoveMenu hotkey.
+VisaFönstermenyn(win, s, vidFönstret := false) {
     titel := ""
     try titel := WinGetTitle(win)
     kort := StrLen(titel) > 40 ? SubStr(titel, 1, 38) "…" : titel
@@ -930,13 +956,46 @@ VisaReplikaMeny(win, s, vidFönstret := false) {
         if ÄrPinnat(win)
             m.Check(T("menuPin"))
     }
-    if vidFönstret {
-        x := 0, y := 0
-        try WinGetPos(&x, &y, , , win)
-        CoordMode("Menu", "Screen")
-        m.Show(x + 60, y + 50)
-    } else {
-        m.Show()
+    ; DalSegno integration - same submenu as in the real system menu path
+    dsFlaggor := DalSegnoFlaggor(win)
+    if dsFlaggor {
+        harPos := dsFlaggor & 2
+        dsm := Menu()
+        dsm.Add(T("dsSave"), (*) => DalSegnoKommando(win, 1))
+        dsm.Add(T("dsMove"), (*) => DalSegnoKommando(win, 2))
+        dsm.Add(T("dsForget"), (*) => DalSegnoKommando(win, 3))
+        dsm.Add(T("dsRule"), (*) => DalSegnoKommando(win, 4))
+        if !harPos {
+            dsm.Disable(T("dsMove"))
+            dsm.Disable(T("dsForget"))
+        }
+        m.Add("DalSegno", dsm)
+    }
+    ; the eaten click never activated anything, so without claiming the
+    ; foreground Windows' foreground lock closes the menu immediately
+    TaFörgrund()
+    ; DPI: a menu is rendered - and the coordinates handed to it interpreted -
+    ; in the DPI awareness of the calling thread. The script as a whole is
+    ; SYSTEM DPI aware, and everything else it positions (the taskbar label,
+    ; the OSD) is built on that, so the awareness is switched per-monitor-v2
+    ; only for as long as the menu is up and then restored. Without it, on any
+    ; monitor whose scaling differs from the primary one the menu came out at
+    ; the wrong size and was placed by virtualized coordinates that resolve
+    ; against the wrong monitor - it opened off-screen on the far monitors and
+    ; oversized on the 125% one, while the log showed it opening perfectly.
+    prevDpi := DllCall("SetThreadDpiAwarenessContext", "ptr", -4, "ptr")
+    try {
+        if vidFönstret {
+            x := 0, y := 0
+            try WinGetPos(&x, &y, , , win)
+            CoordMode("Menu", "Screen")
+            m.Show(x + 60, y + 50)
+        } else {
+            m.Show()
+        }
+    } finally {
+        if prevDpi
+            DllCall("SetThreadDpiAwarenessContext", "ptr", prevDpi, "ptr")
     }
 }
 
