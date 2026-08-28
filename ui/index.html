@@ -9,9 +9,6 @@
 
 <div id="topbar">
   <span id="logo">𝄋</span><span id="appname">DalSegno</span>
-  <label class="toggle"><input type="checkbox" id="tglMove"> <span id="lblMove"></span></label>
-  <label class="toggle"><input type="checkbox" id="tglSave"> <span id="lblSave"></span></label>
-  <label class="toggle"><input type="checkbox" id="tglNotify"> <span id="lblNotify"></span></label>
   <span class="spacer"></span>
   <button id="btnSaveAll"></button>
   <button id="btnApplyAll" class="primary"></button>
@@ -102,6 +99,13 @@
 
   <section id="tab-settings" class="tabpane">
     <div class="inner">
+      <h2 id="behaveH"></h2>
+      <label class="toggle"><input type="checkbox" id="tglMove"> <span id="lblMove"></span></label><br>
+      <label class="toggle"><input type="checkbox" id="tglSave"> <span id="lblSave"></span></label><br>
+      <label class="toggle"><input type="checkbox" id="tglModOnly"> <span id="lblModOnly"></span></label>
+      <p class="help" id="modOnlyHelp"></p>
+      <label class="toggle"><input type="checkbox" id="tglNotify"> <span id="lblNotify"></span></label>
+
       <h2 id="langH"></h2>
       <p class="help" id="langHelp"></p>
       <label class="radio"><input type="radio" name="lang" value="en"> English</label>

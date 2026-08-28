@@ -1414,7 +1414,7 @@ ListWindows() {
 }
 
 UiToggle(name, value) {
-    global moveEnabled, autoSaveEnabled, notifyEnabled
+    global moveEnabled, autoSaveEnabled, notifyEnabled, g_autoSaveModOnly, configIni
     v := value ? true : false
     switch name {
         case "move":
@@ -1423,6 +1423,14 @@ UiToggle(name, value) {
         case "autosave":
             if (autoSaveEnabled != v)
                 ToggleAutoSave()
+        case "modOnly":
+            if (g_autoSaveModOnly != v) {
+                g_autoSaveModOnly := v
+                ; lives with the other behavior settings in the config ini,
+                ; not in the positions file
+                IniWrite(v ? 1 : 0, configIni, "Settings", "AutoSaveModifierOnly")
+                BuildTrayMenu()   ; the autosave label names the mode
+            }
         case "notify":
             if (notifyEnabled != v)
                 ToggleToasts()

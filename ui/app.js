@@ -17,8 +17,10 @@ const STR = {
   en: {
     appSub: 'Window Keeper',
     tglMove: 'Move new windows automatically',
-    tglSave: 'Save on manual move',
-    tglSaveMod: 'Save on move with {mod} held',
+    tglSave: 'Save position on manual move',
+    tglModOnly: 'Only when {mod} is held while dropping',
+    modOnlyHelp: 'Saving becomes a deliberate gesture: a sloppy drag cannot overwrite a carefully placed position. Deliberate saves ({mod} + S, the window menu, Save all) always work.',
+    behaveH: 'Behavior',
     tglNotify: 'Toasts',
     saveAll: 'Save all now',
     saveAllTip: "Save every open window's current position",
@@ -64,8 +66,10 @@ const STR = {
   sv: {
     appSub: 'Fönsterlägen',
     tglMove: 'Flytta nya fönster automatiskt',
-    tglSave: 'Spara vid manuell flytt',
-    tglSaveMod: 'Spara vid flytt med {mod} nedtryckt',
+    tglSave: 'Spara läge vid manuell flytt',
+    tglModOnly: 'Bara när {mod} hålls nere vid släppet',
+    modOnlyHelp: 'Sparandet blir en avsiktlig gest: en slarvig flytt kan inte skriva över ett omsorgsfullt placerat läge. Avsiktliga sparningar ({mod} + S, fönstermenyn, Spara alla) fungerar alltid.',
+    behaveH: 'Beteende',
     tglNotify: 'Notiser',
     saveAll: 'Spara alla nu',
     saveAllTip: 'Spara alla öppna fönsters nuvarande lägen',
@@ -145,7 +149,10 @@ function setupList() {
 function localizeStatic() {
   document.documentElement.lang = lang;
   $('lblMove').textContent = t('tglMove');
-  $('lblSave').textContent = t(st && st.settings && st.settings.modOnly ? 'tglSaveMod' : 'tglSave');
+  $('lblSave').textContent = t('tglSave');
+  $('lblModOnly').textContent = t('tglModOnly');
+  $('modOnlyHelp').textContent = t('modOnlyHelp');
+  $('behaveH').textContent = t('behaveH');
   $('lblNotify').textContent = t('tglNotify');
   $('btnSaveAll').textContent = t('saveAll');
   $('btnSaveAll').title = t('saveAllTip');
@@ -189,10 +196,13 @@ function localizeStatic() {
 function renderTopbar() {
   $('tglMove').checked = !!st.settings.move;
   $('tglSave').checked = !!st.settings.autosave;
+  $('tglModOnly').checked = !!st.settings.modOnly;
+  $('tglModOnly').disabled = !st.settings.autosave;
   $('tglNotify').checked = !!st.settings.notify;
 }
 $('tglMove').addEventListener('change', e => post({ action: 'toggle', name: 'move', value: e.target.checked ? 1 : 0 }));
 $('tglSave').addEventListener('change', e => post({ action: 'toggle', name: 'autosave', value: e.target.checked ? 1 : 0 }));
+$('tglModOnly').addEventListener('change', e => post({ action: 'toggle', name: 'modOnly', value: e.target.checked ? 1 : 0 }));
 $('tglNotify').addEventListener('change', e => post({ action: 'toggle', name: 'notify', value: e.target.checked ? 1 : 0 }));
 $('btnSaveAll').addEventListener('click', () => post({ action: 'saveAll' }));
 $('btnApplyAll').addEventListener('click', () => post({ action: 'applyAll' }));
