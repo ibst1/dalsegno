@@ -36,17 +36,24 @@ the wrong place, such as LabVantage LIMS.
 
 ## GUI
 
-Left-click the tray icon (or press § + D). Three tabs:
+Left-click the tray icon (or press § + D). Four tabs:
 
 - **Saved positions** — every saved position per monitor setup, with
   *Move now* and *Forget* per row.
 - **Open windows** — the manageable windows right now; save or restore any of
   them from here.
 - **Rules** — edit title rules, the ignore lists and *rules only* mode.
+- **Settings** — interface language (English/Svenska; also in the tray menu).
 
-Interface language (English/Svenska) is selectable in the top bar and in the
-tray menu. The GUI is a WebView2 page (`ui/`), same architecture as Encore
-and Expanto.
+The GUI is a WebView2 page (`ui/`), same architecture as Encore and Expanto.
+
+## Title bar menu
+
+Ctrl + right-click on any window's title bar opens a DalSegno menu for that
+window: save its position, move it to the saved one, forget it, or **create a
+title rule** with the window's title prefilled in the GUI — trim the pattern
+down to the stable part and save. Plain right-click is left untouched
+(DeskPilot uses it).
 
 ## Hotkeys
 
@@ -60,6 +67,7 @@ and Expanto.
 | § + Home | move every open window to its saved position |
 | § + F10 | toggle automatic moving |
 | § + F5 | restart the script |
+| Ctrl + right-click a title bar | per-window menu: save/restore/forget/create rule |
 
 ## Files
 

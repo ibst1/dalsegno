@@ -146,18 +146,27 @@ td.actions button { margin-left: 6px; }
 .dim { color: var(--text-dim); }
 
 /* ── rules ───────────────────────────────────────────────────────────── */
-#tab-rules { overflow-y: auto; display: none; }
-#tab-rules.active { display: block; }
-#tab-rules .inner { padding: 12px 16px; max-width: 860px; }
-#tab-rules h2 {
+#tab-rules, #tab-settings { overflow-y: auto; display: none; }
+#tab-rules.active, #tab-settings.active { display: block; }
+#tab-rules .inner, #tab-settings .inner { padding: 12px 16px; max-width: 860px; }
+#tab-rules h2, #tab-settings h2 {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: .5px;
   color: var(--text-dim);
   margin: 18px 0 6px;
 }
-#tab-rules h2:first-child { margin-top: 0; }
-#tab-rules p.help { color: var(--text-dim); margin: 4px 0 10px; }
+#tab-rules h2:first-child, #tab-settings h2:first-child { margin-top: 0; }
+#tab-rules p.help, #tab-settings p.help { color: var(--text-dim); margin: 4px 0 10px; }
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+  cursor: pointer;
+  user-select: none;
+}
+.radio input { accent-color: var(--accent); cursor: pointer; }
 #rulesTable input[type=text] { width: 100%; }
 #rulesTable td.alias { width: 180px; }
 #rulesTable td.rx { width: 60px; text-align: center; }
