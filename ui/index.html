@@ -7,13 +7,6 @@
 </head>
 <body>
 
-<div id="topbar">
-  <span id="logo">𝄋</span><span id="appname">DalSegno</span>
-  <span class="spacer"></span>
-  <button id="btnSaveAll"></button>
-  <button id="btnApplyAll" class="primary"></button>
-</div>
-
 <div id="tabs">
   <button class="tab active" data-tab="positions" id="tabBtnPositions"></button>
   <button class="tab" data-tab="windows" id="tabBtnWindows"></button>
@@ -28,6 +21,8 @@
       <label><span id="lblSetup"></span>&nbsp;<select id="setupSel"></select></label>
       <span class="spacer"></span>
       <button id="btnForgetSel" class="small" disabled></button>
+      <button id="btnSaveAll" class="small"></button>
+      <button id="btnApplyAll" class="small primary"></button>
     </div>
     <div class="tablewrap">
       <table>
@@ -106,6 +101,10 @@
       <label class="toggle"><input type="checkbox" id="tglModOnly"> <span id="lblModOnly"></span></label>
       <p class="help" id="modOnlyHelp"></p>
       <label class="toggle"><input type="checkbox" id="tglNotify"> <span id="lblNotify"></span></label>
+
+      <h2 id="hkH"></h2>
+      <p class="help" id="hkHelp"></p>
+      <div id="hkList"></div>
 
       <h2 id="langH"></h2>
       <p class="help" id="langHelp"></p>

@@ -21,6 +21,15 @@ const STR = {
     tglModOnly: 'Only when {mod} is held while dropping',
     modOnlyHelp: 'Saving becomes a deliberate gesture: a sloppy drag cannot overwrite a carefully placed position. Deliberate saves ({mod} + S, the window menu, Save all) always work.',
     behaveH: 'Behavior',
+    hkH: 'Hotkeys',
+    hkHelp: 'Pressed together with {mod}. AutoHotkey key names (d, F10, Home, Backspace…). Leave empty to disable one.',
+    hkOpenUi: 'Open the DalSegno window',
+    hkSaveActive: "Save the active window's position",
+    hkSaveAll: "Save all open windows' positions",
+    hkApplyAll: 'Move all windows to their saved positions',
+    hkForgetActive: "Forget the active window's position",
+    hkToggleMove: 'Toggle automatic moving',
+    hkReload: 'Restart the script',
     tglNotify: 'Toasts',
     saveAll: 'Save all now',
     saveAllTip: "Save every open window's current position",
@@ -73,6 +82,15 @@ const STR = {
     tglModOnly: 'Bara när {mod} hålls nere vid släppet',
     modOnlyHelp: 'Sparandet blir en avsiktlig gest: en slarvig flytt kan inte skriva över ett omsorgsfullt placerat läge. Avsiktliga sparningar ({mod} + S, fönstermenyn, Spara alla) fungerar alltid.',
     behaveH: 'Beteende',
+    hkH: 'Kortkommandon',
+    hkHelp: 'Trycks tillsammans med {mod}. AutoHotkey-tangentnamn (d, F10, Home, Backspace…). Lämna tomt för att stänga av ett.',
+    hkOpenUi: 'Öppna DalSegno-fönstret',
+    hkSaveActive: 'Spara det aktiva fönstrets läge',
+    hkSaveAll: 'Spara alla öppna fönsters lägen',
+    hkApplyAll: 'Flytta alla fönster till sina sparade lägen',
+    hkForgetActive: 'Glöm det aktiva fönstrets läge',
+    hkToggleMove: 'Växla automatisk flyttning',
+    hkReload: 'Starta om skriptet',
     tglNotify: 'Notiser',
     saveAll: 'Spara alla nu',
     saveAllTip: 'Spara alla öppna fönsters nuvarande lägen',
@@ -139,6 +157,7 @@ window.receiveState = function (s) {
   if (curSetup === null || !setups.includes(curSetup)) curSetup = st.currentSetup;
   localizeStatic();
   renderTopbar();
+  renderHotkeys();
   renderPositions();
   renderWindows();
   if (!rulesDirty) renderRules();
@@ -170,6 +189,8 @@ function localizeStatic() {
   $('lblSetup').textContent = t('setupLabel');
   $('btnOpenPositions').textContent = t('openIni');
   $('filesH').textContent = t('filesH');
+  $('hkH').textContent = t('hkH');
+  $('hkHelp').textContent = t('hkHelp');
   updateForgetSel();
   $('thWindow').textContent = t('thWindow');
   $('thIdentity').textContent = t('thIdentity');
@@ -193,14 +214,13 @@ function localizeStatic() {
   $('btnSaveRules').textContent = t('saveRules');
   $('rulesDirty').textContent = t('unsaved');
   $('btnOpenConfig').textContent = t('openConfig');
-  $('appname').innerHTML = `DalSegno <span class="sub">${esc(t('appSub'))}</span>`;
   $('tabBtnSettings').textContent = t('tabSettings');
   $('langH').textContent = t('langH');
   $('langHelp').textContent = t('langHelp');
   document.querySelectorAll('input[name=lang]').forEach(r => { r.checked = r.value === lang; });
 }
 
-// ── topbar ─────────────────────────────────────────────────────────────
+// ── toggles (Settings tab) ─────────────────────────────────────────────────────────────
 function renderTopbar() {
   $('tglMove').checked = !!st.settings.move;
   $('tglSave').checked = !!st.settings.autosave;
@@ -434,6 +454,29 @@ window.prefillRule = function (r) {
   input.focus();
   input.select();   // the title is prefilled whole - trim it to the stable part
 };
+
+// ── hotkeys (Settings tab) ─────────────────────────────────────────────
+const HK_ACTIONS = ['OpenUi', 'SaveActive', 'SaveAll', 'ApplyAll',
+                    'ForgetActive', 'ToggleMove', 'Reload'];
+
+function renderHotkeys() {
+  // never rebuild under the user's fingers - a state push can arrive while
+  // an input has focus (autosave elsewhere), and blur will re-sync anyway
+  if (document.activeElement && document.activeElement.classList &&
+      document.activeElement.classList.contains('hkkey')) return;
+  const hk = (st.settings && st.settings.hotkeys) || {};
+  const mod = (st.settings && st.settings.modifier) || 'CapsLock';
+  $('hkList').innerHTML = HK_ACTIONS.map(name => `
+    <div class="hkrow">
+      <span class="hkcombo">${esc(mod)} +
+        <input class="hkkey" data-name="${name}" value="${esc(hk[name] ?? '')}"></span>
+      <span class="hklbl">${esc(t('hk' + name))}</span>
+    </div>`).join('');
+}
+$('hkList').addEventListener('change', e => {
+  if (!e.target.classList.contains('hkkey')) return;
+  post({ action: 'setHotkey', name: e.target.dataset.name, key: e.target.value.trim() });
+});
 
 // ── start ──────────────────────────────────────────────────────────────
 post({ action: 'ready' });
