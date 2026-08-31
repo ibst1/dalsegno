@@ -1178,6 +1178,24 @@ BrickaVakt() {
 ; itself. The background is a key color close to the bar's tone (TransColor)
 ; so only the text shows. -DPIScale keeps all coordinates in physical pixels.
 UppdateraBricka() {
+    ; DPI: the taskbar belongs to Explorer, which is per-monitor aware, while
+    ; this script is system-DPI aware - so on a mixed-scaling desktop its rect
+    ; comes back in a space that does not line up with the monitors. Measured
+    ; on this setup: the bar reports x=1920 system-aware and x=0 per-monitor,
+    ; which placed the label at x=4775, outside the 3840-wide primary monitor.
+    ; Reading the bar, its icon area and placing the label all happen under
+    ; per-monitor-v2 so the three agree; the context is restored on the way
+    ; out, since everything else in the script is built on system awareness.
+    prevDpi := DllCall("SetThreadDpiAwarenessContext", "ptr", -4, "ptr")
+    try
+        UppdateraBrickaKärna()
+    finally {
+        if prevDpi
+            DllCall("SetThreadDpiAwarenessContext", "ptr", prevDpi, "ptr")
+    }
+}
+
+UppdateraBrickaKärna() {
     global g_bricka, g_brickaText
     ; never touch the label while one of our menus is open: the timer fires
     ; inside the menu's modal loop, and Show/SetWindowPos dismisses the menu
@@ -1225,7 +1243,7 @@ UppdateraBrickaInre() {
         g_brickaText := innehåll
         if IsObject(g_bricka)
             try g_bricka.Destroy()
-        skala := A_ScreenDPI / 96
+        skala := BrickaDpi(fält) / 96
         nyckel := ljust ? "EEEEEE" : "202020"
         ; a topmost STAND-ALONE window: as a taskbar child the composition
         ; surface repainted over the label on every tray icon animation
@@ -1243,18 +1261,42 @@ UppdateraBrickaInre() {
         g_bricka := b
     }
     g_bricka.GetPos(, , &bb, &bh)
-    g_bricka.Show("NoActivate x" (fältX + ikonX - bb - Round(12 * A_ScreenDPI / 96))
+    g_bricka.Show("NoActivate x" (fältX + ikonX - bb - Round(12 * BrickaDpi(fält) / 96))
         . " y" (fältY + (fältHöjd - bh) // 2))
     ; clicking the taskbar raises it within the topmost band — re-assert
     DllCall("SetWindowPos", "ptr", g_bricka.Hwnd, "ptr", 0
         , "int", 0, "int", 0, "int", 0, "int", 0, "uint", 0x13)   ; TOP, NOMOVE|NOSIZE|NOACTIVATE
 }
 
+; The taskbar's own DPI - what the label must be scaled by. Its monitor is
+; not necessarily the primary one, so A_ScreenDPI is the wrong number.
+BrickaDpi(fält) {
+    dpi := 0
+    try dpi := DllCall("GetDpiForWindow", "ptr", fält, "uint")
+    return dpi ? dpi : A_ScreenDPI
+}
+
 ; A stand-alone label must handle what a taskbar child got for free:
 ; hide when the taskbar is auto-hidden or a fullscreen window covers the
-; primary monitor.
+; monitor it sits on. Called from within the per-monitor-aware section, so
+; every rectangle here is in the same space.
 BrickaSkaDöljas(fältY) {
-    if (fältY + 8 > A_ScreenHeight)
+    ; auto-hidden: the bar has slid below the bottom edge of ITS monitor
+    botten := A_ScreenHeight
+    try {
+        fält := WinExist("ahk_class Shell_TrayWnd")
+        if fält {
+            WinGetPos(&fx, &fy, &fb, &fh, fält)
+            loop MonitorGetCount() {
+                MonitorGet(A_Index, &mv, &mö, &mh, &mn)
+                if (fx + fb // 2 >= mv && fx + fb // 2 < mh) {
+                    botten := mn
+                    break
+                }
+            }
+        }
+    }
+    if (fältY + 8 > botten)
         return true
     fg := WinExist("A")
     if !fg
