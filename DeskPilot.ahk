@@ -1237,6 +1237,24 @@ UppdateraBrickaInre() {
         , "SystemUsesLightTheme", 0)
     rad1 := s.name != "" ? s.name : T("desktop") " " s.index
     rad2 := s.name != "" ? T("desktop") " " s.index " " T("of") " " s.count : ""
+    ; The app buttons grow rightwards as windows are opened and eventually
+    ; reach the strip we live in, which put them under the label. Measure the
+    ; free gap between their right edge and the icon area, and give way:
+    ; drop the second line first, hide entirely if even that will not fit.
+    ; Overlapping is the one outcome nobody wants.
+    knappSlut := 0
+    try {
+        ControlGetPos(&kx, , &kb, , "MSTaskListWClass1", fält)
+        knappSlut := kx + kb
+    }
+    marginal := Round(12 * BrickaDpi(fält) / 96)
+    glapp := knappSlut ? ikonX - knappSlut - 2 * marginal : 99999
+    if (glapp < BrickaBredd(rad1, rad2, fält))
+        rad2 := ""                                   ; compact: name only
+    if (rad2 = "" && glapp < BrickaBredd(rad1, "", fält)) {
+        DöljBricka()
+        return
+    }
     innehåll := rad1 "|" rad2 "|" ljust
     if (innehåll != g_brickaText || !IsObject(g_bricka)
         || !DllCall("IsWindow", "ptr", g_bricka.Hwnd)) {
@@ -1266,6 +1284,31 @@ UppdateraBrickaInre() {
     ; clicking the taskbar raises it within the topmost band — re-assert
     DllCall("SetWindowPos", "ptr", g_bricka.Hwnd, "ptr", 0
         , "int", 0, "int", 0, "int", 0, "int", 0, "uint", 0x13)   ; TOP, NOMOVE|NOSIZE|NOACTIVATE
+}
+
+; How wide the label would be with this content, measured by rendering it in
+; a hidden throwaway Gui with the same font and margins. Cached, since the
+; guard timer asks four times a second and the answer only changes with the
+; text or the scale.
+BrickaBredd(rad1, rad2, fält) {
+    static cache := Map()
+    skala := BrickaDpi(fält) / 96
+    nyckel := rad1 "|" rad2 "|" skala
+    if cache.Has(nyckel)
+        return cache[nyckel]
+    b := 0
+    try {
+        g := Gui("-DPIScale -Caption +ToolWindow +E0x08000000")
+        g.MarginX := Round(10 * skala), g.MarginY := Round(3 * skala)
+        g.SetFont("s9 q4", "Segoe UI Variable Display")
+        g.Add("Text", "Center", rad2 != "" ? rad1 "`n" rad2 : rad1)
+        g.Show("NoActivate Hide AutoSize")
+        g.GetPos(, , &b)
+        g.Destroy()
+    }
+    if (cache.Count > 40)
+        cache.Clear()
+    return cache[nyckel] := b
 }
 
 ; The taskbar's own DPI - what the label must be scaled by. Its monitor is
