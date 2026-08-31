@@ -750,7 +750,11 @@ MusÖverMålFönster(hk := "", *) {
         ; popup has no title, so the rule item read: Always move "" to.
         if !ÄrRiktigtFönster(win)
             return false
-        if WinGetPID(win) = egenPid
+        ; our own windows are normally not targets - but the settings GUI is a
+        ; perfectly ordinary window someone may well want to move to another
+        ; desktop. The label and the OSD stay excluded on their own merits:
+        ; ÄrRiktigtFönster turns away WS_EX_NOACTIVATE, which both carry.
+        if (WinGetPID(win) = egenPid && !(IsObject(g_uiWin) && win = g_uiWin.Hwnd))
             return false
         ; windows parked on OTHER virtual desktops stay WS_VISIBLE but are
         ; DWM-cloaked, and WindowFromPoint happily returns such ghosts lying
@@ -1440,20 +1444,45 @@ VisaOsd(s := 0) {
     VisaOsdText(OsdText(s))
 }
 
+; The effective DPI of the monitor under a point. MONITOR_DEFAULTTONEAREST
+; keeps an answer even for coordinates just outside every monitor.
+SkärmDpiVidPunkt(x, y) {
+    try {
+        hMon := DllCall("MonitorFromPoint", "int64", (x & 0xFFFFFFFF) | (y << 32)
+            , "uint", 2, "ptr")
+        if hMon {
+            DllCall("shcore\GetDpiForMonitor", "ptr", hMon, "int", 0
+                , "uint*", &dx := 0, "uint*", &dy := 0, "hresult")
+            if dx
+                return dx
+        }
+    }
+    return A_ScreenDPI
+}
+
 VisaOsdText(text) {
+    ; DPI: the overlay is placed on whichever monitor the mouse is on, and the
+    ; script is system-DPI aware - so both the monitor rectangles and the font
+    ; came out wrong on every monitor whose scaling differs from the primary
+    ; one: misplaced, and drawn 1.5x too large here. The whole placement runs
+    ; per-monitor-v2 so the rectangles line up, the Gui is -DPIScale so AHK
+    ; adds no scaling of its own, and the font and margins are scaled by the
+    ; TARGET monitor's DPI rather than the system's.
+    prevDpi := DllCall("SetThreadDpiAwarenessContext", "ptr", -4, "ptr")
+    try
+        VisaOsdTextKärna(text)
+    finally {
+        if prevDpi
+            DllCall("SetThreadDpiAwarenessContext", "ptr", prevDpi, "ptr")
+    }
+}
+
+VisaOsdTextKärna(text) {
     global g_osd
     if IsObject(g_osd) {
         g_osd.Destroy()
         g_osd := 0
     }
-    osd := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
-    osd.BackColor := "1E293B"
-    osd.MarginX := 34, osd.MarginY := 18
-    osd.SetFont("s20 w700 cWhite", "Segoe UI")
-    osd.Add("Text", "Center", text)
-    DllCall("dwmapi\DwmSetWindowAttribute", "ptr", osd.Hwnd
-        , "uint", 33, "uint*", 2, "uint", 4)   ; DWMWA_WINDOW_CORNER_PREFERENCE = ROUND
-
     ; place on the monitor holding the mouse, a bit down from the top edge
     CoordMode("Mouse", "Screen")
     MouseGetPos(&mx, &my)
@@ -1465,6 +1494,16 @@ VisaOsdText(text) {
             break
         }
     }
+    skala := SkärmDpiVidPunkt(mx, my) / 96
+
+    osd := Gui("-DPIScale +AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
+    osd.BackColor := "1E293B"
+    osd.MarginX := Round(34 * skala), osd.MarginY := Round(18 * skala)
+    osd.SetFont("s" Round(20 * skala) " w700 cWhite", "Segoe UI")
+    osd.Add("Text", "Center", text)
+    DllCall("dwmapi\DwmSetWindowAttribute", "ptr", osd.Hwnd
+        , "uint", 33, "uint*", 2, "uint", 4)   ; DWMWA_WINDOW_CORNER_PREFERENCE = ROUND
+
     MonitorGetWorkArea(skärm, &vä, &öv, &hö, &ne)
     osd.Show("NoActivate Hide AutoSize")
     osd.GetPos(, , &b, &h)
