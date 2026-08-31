@@ -1238,20 +1238,31 @@ UppdateraBrickaInre() {
     rad1 := s.name != "" ? s.name : T("desktop") " " s.index
     rad2 := s.name != "" ? T("desktop") " " s.index " " T("of") " " s.count : ""
     ; The app buttons grow rightwards as windows are opened and eventually
-    ; reach the strip we live in, which put them under the label. Measure the
-    ; free gap between their right edge and the icon area, and give way:
-    ; drop the second line first, hide entirely if even that will not fit.
-    ; Overlapping is the one outcome nobody wants.
-    knappSlut := 0
-    try {
-        ControlGetPos(&kx, , &kb, , "MSTaskListWClass1", fält)
-        knappSlut := kx + kb
-    }
+    ; reach the strip we live in, drawing them underneath the label. Try the
+    ; forms from richest to barest and take the first one whose left edge
+    ; lands on free bar: two lines, then one compact line, then just the
+    ; counter. Only if even that collides does the label go away, because
+    ; vanishing exactly when many windows are open is the worst answer.
+    ;
+    ; MSTaskListWClass1 is NOT usable for this: on Windows 11 it is a
+    ; vestigial control that reported the buttons ending at 761 while they
+    ; actually reached 1082. The buttons are XAML, so the only honest probe
+    ; is asking UI Automation what sits at a given point.
     marginal := Round(12 * BrickaDpi(fält) / 96)
-    glapp := knappSlut ? ikonX - knappSlut - 2 * marginal : 99999
-    if (glapp < BrickaBredd(rad1, rad2, fält))
-        rad2 := ""                                   ; compact: name only
-    if (rad2 = "" && glapp < BrickaBredd(rad1, "", fält)) {
+    mittY := fältY + fältHöjd // 2
+    former := [[rad1, rad2]]
+    if (rad2 != "")
+        former.Push([rad1 " " s.index "/" s.count, ""])
+    former.Push([s.index "/" s.count, ""])
+    rad1 := "", rad2 := ""
+    for f in former {
+        bredd := BrickaBredd(f[1], f[2], fält)
+        if !UiaKnappVid(fältX + ikonX - bredd - marginal, mittY) {
+            rad1 := f[1], rad2 := f[2]
+            break
+        }
+    }
+    if (rad1 = "") {
         DöljBricka()
         return
     }
@@ -1284,6 +1295,42 @@ UppdateraBrickaInre() {
     ; clicking the taskbar raises it within the topmost band — re-assert
     DllCall("SetWindowPos", "ptr", g_bricka.Hwnd, "ptr", 0
         , "int", 0, "int", 0, "int", 0, "int", 0, "uint", 0x13)   ; TOP, NOMOVE|NOSIZE|NOACTIVATE
+}
+
+; Is a taskbar button sitting at this screen point? UIA_ButtonControlTypeId
+; is 50000. Answers false on any failure: a missing answer must not be what
+; makes the label disappear. Cached briefly - the guard timer asks four times
+; a second and the taskbar does not rearrange that fast.
+UiaKnappVid(x, y) {
+    static senast := 0, senastNyckel := "", senastSvar := false
+    nyckel := x "," y
+    if (nyckel = senastNyckel && A_TickCount - senast < 1000)
+        return senastSvar
+    svar := false
+    try {
+        typ := UiaTypVid(x, y)
+        svar := (typ = 50000)
+    }
+    senast := A_TickCount, senastNyckel := nyckel, senastSvar := svar
+    return svar
+}
+
+UiaTypVid(x, y) {
+    static uia := 0
+    if !uia {
+        DllCall("ole32\CoCreateInstance"
+            , "ptr", VdaGuid("{FF48DBA4-60EF-4201-AA87-54103EEF594E}")   ; CUIAutomation
+            , "ptr", 0, "uint", 0x17
+            , "ptr", VdaGuid("{30CBE57D-D9D0-452A-AB13-7AC5AC4825EE}")
+            , "ptr*", &p := 0, "hresult")
+        uia := ComValue(13, p)
+    }
+    ComCall(7, uia, "int64", (x & 0xFFFFFFFF) | (y << 32), "ptr*", &pEl := 0)
+    if !pEl
+        return 0
+    el := ComValue(13, pEl)
+    ComCall(21, el, "int*", &typ := 0)     ; get_CurrentControlType
+    return typ
 }
 
 ; How wide the label would be with this content, measured by rendering it in
