@@ -759,7 +759,9 @@ MouseOverWindow(*) {
             return false
         if WinGetClass(win) ~= "^(Shell_TrayWnd|Shell_SecondaryTrayWnd|Progman|WorkerW|#32768)$"
             return false
-        if WinGetPID(win) = ownPid
+        ; our own windows are normally not targets - but the GUI is an ordinary
+        ; window someone may want to save a position for, or move
+        if (WinGetPID(win) = ownPid && !(g_uiWin && win = g_uiWin.Hwnd))
             return false
         if (WinGetExStyle(win) & 0x8000000)      ; WS_EX_NOACTIVATE - menus, OSDs
             return false
