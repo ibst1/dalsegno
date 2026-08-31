@@ -32,3 +32,22 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+WebView2 wrapper for AutoHotkey (lib\WebView2.ahk, ComVar.ahk, Promise.ahk)
+---------------------------------------------------------------------------
+Copyright (c) thqby
+https://github.com/thqby/ahk2_lib
+Licensed under the MIT License.
+
+WebView2Loader.dll
+------------------
+Part of the Microsoft Edge WebView2 SDK.
+Copyright (c) Microsoft Corporation
+https://developer.microsoft.com/microsoft-edge/webview2/
+Redistributed under the Microsoft Software License Terms for the SDK.
+
+JSON.ahk
+--------
+Copyright (c) thqby / contributors
+https://github.com/thqby/ahk2_lib
+Licensed under the MIT License.
