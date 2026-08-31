@@ -234,7 +234,7 @@ LäsKonfig() {
     if fel != "" {
         TrayTip(T("invalidHotkeys") "`n" fel, "DeskPilot", "Iconx")
         try FileAppend(FormatTime() "  Invalid hotkeys: " StrReplace(fel, "`n", " / ") "`n"
-            , A_ScriptDir "\error.log", "UTF-8")
+            , Felloggen(), "UTF-8")
     }
 }
 
@@ -1750,6 +1750,20 @@ UiSparaRegler(regler) {
     TrayTip(T("rulesSaved"), "DeskPilot")
 }
 
+
+; Log next to the script only when that is a private place. These folders are
+; synced with OneDrive across two machines, and a shared error.log interleaves
+; lines from both - which actively misled a debugging session: the newest
+; entries had come from the OTHER computer. Per-machine, in LOCALAPPDATA.
+Felloggen() {
+    static sökväg := ""
+    if (sökväg != "")
+        return sökväg
+    mapp := EnvGet("LOCALAPPDATA") "\DeskPilot"
+    try DirCreate(mapp)
+    return sökväg := mapp "\error.log"
+}
+
 InitTray() {
     A_TrayMenu.Delete()
     A_TrayMenu.Add(T("trayOpenUi"), (*) => ÖppnaUi())
@@ -1807,6 +1821,6 @@ VäxlaAutostart(*) {
 ; crashing timer would spam a box every 250 ms.
 LoggaFel(err, mode) {
     try FileAppend(FormatTime() "  " err.Message " (" err.File ":" err.Line ")`n"
-        , A_ScriptDir "\error.log", "UTF-8")
+        , Felloggen(), "UTF-8")
     return 1
 }
