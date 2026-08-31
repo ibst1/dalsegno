@@ -31,6 +31,8 @@
 ;===============================================================================
 #Requires AutoHotkey v2.0
 #SingleInstance Force
+#Include lib\WebView2.ahk
+#Include lib\JSON.ahk
 Persistent
 
 VD_KEY := "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops"
@@ -38,6 +40,7 @@ VDA_DLL := A_ScriptDir "\VirtualDesktopAccessor.dll"
 
 g_konfigFil := A_ScriptDir "\DeskPilot config.ini"
 g_regKortkommandon := []
+g_uiWin := 0, g_uiCtrl := 0, g_uiCore := 0, g_uiReady := false
 g_dllLaddad := FileExist(VDA_DLL) ? DllCall("LoadLibrary", "str", VDA_DLL, "ptr") != 0 : false
 g_sistaGuid := ""    ; GUID at last poll — separates a switch from startup/rename
 g_sistaLäge := ""    ; guid|name|count — update the tray only when something changed
@@ -401,11 +404,14 @@ T(k) {
         "ruleSaved", "Rule saved → ",
         "dsSave", "Save window position", "dsMove", "Move to saved position",
         "dsForget", "Forget saved position", "dsRule", "Create title rule…",
+        "trayOpenUi", "Open DeskPilot…",
         "trayShowName", "Show desktop name", "trayOpenConfig", "Open configuration",
         "trayReloadConfig", "Reload configuration", "trayLanguage", "Language",
         "trayAutostart", "Start with Windows",
         "trayRestart", "Restart script", "trayExit", "Exit",
-        "configLoaded", "Configuration loaded", "invalidHotkeys", "Invalid hotkeys:")
+        "configLoaded", "Configuration loaded", "invalidHotkeys", "Invalid hotkeys:",
+        "uiFail", "Could not start the GUI (WebView2 runtime missing?)",
+        "rulesSaved", "Rules saved")
     static sv := Map(
         "desktop", "Skrivbord", "of", "av", "windowTo", "Fönster → ",
         "dllMissing", "VirtualDesktopAccessor.dll saknas – kan inte flytta fönster",
@@ -421,11 +427,14 @@ T(k) {
         "ruleSaved", "Regel sparad → ",
         "dsSave", "Spara fönstrets läge", "dsMove", "Flytta till sparat läge",
         "dsForget", "Glöm sparat läge", "dsRule", "Skapa titelregel…",
+        "trayOpenUi", "Öppna DeskPilot…",
         "trayShowName", "Visa skrivbordsnamn", "trayOpenConfig", "Öppna konfigurationen",
         "trayReloadConfig", "Läs om konfigurationen", "trayLanguage", "Språk",
         "trayAutostart", "Starta med Windows",
         "trayRestart", "Starta om skriptet", "trayExit", "Avsluta",
-        "configLoaded", "Konfigurationen inläst", "invalidHotkeys", "Ogiltiga kortkommandon:")
+        "configLoaded", "Konfigurationen inläst", "invalidHotkeys", "Ogiltiga kortkommandon:",
+        "uiFail", "Kunde inte starta GUI:t (saknas WebView2-runtime?)",
+        "rulesSaved", "Regler sparade")
     return (g_språk = "sv" ? sv : en).Get(k, k)
 }
 
@@ -461,6 +470,7 @@ VdaKommando(wParam, lParam, msg, hwnd) {
             UppdateraPilikoner()
         case 6: VäxlaRelativt(1)
         case 7: VäxlaRelativt(-1)
+        case 8: ÖppnaUi()          ; open the settings GUI
         case 100:
             try FileDelete(A_ScriptDir "\ping.txt")
             try FileAppend("pong " lParam "`n", A_ScriptDir "\ping.txt", "UTF-8")
@@ -1472,8 +1482,240 @@ DöljOsd() {
     }
 }
 
+; =============================================================================
+;  Settings GUI (WebView2) - same architecture as DalSegno: one state object
+;  pushed into window.receiveState, {action:…} messages posted back.
+; =============================================================================
+
+ÖppnaUi(*) {
+    global g_uiWin, g_uiCtrl, g_uiCore
+    if g_uiWin {
+        g_uiWin.Show()
+        PassaUiTillSkärm()
+        SkickaUiTillstånd()
+        return
+    }
+    DllCall("shell32\SetCurrentProcessExplicitAppUserModelID", "str", "DeskPilot.Application.1")
+    g_uiWin := Gui("+Resize +MinSize640x460", "DeskPilot")
+    g_uiWin.OnEvent("Close", (*) => (SparaUiGeometri(), g_uiWin.Hide()))
+    g_uiWin.OnEvent("Size", UiStorlek)
+    g_uiWin.Show(LäsUiGeometri())
+    PassaUiTillSkärm()
+    DllCall("dwmapi\DwmSetWindowAttribute", "ptr", g_uiWin.hwnd, "uint", 20, "int*", 1, "uint", 4)
+    try {
+        ico := LoadPicture(A_ScriptDir "\icons\app.ico", "Icon1 w32 h32", &_t)
+        SendMessage(0x80, 1, ico, , g_uiWin.hwnd)
+        DllCall("SetClassLongPtr", "ptr", g_uiWin.hwnd, "int", -14, "ptr", ico)
+    }
+    try {
+        ; own user data folder - an empty one falls back to Edge's profile,
+        ; which cannot be shared with a running browser
+        dataDir := EnvGet("LOCALAPPDATA") "\DeskPilot\WebView2"
+        try DirCreate(dataDir)
+        g_uiCtrl := WebView2.create(g_uiWin.hwnd, , 0, dataDir, "", 0
+            , A_ScriptDir "\lib\WebView2Loader.dll")
+        g_uiCtrl.Fill()
+        g_uiCore := g_uiCtrl.CoreWebView2
+        g_uiCore.add_WebMessageReceived(UiMeddelande)
+        g_uiCore.Navigate("file:///" StrReplace(A_ScriptDir "\ui\index.html", "\", "/"))
+    } catch as e {
+        g_uiWin.Destroy()
+        g_uiWin := 0, g_uiCtrl := 0, g_uiCore := 0
+        TrayTip(T("uiFail") " (" e.Message ")", "DeskPilot", "Iconx")
+    }
+}
+
+UiStorlek(gui, minMax, w, h) {
+    global g_uiCtrl
+    if (minMax != -1 && IsObject(g_uiCtrl))
+        try g_uiCtrl.Fill()
+}
+
+LäsUiGeometri() {
+    b := 980, h := 660
+    try {
+        b := Integer(IniRead(g_konfigFil, "Window", "W", "980"))
+        h := Integer(IniRead(g_konfigFil, "Window", "H", "660"))
+    }
+    x := IniRead(g_konfigFil, "Window", "X", "")
+    y := IniRead(g_konfigFil, "Window", "Y", "")
+    opt := "w" Max(640, b) " h" Max(460, h)
+    return (x != "" && y != "") ? "x" x " y" y " " opt : opt
+}
+
+SparaUiGeometri() {
+    global g_uiWin
+    if !g_uiWin
+        return
+    try {
+        if (WinGetMinMax(g_uiWin.hwnd) != 0)
+            return
+        ; position from the window rect, size from the CLIENT rect - Show("w…")
+        ; sizes the client area, so storing the outer size grows the window
+        WinGetPos(&x, &y, , , g_uiWin.hwnd)
+        WinGetClientPos(, , &b, &h, g_uiWin.hwnd)
+        IniWrite(x, g_konfigFil, "Window", "X"), IniWrite(y, g_konfigFil, "Window", "Y")
+        IniWrite(b, g_konfigFil, "Window", "W"), IniWrite(h, g_konfigFil, "Window", "H")
+    }
+}
+
+PassaUiTillSkärm() {
+    global g_uiWin
+    if !g_uiWin
+        return
+    try {
+        if (WinGetMinMax(g_uiWin.hwnd) != 0)
+            return
+        WinGetPos(&x, &y, &b, &h, g_uiWin.hwnd)
+        MonitorGetWorkArea(SkärmFörFönster(g_uiWin.hwnd), &vä, &öv, &hö, &ne)
+        b := Min(b, hö - vä), h := Min(h, ne - öv)
+        WinMove(Min(Max(x, vä), hö - b), Min(Max(y, öv), ne - h), b, h, g_uiWin.hwnd)
+    }
+}
+
+SkärmFörFönster(hwnd) {
+    try {
+        WinGetPos(&x, &y, &b, &h, hwnd)
+        mx := x + b // 2, my := y + h // 2
+        loop MonitorGetCount() {
+            MonitorGet(A_Index, &vä, &öv, &hö, &ne)
+            if (mx >= vä && mx < hö && my >= öv && my < ne)
+                return A_Index
+        }
+    }
+    return MonitorGetPrimary()
+}
+
+UiSkicka(skript) {
+    global g_uiReady, g_uiCore
+    if (!g_uiReady || !IsObject(g_uiCore))
+        return
+    try g_uiCore.ExecuteScriptAsync(skript)
+    catch
+        g_uiReady := false
+}
+
+SkickaUiTillstånd() {
+    global g_uiReady, g_regler
+    if !g_uiReady
+        return
+    s := LäsSkrivbordsStatus()
+    regler := []
+    for r in g_regler
+        regler.Push(Map("desktop", r.mål, "exe", r.exe, "title", r.regex
+            , "follow", r.följ ? 1 : 0))
+    hk := Map()
+    for namn in ["MoveNext", "MovePrevious", "MoveFollowNext", "MoveFollowPrevious"
+        , "MoveMenu", "ShowName", "SwitchToPrefix", "MoveToPrefix", "MoveFollowToPrefix"]
+        hk[namn] := IniRead(g_konfigFil, "Hotkeys", namn, "")
+    tillstånd := Map(
+        "desktops", Map("count", s ? s.count : 0, "index", s ? s.index : 0)
+        , "settings", Map(
+            "lang", g_språk
+            , "nameInTray", g_namnITray ? 1 : 0
+            , "wheel", g_rullhjul ? 1 : 0
+            , "arrowIcons", g_pilikoner ? 1 : 0
+            , "titleMenu", g_titelmeny ? 1 : 0
+            , "menuModifier", g_menyModifierare
+            , "menuButton", g_menyKnapp
+            , "wholeWindow", g_helaFönstret ? 1 : 0
+            , "exclude", g_egenMeny)
+        , "hotkeys", hk
+        , "rules", regler
+        , "windows", ListaFönster())
+    UiSkicka("window.receiveState(" JSON.Dump(tillstånd) ")")
+}
+
+; Windows worth offering a rule for: titled, not ours, not shell furniture.
+ListaFönster() {
+    lista := []
+    for hwnd in WinGetList() {
+        try {
+            titel := WinGetTitle(hwnd)
+            if (titel = "" || !ÄrRiktigtFönster(hwnd))
+                continue
+            if WinGetClass(hwnd) ~= "^(Progman|WorkerW|Shell_TrayWnd|Shell_SecondaryTrayWnd)$"
+                continue
+            lista.Push(Map("hwnd", hwnd, "exe", WinGetProcessName(hwnd)
+                , "title", SubStr(titel, 1, 90), "desktop", SkrivbordFörFönster(hwnd)))
+        }
+    }
+    return lista
+}
+
+SkrivbordFörFönster(hwnd) {
+    if !g_dllLaddad
+        return ""
+    n := 0
+    try n := DllCall("VirtualDesktopAccessor\GetWindowDesktopNumber", "ptr", hwnd, "int")
+    return (n >= 0 && n < 99) ? n + 1 : ""
+}
+
+UiMeddelande(sender, args) {
+    global g_uiReady
+    try msg := JSON.Load(args.WebMessageAsJson)
+    catch
+        return
+    switch msg["action"] {
+        case "ready":
+            g_uiReady := true
+            SkickaUiTillstånd()
+        case "refresh":
+            SkickaUiTillstånd()
+        case "setOption":
+            UiSättVal(msg["name"], msg["value"])
+        case "setHotkey":
+            UiSättKortkommando(msg["name"], msg["key"])
+        case "setLang":
+            IniWrite(msg["lang"] = "sv" ? "sv" : "en", g_konfigFil, "Display", "Language")
+            LäsOmKonfig()
+        case "saveRules":
+            UiSparaRegler(msg["rules"])
+        case "openConfig":
+            try Run('notepad.exe "' g_konfigFil '"')
+        case "reloadConfig":
+            LäsOmKonfig()
+    }
+}
+
+UiSättVal(namn, värde) {
+    sektion := (namn = "NameInTray" || namn = "Language") ? "Display" : "Mouse"
+    IniWrite(värde, g_konfigFil, sektion, namn)
+    LäsOmKonfig()
+}
+
+; A hotkey edited in the GUI. Written first, then the whole configuration is
+; re-read - LäsKonfig already validates every hotkey and reports the bad ones,
+; so there is no second, divergent validator here.
+UiSättKortkommando(namn, tangent) {
+    IniWrite(tangent, g_konfigFil, "Hotkeys", namn)
+    LäsOmKonfig()
+}
+
+UiSparaRegler(regler) {
+    ; the ini section is rewritten wholesale: rule order is meaningful (first
+    ; match wins) and editing in place would not preserve it
+    try IniDelete(g_konfigFil, "Rules")
+    n := 0
+    for r in regler {
+        rad := r["desktop"]
+        if (r["exe"] != "")
+            rad .= " /exe:" r["exe"]
+        if r["follow"]
+            rad .= " /follow"
+        if (r["title"] != "")
+            rad .= " " r["title"]
+        IniWrite(rad, g_konfigFil, "Rules", "Rule" (++n))
+    }
+    LäsOmKonfig()
+    TrayTip(T("rulesSaved"), "DeskPilot")
+}
+
 InitTray() {
     A_TrayMenu.Delete()
+    A_TrayMenu.Add(T("trayOpenUi"), (*) => ÖppnaUi())
+    A_TrayMenu.Default := T("trayOpenUi")
+    A_TrayMenu.Add()
     A_TrayMenu.Add(T("trayShowName"), (*) => VisaOsd())
     A_TrayMenu.Add()
     A_TrayMenu.Add(T("trayOpenConfig"), (*) => Run('notepad.exe "' g_konfigFil '"'))
@@ -1494,6 +1736,8 @@ InitTray() {
 }
 
 LäsOmKonfig(*) {
+    ; an open GUI must not keep showing the values it just replaced
+    SetTimer(SkickaUiTillstånd, -120)
     LäsKonfig()
     InitTray()          ; the language may have changed in the config file
     UppdateraPilikoner()

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; style-src 'self'; script-src 'self';">
+  <link rel="stylesheet" href="style.css">
+  <title>DeskPilot</title>
+</head>
+<body>
+
+<div id="tabs">
+  <button class="tab active" data-tab="hotkeys" id="tabBtnHotkeys"></button>
+  <button class="tab" data-tab="rules" id="tabBtnRules"></button>
+  <button class="tab" data-tab="settings" id="tabBtnSettings"></button>
+</div>
+
+<div id="main">
+
+  <section id="tab-hotkeys" class="tabpane active">
+    <div class="inner">
+      <h2 id="hkH"></h2>
+      <p class="help" id="hkHelp"></p>
+      <div id="hkList"></div>
+
+      <h2 id="prefixH"></h2>
+      <p class="help" id="prefixHelp"></p>
+      <div id="prefixList"></div>
+    </div>
+  </section>
+
+  <section id="tab-rules" class="tabpane">
+    <div class="inner">
+      <h2 id="rulesH"></h2>
+      <p class="help" id="rulesHelp"></p>
+      <div class="tablewrap">
+        <table id="rulesTable">
+          <thead><tr>
+            <th id="thDesktop"></th>
+            <th id="thExe"></th>
+            <th id="thTitle"></th>
+            <th style="text-align:center" id="thFollow"></th>
+            <th></th>
+          </tr></thead>
+          <tbody id="rulesBody"></tbody>
+        </table>
+      </div>
+      <p>
+        <button id="btnAddRule" class="small"></button>
+        <button id="btnSaveRules" class="small primary"></button>
+        <span id="rulesDirty" class="dirty"></span>
+      </p>
+
+      <h2 id="winsH"></h2>
+      <p class="help" id="winsHelp"></p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr>
+            <th id="thWinProgram"></th><th id="thWinTitle"></th>
+            <th id="thWinDesktop"></th><th></th>
+          </tr></thead>
+          <tbody id="winBody"></tbody>
+        </table>
+      </div>
+      <p><button id="btnRefreshWins" class="small"></button></p>
+    </div>
+  </section>
+
+  <section id="tab-settings" class="tabpane">
+    <div class="inner">
+      <h2 id="menuH"></h2>
+      <p class="help" id="menuHelp"></p>
+      <label class="toggle"><input type="checkbox" id="tglTitleMenu"> <span id="lblTitleMenu"></span></label>
+      <div class="field">
+        <label><span id="lblMenuModifier"></span>
+          <input id="inMenuModifier" class="short"></label>
+        <label><span id="lblMenuButton"></span>
+          <input id="inMenuButton" class="short"></label>
+      </div>
+      <label class="toggle"><input type="checkbox" id="tglWholeWindow"> <span id="lblWholeWindow"></span></label>
+      <p class="help" id="wholeWindowHelp"></p>
+      <div class="field">
+        <label><span id="lblExclude"></span>
+          <input id="inExclude" class="wide"></label>
+      </div>
+      <p class="help" id="excludeHelp"></p>
+
+      <h2 id="taskbarH"></h2>
+      <label class="toggle"><input type="checkbox" id="tglNameInTray"> <span id="lblNameInTray"></span></label>
+      <label class="toggle"><input type="checkbox" id="tglWheel"> <span id="lblWheel"></span></label>
+      <p class="help" id="wheelHelp"></p>
+      <label class="toggle"><input type="checkbox" id="tglArrows"> <span id="lblArrows"></span></label>
+      <p class="help" id="arrowsHelp"></p>
+
+      <h2 id="langH"></h2>
+      <p class="help" id="langHelp"></p>
+      <label class="radio"><input type="radio" name="lang" value="en"> English</label>
+      <label class="radio"><input type="radio" name="lang" value="sv"> Svenska</label>
+
+      <h2 id="filesH"></h2>
+      <button id="btnOpenConfig" class="small"></button>
+      <button id="btnReload" class="small"></button>
+    </div>
+  </section>
+
+</div>
+
+<div id="statusbar"><span id="status"></span></div>
+
+<script src="app.js"></script>
+</body>
+</html>
