@@ -733,12 +733,19 @@ ApplyMenuHotkey(mine := "") {
         try Hotkey(k, "Off")
     g_menuKeys := []
     if (mine && g_menuButton != "") {
+        ; * is not optional: a hotkey without it fires only when NO modifier is
+        ; held. The menu modifier may well be one - CapsModifier expresses
+        ; CapsLock as RCtrl so other scripts can address it, which turns every
+        ; CapsLock+right-click into a Ctrl+right-click - and a bare
+        ; registration then matches nothing, in every application at once.
+        ; Gating belongs to MouseOverWindow, which reads the physical state.
+        btn := "*" g_menuButton
         try {
-            Hotkey(g_menuButton, MenuKeyDown, "On")
-            Hotkey(g_menuButton " Up", ShowWindowMenu, "On")
-            g_menuKeys := [g_menuButton, g_menuButton " Up"]
+            Hotkey(btn, MenuKeyDown, "On")
+            Hotkey(btn " Up", ShowWindowMenu, "On")
+            g_menuKeys := [btn, btn " Up"]
         } catch {
-            try Hotkey(g_menuButton, "Off")   ; the down half may have taken
+            try Hotkey(btn, "Off")   ; the down half may have taken
             TrayTip Tr("badMenuHotkey") "`n" g_menuButton, Tr("appTitle")
         }
     }
