@@ -149,6 +149,9 @@ td.actions button { margin-left: 6px; }
 .badge.rule { color: var(--accent2); border-color: var(--accent); }
 .ok { color: var(--green); }
 .dim { color: var(--text-dim); }
+/* our own settings window: listed so it can be seen, greyed because window
+   rules never touch it (see ownWinTip) */
+tr.own td { color: var(--text-dim); }
 
 /* ── rules ───────────────────────────────────────────────────────────── */
 #tab-rules, #tab-settings { overflow-y: auto; display: none; }

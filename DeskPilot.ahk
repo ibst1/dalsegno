@@ -98,7 +98,8 @@ OnMessage(DllCall("RegisterWindowMessage", "str", "DESKPILOT_CMD", "uint"), VdaK
 OnMessage(0x7E, SkärmbytesVakt)   ; WM_DISPLAYCHANGE: restart on monitor changes
 OnMessage(0x404, TrayIkonKlick)   ; AHK_NOTIFYICON: left click = desktop picker
 HotIf(MusÖverBricka)
-Hotkey("LButton", BrickKlick, "On")   ; click on the name label = desktop picker
+Hotkey("LButton", BrickKlick, "On")   ; label: left = desktop picker
+Hotkey("RButton", BrickHöger, "On")   ; label: right = settings GUI
 HotIf()
 PollSkrivbord()      ; set the icon right away; the first call shows no OSD
 SetTimer(PollSkrivbord, 250)
@@ -283,13 +284,27 @@ TillämpaMenyKortkommando() {
         try Hotkey(tangent, "Off")
     g_menyTangenter := []
     if (g_titelmeny && g_menyKnapp != "") {
+        ; * is not optional. A hotkey without it fires ONLY when no modifier is
+        ; held, so the button has to be registered for every modifier state the
+        ; menu can be summoned in. Back when the modifier was Shift this file
+        ; carried an explicit "+RButton" twin next to the bare one for exactly
+        ; that reason; collapsing the two into one bare registration worked
+        ; only while CapsLock produced no modifier state of its own.
+        ;
+        ; It does now: CapsModifier expresses CapsLock AS RCtrl, because that
+        ; is the only way to make the key addressable from other scripts. So
+        ; every CapsLock+right-click arrives as CTRL+right-click and the bare
+        ; hotkey stops matching - in every application at once. * accepts any
+        ; combination and leaves the gating to the criterion, which reads the
+        ; modifier's physical state and is the thing that should decide.
+        knapp := "*" g_menyKnapp
         try {
-            Hotkey(g_menyKnapp, MenyHögerNer, "On")
-            Hotkey(g_menyKnapp " Up", VisaFönsterMeny, "On")
-            g_menyTangenter := [g_menyKnapp, g_menyKnapp " Up"]
+            Hotkey(knapp, MenyHögerNer, "On")
+            Hotkey(knapp " Up", VisaFönsterMeny, "On")
+            g_menyTangenter := [knapp, knapp " Up"]
         } catch {
             fel .= "MenuButton: " g_menyKnapp "`n"
-            try Hotkey(g_menyKnapp, "Off")   ; the down half may have taken
+            try Hotkey(knapp, "Off")   ; the down half may have taken
         }
     }
     HotIf()
@@ -695,6 +710,20 @@ BrickKlick(*) {
     VisaSkrivbordsväljare()
 }
 
+; Right-click on the label opens the settings GUI.
+;
+; This started out as a double-click, which forced a choice between two bad
+; options: defer the left click by the double-click interval, making the
+; picker - the frequent action - sluggish; or catch the second click while the
+; picker menu is up, which runs it in a thread interrupting one parked in that
+; menu's modal loop, racing EndMenu against a menu still unwinding. The first
+; was merely slow, the second worked only sometimes. Two separate buttons need
+; no timing at all, so both gestures are immediate.
+BrickHöger(*) {
+    TaFörgrund()      ; the click-through label never activates us
+    ÖppnaUi()
+}
+
 ; Windows' foreground lock denies background processes; borrow rights from
 ; the current foreground window's thread and claim the foreground.
 TaFörgrund() {
@@ -987,6 +1016,37 @@ VisaFönstermenyn(win, s, vidFönstret := false) {
         }
     }
     m := Menu()
+    ; DalSegno's items go FIRST and FLAT. They used to hang under a "DalSegno"
+    ; submenu, which made the most direct actions in the menu - save this
+    ; window's position, put it back - the only ones needing a second step, and
+    ; split the menu by which script implements an item rather than by what the
+    ; item does. Their labels carry themselves ("Spara fönstrets läge"), so the
+    ; heading was not doing any explaining either.
+    ;
+    ; The separator is added only when DalSegno actually contributed something,
+    ; otherwise the menu would open with a rule above nothing.
+    dsFlaggor := DalSegnoFlaggor(win)
+    if dsFlaggor {
+        harPos := dsFlaggor & 2
+        ; A Windows menu has no real section header, so the heading is an item
+        ; that is disabled and does nothing - the standard way to label a group.
+        ; Headings appear ONLY when both scripts contribute: with DalSegno not
+        ; running the menu is entirely DeskPilot's, and naming the one section
+        ; there is would say nothing the menu does not already say.
+        m.Add("DalSegno", (*) => "")
+        m.Disable("DalSegno")
+        m.Add(T("dsSave"), (*) => DalSegnoKommando(win, 1))
+        m.Add(T("dsMove"), (*) => DalSegnoKommando(win, 2))
+        m.Add(T("dsForget"), (*) => DalSegnoKommando(win, 3))
+        m.Add(T("dsRule"), (*) => DalSegnoKommando(win, 4))
+        if !harPos {
+            m.Disable(T("dsMove"))
+            m.Disable(T("dsForget"))
+        }
+        m.Add()
+        m.Add("DeskPilot", (*) => "")
+        m.Disable("DeskPilot")
+    }
     m.Add(T("menuMoveTo"), flytta)
     m.Add(T("menuMoveFollow"), följ)
     m.Add(T("menuAlwaysPre") kort T("menuAlwaysPost"), alltid)
@@ -994,21 +1054,6 @@ VisaFönstermenyn(win, s, vidFönstret := false) {
         m.Add(T("menuPin"), VäxlaPinning.Bind(win))
         if ÄrPinnat(win)
             m.Check(T("menuPin"))
-    }
-    ; DalSegno integration - same submenu as in the real system menu path
-    dsFlaggor := DalSegnoFlaggor(win)
-    if dsFlaggor {
-        harPos := dsFlaggor & 2
-        dsm := Menu()
-        dsm.Add(T("dsSave"), (*) => DalSegnoKommando(win, 1))
-        dsm.Add(T("dsMove"), (*) => DalSegnoKommando(win, 2))
-        dsm.Add(T("dsForget"), (*) => DalSegnoKommando(win, 3))
-        dsm.Add(T("dsRule"), (*) => DalSegnoKommando(win, 4))
-        if !harPos {
-            dsm.Disable(T("dsMove"))
-            dsm.Disable(T("dsForget"))
-        }
-        m.Add("DalSegno", dsm)
     }
     ; the eaten click never activated anything, so without claiming the
     ; foreground Windows' foreground lock closes the menu immediately
@@ -1143,6 +1188,13 @@ RegelSvep() {
         gammal := g_kändaFönster.Get(hwnd, "")
         if (gammal = titel)
             continue
+        ; ALL of our own windows are skipped, the settings GUI included. The
+        ; menu draws this line differently - MusÖverMålFönster deliberately
+        ; lets the GUI through, since offering to move a window you right-
+        ; clicked is harmless. A rule is not: it fires on its own, and a
+        ; config window that walks off to another desktop while you are
+        ; editing the very rules that move it is its own trap. Deliberate;
+        ; do not "fix".
         try {
             if WinGetPID(hwnd) = egenPid
                 continue
@@ -1667,6 +1719,7 @@ SkickaUiTillstånd() {
 
 ; Windows worth offering a rule for: titled, not ours, not shell furniture.
 ListaFönster() {
+    static egenPid := DllCall("GetCurrentProcessId")
     lista := []
     for hwnd in WinGetList() {
         try {
@@ -1675,8 +1728,20 @@ ListaFönster() {
                 continue
             if WinGetClass(hwnd) ~= "^(Progman|WorkerW|Shell_TrayWnd|Shell_SecondaryTrayWnd)$"
                 continue
+            skrivbord := SkrivbordFörFönster(hwnd)
+            ; A window on no virtual desktop cannot be moved to one, so it does
+            ; not belong in a list of windows we can act on. This is what filled
+            ; the table with near-duplicates: Task Switching, the tray overflow,
+            ; Battery Meter and every hidden helper a program keeps around are
+            ; titled top-level windows, and several of them share their owner's
+            ; title exactly. Only skip them when the desktop number is
+            ; trustworthy - without the DLL every window reports "" and the
+            ; list would come back empty.
+            if (g_dllLaddad && skrivbord = "")
+                continue
             lista.Push(Map("hwnd", hwnd, "exe", WinGetProcessName(hwnd)
-                , "title", SubStr(titel, 1, 90), "desktop", SkrivbordFörFönster(hwnd)))
+                , "title", SubStr(titel, 1, 90), "desktop", skrivbord
+                , "own", (WinGetPID(hwnd) = egenPid ? 1 : 0)))
         }
     }
     return lista

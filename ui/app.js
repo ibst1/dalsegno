@@ -35,6 +35,9 @@ const STR = {
     winsHelp: 'Windows DeskPilot can act on right now. "Rule…" fills in a new rule from the window.',
     thWinProgram: 'Program', thWinTitle: 'Title', thWinDesktop: 'Desktop',
     ruleBtn: 'Rule…', ruleBtnTip: 'Create a rule prefilled from this window',
+    ownWinTip: 'DeskPilot’s own window. Window rules never apply to it, so ' +
+      'the settings window cannot walk off to another desktop while you edit ' +
+      'the rules that would move it.',
     winsEmpty: 'No windows found.',
 
     menuH: 'Window menu',
@@ -92,6 +95,9 @@ const STR = {
     winsHelp: 'Fönster som DeskPilot kan agera på just nu. "Regel…" fyller i en ny regel från fönstret.',
     thWinProgram: 'Program', thWinTitle: 'Titel', thWinDesktop: 'Skrivbord',
     ruleBtn: 'Regel…', ruleBtnTip: 'Skapa en regel förifylld från det här fönstret',
+    ownWinTip: 'DeskPilots eget fönster. Fönsterregler gäller aldrig det, så ' +
+      'inställningsfönstret kan inte vandra iväg till ett annat skrivbord ' +
+      'medan du redigerar reglerna som skulle flytta det.',
     winsEmpty: 'Inga fönster hittades.',
 
     menuH: 'Fönstermeny',
@@ -247,9 +253,9 @@ function desktopOptions(sel) {
 }
 function ruleRow(r) {
   return `<tr>
-    <td><select class="r-desktop">${desktopOptions(Number(r.desktop) || 1)}</select></td>
     <td><input class="r-exe" value="${esc(r.exe)}" placeholder="${esc(t('anyProgram'))}"></td>
     <td><input class="r-title wide" value="${esc(r.title)}"></td>
+    <td><select class="r-desktop">${desktopOptions(Number(r.desktop) || 1)}</select></td>
     <td style="text-align:center"><input type="checkbox" class="r-follow"${r.follow ? ' checked' : ''}></td>
     <td class="actions"><button class="small act-del" title="${esc(t('delRuleTip'))}">✕</button></td>
   </tr>`;
@@ -313,13 +319,30 @@ function renderWindows() {
     body.innerHTML = `<tr class="empty-row"><td colspan="4">${esc(t('winsEmpty'))}</td></tr>`;
     return;
   }
-  body.innerHTML = st.windows.map(w => `
-    <tr data-hwnd="${w.hwnd}">
+  // Rows identical in program, title AND desktop are collapsed into one with
+  // a count. They are not distinguishable in this table, and "Rule…" would
+  // build the very same rule from any of them, so listing them separately
+  // only adds noise. Rows differing in desktop stay apart - that difference is
+  // exactly what the table is for.
+  const groups = [];
+  const seen = new Map();
+  for (const w of st.windows) {
+    const key = `${w.exe} ${w.title} ${w.desktop}`;
+    const hit = seen.get(key);
+    if (hit) { hit.n++; continue; }
+    const g = { ...w, n: 1 };
+    seen.set(key, g);
+    groups.push(g);
+  }
+  body.innerHTML = groups.map(w => `
+    <tr data-hwnd="${w.hwnd}"${w.own ? ' class="own"' : ''}>
       <td>${esc(w.exe)}</td>
-      <td class="ellip" title="${esc(w.title)}">${esc(w.title)}</td>
+      <td class="ellip" title="${esc(w.title)}">${esc(w.title)}${
+        w.n > 1 ? ` <span class="dim">×${w.n}</span>` : ''}</td>
       <td>${esc(w.desktop || '–')}</td>
       <td class="actions">
-        <button class="small act-rule" title="${esc(t('ruleBtnTip'))}">${esc(t('ruleBtn'))}</button>
+        <button class="small act-rule"${w.own ? ' disabled' : ''} title="${
+          esc(w.own ? t('ownWinTip') : t('ruleBtnTip'))}">${esc(t('ruleBtn'))}</button>
       </td></tr>`).join('');
 }
 $('btnRefreshWins').addEventListener('click', () => post({ action: 'refresh' }));
