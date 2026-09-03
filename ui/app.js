@@ -54,6 +54,7 @@ const STR = {
     newRuleBtn: 'Rule…', editRuleBtn: 'Edit rule…',
     ruleRowTip: "The window menu's save dialog for this window: what the position applies to, the desktop, or the rule it matches",
     unmanagedTip: 'Only managed through a rule - none matches yet',
+    ownWinTip: 'DalSegno\'s own window. Rules never apply to it and it needs no position; it always opens on the desktop you are on.',
     winsEmpty: 'No windows found.',
     // desktops tab
     dllNote: 'VirtualDesktopAccessor.dll is missing next to the script: windows cannot be moved between desktops, and rules with a desktop do nothing. See the README for the download.',
@@ -141,6 +142,7 @@ const STR = {
     newRuleBtn: 'Regel…', editRuleBtn: 'Ändra regel…',
     ruleRowTip: 'Fönstermenyns spardialog för det här fönstret: vad läget ska gälla, skrivbord, eller regeln som matchar',
     unmanagedTip: 'Hanteras bara via regel - ingen matchar ännu',
+    ownWinTip: 'DalSegnos eget fönster. Regler gäller aldrig det och det behöver inget läge; det öppnas alltid på skrivbordet du är på.',
     winsEmpty: 'Inga fönster hittades.',
     dllNote: 'VirtualDesktopAccessor.dll saknas bredvid skriptet: fönster kan inte flyttas mellan skrivbord, och regler med skrivbord gör ingenting. Se README för nedladdning.',
     dhkH: 'Skrivbordens kortkommandon',
@@ -627,10 +629,21 @@ function renderWindows() {
       o += `<option value="${i}"${i === cur ? ' selected' : ''}>${esc(names[i - 1] || i)}</option>`;
     return `<td class="deskcell">${cur ? `<select class="w-desktop">${o}</select>` : '<span class="dim">–</span>'}</td>`;
   };
-  body.innerHTML = st.windows.map(w => `
+  body.innerHTML = st.windows.map(w => w.own ? `
+    <tr data-hwnd="${w.hwnd}" class="own" title="${esc(t('ownWinTip'))}">
+      <td>${esc(w.exe)}</td>
+      <td class="ellip">${esc(w.title)}</td>
+      ${desktopsOn() ? `<td class="deskcell dim">${esc(w.desktop || '–')}</td>` : '<td class="deskcell"></td>'}
+      <td><span class="dim">–</span></td>
+      <td><span class="dim">–</span></td>
+      <td class="actions">
+        <button class="small" disabled>${esc(t('saveBtn'))}</button>
+        <button class="small" disabled>${esc(t('moveHere'))}</button>
+        <button class="small" disabled>${esc(t('newRuleBtn'))}</button>
+      </td></tr>` : `
     <tr data-hwnd="${w.hwnd}">
       <td>${esc(w.exe)}</td>
-      <td class="ellip" title="${esc(w.title)}">${esc(w.title)}</td>
+      <td class="ellip" title="${esc(w.title)}">${esc(w.title)}${Number(w.n) > 1 ? ` <span class="dim">×${esc(w.n)}</span>` : ''}</td>
       ${deskCell(w)}
       <td>${w.rule ? `<span class="badge rule">${esc(t('badgeRule'))}: ${esc(w.rule)}</span>`
                    : w.managed ? `<span class="badge">${esc(t('badgeStd'))}</span>`

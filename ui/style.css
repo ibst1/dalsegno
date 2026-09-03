@@ -167,6 +167,7 @@ body.no-desktops .deskcol, body.no-desktops td.deskcell { display: none; }
 #posBody td.nopos { text-align: center; font-style: italic; }
 #posBody tr.new { background: var(--bg3); }
 #winBody td.deskcell select { padding: 2px 4px; }
+#winBody tr.own td { opacity: .45; }
 
 /* ── settings-like panes ─────────────────────────────────────────────── */
 #tab-settings, #tab-desktops { overflow-y: auto; display: none; }

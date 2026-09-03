@@ -397,6 +397,21 @@ DesktopOf(hwnd) {
     return (n >= 0 && n < 99) ? n + 1 : ""
 }
 
+; Moves a window of ours to the current desktop before it is shown again -
+; a hidden window reappears on the desktop it was last on otherwise.
+DesktopBringHere(hwnd) {
+    global g_dllLoaded, g_modDesktops
+    if (!g_modDesktops || !g_dllLoaded)
+        return
+    s := ReadDesktopStatus()
+    if (!s || !s.index)
+        return
+    nr := -1
+    try nr := DllCall("VirtualDesktopAccessor\GetWindowDesktopNumber", "ptr", hwnd, "int")
+    if (nr >= 0 && nr != s.index - 1)
+        try DllCall("VirtualDesktopAccessor\MoveWindowToDesktopNumber", "ptr", hwnd, "int", s.index - 1, "int")
+}
+
 ; A rule with a desktop, applied to one window: moved if it is elsewhere,
 ; followed if the rule says so.
 DesktopApplyToWindow(hwnd, desktop, follow) {
