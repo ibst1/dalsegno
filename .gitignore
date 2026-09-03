@@ -1,9 +1,18 @@
-# User configuration (auto-generated with defaults on first run)
+# Runtime artifacts
+error.log
+selftest.txt
+ping.txt
+
+# User configuration (created with defaults on first run) and local state
 DalSegno config.ini
-
-# Local state: saved window positions, toggles, language, GUI geometry
+DalSegno config.v1.bak
 DalSegno positions.ini
+*.bak
 
-# Build output and cached toolchain (if a build pipeline is added later)
+# Third-party binary - download from Ciantic/VirtualDesktopAccessor releases,
+# see README
+VirtualDesktopAccessor.dll
+
+# Build output (attached to GitHub releases instead) and cached toolchain
 dist/
 build/

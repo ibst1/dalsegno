@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>DalSegno Window Keeper</title>
+<title>DalSegno Window Manager</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -10,6 +10,7 @@
 <div id="tabs">
   <button class="tab active" data-tab="positions" id="tabBtnPositions"></button>
   <button class="tab" data-tab="windows" id="tabBtnWindows"></button>
+  <button class="tab" data-tab="desktops" id="tabBtnDesktops"></button>
   <button class="tab" data-tab="settings" id="tabBtnSettings"></button>
 </div>
 
@@ -30,6 +31,7 @@
           <th class="selcol"><input type="checkbox" id="selAllPos"></th>
           <th id="thWindow"></th><th id="thIdentity"></th>
           <th style="text-align:center" id="thActive"></th>
+          <th id="thDesktop" class="deskcol"></th>
           <th style="text-align:right" id="thX">X</th>
           <th style="text-align:right" id="thY">Y</th>
           <th style="text-align:right" id="thWidth"></th>
@@ -51,6 +53,7 @@
       <table>
         <thead><tr>
           <th id="thProgram"></th><th id="thTitle"></th>
+          <th id="thWinDesktop" class="deskcol"></th>
           <th id="thIdentity2"></th><th id="thSaved"></th><th></th>
         </tr></thead>
         <tbody id="winBody"></tbody>
@@ -58,8 +61,44 @@
     </div>
   </section>
 
+  <section id="tab-desktops" class="tabpane">
+    <div class="inner">
+      <p class="help warn" id="dllNote" hidden></p>
+      <h2 id="dhkH"></h2>
+      <p class="help" id="dhkHelp"></p>
+      <div id="dhkList"></div>
+      <h2 id="prefixH"></h2>
+      <p class="help" id="prefixHelp"></p>
+      <div id="prefixList"></div>
+
+      <h2 id="taskbarH"></h2>
+      <label class="toggle"><input type="checkbox" id="tglNameInTray"> <span id="lblNameInTray"></span></label><br>
+      <label class="toggle"><input type="checkbox" id="tglWheel"> <span id="lblWheel"></span></label>
+      <p class="help" id="wheelHelp"></p>
+      <label class="toggle"><input type="checkbox" id="tglArrows"> <span id="lblArrows"></span></label>
+      <p class="help" id="arrowsHelp"></p>
+    </div>
+  </section>
+
   <section id="tab-settings" class="tabpane">
     <div class="inner">
+      <h2 id="modulesH"></h2>
+      <p class="help" id="modulesHelp"></p>
+      <label class="toggle"><input type="checkbox" id="tglModPositions"> <span id="lblModPositions"></span></label><br>
+      <label class="toggle"><input type="checkbox" id="tglModDesktops"> <span id="lblModDesktops"></span></label>
+
+      <h2 id="menuH"></h2>
+      <p class="help" id="menuHelp"></p>
+      <label class="toggle"><input type="checkbox" id="tglMenuOn"> <span id="lblMenuOn"></span></label>
+      <div class="field">
+        <label><span id="lblMenuModifier"></span> <input id="inMenuModifier" class="short"></label>
+        <label><span id="lblMenuButton"></span> <input id="inMenuButton" class="short"></label>
+      </div>
+      <label class="toggle"><input type="checkbox" id="tglMenuWhole"> <span id="lblMenuWhole"></span></label>
+      <p class="help" id="menuWholeHelp"></p>
+      <div class="field"><label><span id="lblMenuExclude"></span> <input id="inMenuExclude" class="wide"></label></div>
+      <p class="help" id="menuExcludeHelp"></p>
+
       <h2 id="behaveH"></h2>
       <label class="toggle"><input type="checkbox" id="tglMove"> <span id="lblMove"></span></label><br>
       <label class="toggle"><input type="checkbox" id="tglSave"> <span id="lblSave"></span></label><br>
@@ -101,6 +140,7 @@
       <p>
         <button id="btnOpenPositions" class="small"></button>
         <button id="btnOpenConfig" class="small"></button>
+        <button id="btnReload" class="small"></button>
       </p>
     </div>
   </section>
