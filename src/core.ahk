@@ -825,9 +825,14 @@ ApplyActionHotkeys() {
         key := g_hk.Has(namn) ? g_hk[namn] : ""
         if (key = "" || (positionsOnly.Has(namn) && !g_modPositions))
             continue
+        ; * is not optional, for the same reason as the menu button: a hotkey
+        ; without it fires only when NO modifier is held, and CapsModifier
+        ; expresses a held CapsLock as RCtrl - so CapsLock+D arrives as
+        ; Ctrl+D and a bare "d" never matches. The criterion (the modifier
+        ; physically down) is what gates it; Ctrl+D on its own passes through.
         try {
-            Hotkey(key, handler, "On")
-            g_actionKeys.Push(key)
+            Hotkey("*" key, handler, "On")
+            g_actionKeys.Push("*" key)
         }
     }
     HotIf()

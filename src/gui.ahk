@@ -344,7 +344,7 @@ UiSetHotkey(name, key) {
                 }
             try {
                 HotIf(ModifierHeld)
-                Hotkey(key, (*) => 0, "Off")   ; syntax probe, never enabled
+                Hotkey("*" key, (*) => 0, "Off")   ; syntax probe, never enabled
                 HotIf()
             } catch {
                 HotIf()
