@@ -31,6 +31,8 @@ Persistent
 
 if (A_Args.Length && A_Args[1] = "/selftest") {
     LoadConfig()
+    g_desktopsStarted := true   ; so the desktop hotkeys register and can be listed
+    ApplyDesktopHotkeys()
     out := "modules=positions:" (g_modPositions ? 1 : 0) " desktops:" (g_modDesktops ? 1 : 0)
     out .= "`nlanguage=" g_lang
     out .= "`nmenu=" g_modifier "+" g_menuButton " enabled:" (g_menuOn ? 1 : 0) " whole:" (g_menuWhole ? 1 : 0)
@@ -38,6 +40,14 @@ if (A_Args.Length && A_Args[1] = "/selftest") {
     for r in titleRules
         out .= "`n  " r.alias " = " RuleValue(r)
     out .= "`nrulesOnlyExe=" rulesOnlyExe.Length " ignoreExe=" ignoreExe.Length " ignoreTitles=" ignoreTitles.Length
+    keys := ""
+    for k in g_actionKeys
+        keys .= (keys = "" ? "" : ", ") k
+    out .= "`nactionHotkeys(" g_modifier " held)=" keys
+    keys := ""
+    for k in g_desktopHotkeys
+        keys .= (keys = "" ? "" : ", ") k
+    out .= "`ndesktopHotkeys(" g_desktopHotkeys.Length ")=" keys
     s := ReadDesktopStatus()
     out .= "`ndesktops=" (s ? "index:" s.index " count:" s.count " name:" s.name : "(registry not readable)")
     out .= "`ndll=" (FileExist(VDA_DLL) ? "present" : "missing")
