@@ -10,7 +10,6 @@
 <div id="tabs">
   <button class="tab active" data-tab="positions" id="tabBtnPositions"></button>
   <button class="tab" data-tab="windows" id="tabBtnWindows"></button>
-  <button class="tab" data-tab="rules" id="tabBtnRules"></button>
   <button class="tab" data-tab="settings" id="tabBtnSettings"></button>
 </div>
 
@@ -19,16 +18,18 @@
   <section id="tab-positions" class="tabpane active">
     <div class="pane-head">
       <label><span id="lblSetup"></span>&nbsp;<select id="setupSel"></select></label>
+      <button id="btnAddRule" class="small"></button>
       <span class="spacer"></span>
       <button id="btnForgetSel" class="small" disabled></button>
       <button id="btnSaveAll" class="small"></button>
       <button id="btnApplyAll" class="small primary"></button>
     </div>
     <div class="tablewrap">
-      <table>
+      <table id="posTable">
         <thead><tr>
           <th class="selcol"><input type="checkbox" id="selAllPos"></th>
           <th id="thWindow"></th><th id="thIdentity"></th>
+          <th style="text-align:center" id="thActive"></th>
           <th style="text-align:right" id="thX">X</th>
           <th style="text-align:right" id="thY">Y</th>
           <th style="text-align:right" id="thWidth"></th>
@@ -57,24 +58,24 @@
     </div>
   </section>
 
-  <section id="tab-rules" class="tabpane">
+  <section id="tab-settings" class="tabpane">
     <div class="inner">
-      <h2 id="rulesH"></h2>
-      <p class="help" id="rulesHelp"></p>
-      <table id="rulesTable">
-        <thead><tr>
-          <th id="thAlias"></th><th id="thPattern"></th>
-          <th style="text-align:center">Regex</th><th></th>
-        </tr></thead>
-        <tbody id="rulesBody"></tbody>
-      </table>
-      <p><button id="btnAddRule" class="small"></button></p>
+      <h2 id="behaveH"></h2>
+      <label class="toggle"><input type="checkbox" id="tglMove"> <span id="lblMove"></span></label><br>
+      <label class="toggle"><input type="checkbox" id="tglSave"> <span id="lblSave"></span></label><br>
+      <label class="toggle"><input type="checkbox" id="tglModOnly"> <span id="lblModOnly"></span></label>
+      <p class="help" id="modOnlyHelp"></p>
+      <label class="toggle"><input type="checkbox" id="tglNotify"> <span id="lblNotify"></span></label>
 
-      <label class="toggle" style="margin-top:8px"><input type="checkbox" id="tglOnlyRules">
-        <span id="lblOnlyRules"></span></label>
+      <h2 id="managedH"></h2>
+      <label class="toggle"><input type="checkbox" id="tglOnlyRules"> <span id="lblOnlyRules"></span></label>
       <p class="help" id="onlyRulesHelp"></p>
-
-      <h2 id="ignoreH"></h2>
+      <h3 id="onlyRulesExeH"></h3>
+      <p class="help" id="onlyRulesExeHelp"></p>
+      <div class="ignore-grid"><div>
+        <textarea id="txtRulesOnlyExe" spellcheck="false" placeholder="msedge.exe"></textarea>
+      </div></div>
+      <h3 id="ignoreH"></h3>
       <div class="ignore-grid">
         <div>
           <p class="help" id="ignExeHelp"></p>
@@ -85,24 +86,7 @@
           <textarea id="txtIgnoreTitle" spellcheck="false" placeholder="Bildfönster"></textarea>
         </div>
       </div>
-
-      <div id="rulesFooter">
-        <button id="btnSaveRules" class="primary"></button>
-        <span id="rulesDirty" hidden></span>
-        <span class="spacer"></span>
-        <button id="btnOpenConfig" class="small"></button>
-      </div>
-    </div>
-  </section>
-
-  <section id="tab-settings" class="tabpane">
-    <div class="inner">
-      <h2 id="behaveH"></h2>
-      <label class="toggle"><input type="checkbox" id="tglMove"> <span id="lblMove"></span></label><br>
-      <label class="toggle"><input type="checkbox" id="tglSave"> <span id="lblSave"></span></label><br>
-      <label class="toggle"><input type="checkbox" id="tglModOnly"> <span id="lblModOnly"></span></label>
-      <p class="help" id="modOnlyHelp"></p>
-      <label class="toggle"><input type="checkbox" id="tglNotify"> <span id="lblNotify"></span></label>
+      <p class="help" id="managedSavedHint"></p>
 
       <h2 id="hkH"></h2>
       <p class="help" id="hkHelp"></p>
@@ -114,7 +98,10 @@
       <label class="radio"><input type="radio" name="lang" value="sv"> Svenska</label>
 
       <h2 id="filesH"></h2>
-      <button id="btnOpenPositions" class="small"></button>
+      <p>
+        <button id="btnOpenPositions" class="small"></button>
+        <button id="btnOpenConfig" class="small"></button>
+      </p>
     </div>
   </section>
 

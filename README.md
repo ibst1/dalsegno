@@ -36,26 +36,66 @@ in the wrong place.
   (browser popups often retitle shortly after opening).
 - If several windows share one identity, nothing is auto-saved until only one
   remains (you can still save deliberately with CapsLock + S).
-- Minimized and maximized windows are never saved or restored.
+- **Maximized windows** are saved as *maximized on that monitor*, together
+  with the normal rectangle they restore to. A new window with that identity
+  is moved to the rectangle (that is what picks the monitor) and maximized
+  there; a window that opens maximized but was saved normal is restored to
+  the saved rectangle. The saved state is reproduced whole, either way.
+- Minimized windows are never saved or restored.
+- **Rules-only programs** (`[RulesOnlyExe]`): a program listed there gets no
+  program-wide identity — only its windows that match a title rule are
+  managed, the rest are left alone. That is the natural setting for a
+  browser, where every popup is a separate window: without it, the first
+  popup you save becomes the position of every other browser window too.
 
 ## GUI
 
-Left-click the tray icon (or press CapsLock + D). Four tabs:
+Left-click the tray icon (or press CapsLock + D). Three tabs:
 
-- **Saved positions** — every saved position per monitor setup, with
-  *Move now* and *Forget* per row.
+- **Positions** — one row per identity for the selected monitor setup: every
+  title rule (with its position, or *no position yet*) and every program
+  identity that has a position. Rules and positions used to be two tabs that
+  showed the same things twice; a rule is only interesting together with the
+  place its windows go to. A rule's text and regex flag are edited right in
+  the row and saved the moment you leave the field (Enter commits, Escape
+  reverts). **Active** switches a rule off without deleting it: its windows
+  then count as ordinary windows of their program, and its position waits.
+  *+ Add rule* opens an empty row. Per row: *Move now*, *Forget* (the
+  position) and *Delete rule* (the rule and its positions in every setup,
+  after confirmation). Rows are described by what they apply to — *windows
+  with "Whole Genome View" in the title*, *all ChAS.exe windows* — with the
+  window the position was saved from in the tooltip.
 - **Open windows** — the manageable windows right now; save or restore any of
-  them from here.
-- **Rules** — edit title rules, the ignore lists and *rules only* mode.
-- **Settings** — interface language (English/Svenska; also in the tray menu).
+  them, or *Similar…* for the one-dialog rule flow on a listed window.
+- **Settings** — behavior toggles; which windows are managed (*rules only*
+  mode, rules-only programs, ignore lists — saved as soon as you leave the
+  field); hotkeys; language (English/Svenska; also in the tray menu); the
+  two files.
 
 The GUI is a WebView2 page (`ui/`), same architecture as Encore and Expanto.
 
 ## Window menu
 
-Hold **CapsLock** and right-click a window: save its position, move it to the
-saved one, forget it, or **create a title rule** with the window's title
-prefilled in the GUI — trim the pattern down to the stable part and save.
+Hold **CapsLock** and right-click a window. Three items: **Save window
+position…**, *Move to saved position*, *Forget saved position*.
+
+The save item opens one dialog that settles what the position applies to:
+
+- A window that matches no rule: *all windows of this program*, or *windows
+  with … in the title* — a new rule, with the stable part of the title
+  suggested (`Whole Genome View - 26MD12102_….cychp` → `Whole Genome View`,
+  `Förhandsgranska 26MD12097 - …` → `Förhandsgranska`). Programs marked
+  rules-only get the title option alone. OK writes the rule *and* saves this
+  window's position under it in one step; the alias is derived from the text
+  (`wholegenomeview`) and made unique. If an earlier rule in the config also
+  matches the title, that one takes precedence and the notification says so.
+- A window that already matches an active rule: the item reads **Edit rule…**
+  instead, and the dialog shows the rule's text, regex flag and Active tick,
+  plus *save this window's current position as the rule's position* (ticked).
+
+Windows of rules-only programs that match no rule yet still get the menu,
+since a rule is exactly what they need. The *Rule…* / *Edit rule…* button on
+the Open windows tab opens the same dialog for a listed window.
 
 With [DeskPilot](https://github.com/ibst1/deskpilot) running, these items
 appear as a *DalSegno* submenu inside its larger window menu instead, on the
@@ -97,14 +137,14 @@ as an ordinary keystroke rather than firing the action.
 | --- | --- |
 | `DalSegno.ahk` | the script (AutoHotkey v2) |
 | `DalSegno positions.ini` | saved positions + on/off state + language (UTF-16) |
-| `DalSegno config.ini` | title rules, ignore lists, rules-only mode (UTF-16) |
+| `DalSegno config.ini` | title rules (and which are switched off), rules-only programs, ignore lists, rules-only mode (UTF-16) |
 | `ui/` | the WebView2 GUI |
 | `lib/`, `ComVar.ahk`, `Promise.ahk` | WebView2 + JSON libraries |
 | `app.ico` | the segno icon |
 
 The config file can be edited by hand (then pick *Reload settings* in the tray
-menu) or from the GUI's Rules tab. Note that saving rules from the GUI rewrites
-the three rule sections, dropping any comments inside them.
+menu) or from the GUI. Note that edits from the GUI rewrite the list sections
+they touch, dropping any comments inside them.
 
 ### Config format
 
@@ -115,6 +155,12 @@ RulesOnly = 0        ; 1 = only windows matching a title rule are managed
 [TitleRules]
 alias = text         ; substring matched anywhere in the title
 alias2 = re:pattern  ; regular expression
+
+[RulesOnlyExe]
+1 = msedge.exe       ; these programs are managed ONLY through title rules
+
+[DisabledRules]
+alias = 1            ; rules switched off in the GUI (kept in [TitleRules])
 
 [IgnoreExe]
 1 = mstsc.exe        ; never touch windows of these programs
