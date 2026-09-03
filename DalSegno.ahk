@@ -91,8 +91,13 @@ g_actionKeys := []             ; the plain keys registered under the modifier
 ignoreExe    := []   ; exe names never to touch
 ignoreTitles := []   ; title fragments never to touch
 titleRules   := []   ; { alias, pattern, regex } - shared identity
+rulesOnlyExe := []   ; exe names managed ONLY through title rules (browsers)
 rulesOnly    := false
 LoadConfig()
+
+; Why the last SavePos failed: "" (it did not), "min", "gone" or "write" - the
+; callers turn it into a message with SaveErrorText().
+g_saveError := "", g_saveErrorText := ""
 
 ; --- State --------------------------------------------------------------------
 ; winInfo: hwnd -> { seen, setup, done }
@@ -111,6 +116,7 @@ PLACEMENT_GRACE_MS := 10000
 
 ; --- GUI (WebView2) - created lazily on first open ----------------------------
 g_uiWin := 0, g_uiCtrl := 0, g_uiCore := 0, g_uiReady := false
+g_ruleDlg := 0                 ; the window menu's save/rule dialog, one at a time
 
 ; --- Autosave: Windows tells us exactly when a drag ends ----------------------
 ; EVENT_SYSTEM_MOVESIZEEND fires when the user releases a window after moving
@@ -139,8 +145,10 @@ g_menuOpen := false   ; our own window menu is showing (drives click handling)
 ; External command interface. DeskPilot shows DalSegno's per-window items in
 ; its title bar menu and talks to us through this registered message:
 ; wParam = target window, lParam 0 = query (returns 1 = manageable, +2 = a
-; saved position exists), 1 = save position, 2 = move to saved, 3 = forget,
-; 4 = create title rule in the GUI.
+; saved position exists, +4 = matches an active rule), 1 = save position (a
+; dialog settles what it applies to; for a rule-matched window it edits the
+; rule), 2 = move to saved, 3 = forget. 4 is accepted as a synonym of 1 for
+; older DeskPilot builds.
 ;
 ; Exactly ONE script may hook the mouse button: two hooks on the same button
 ; race each other (hook order depends on start order, and criteria time out
@@ -186,28 +194,46 @@ Tr(id) {
         "autoSaveOff",    "Saving on manual move: OFF",
         "toastSaved",     "Window position saved",
         "savedTitle",     "Position saved",
-        "menuSave",       "Save window position",
+        "menuSave",       "Save window position…",
+        "menuEditRule",   "Edit rule…",
         "menuMove",       "Move to saved position",
         "menuForget",     "Forget saved position",
-        "menuRule",       "Create title rule…",
+        "appliesRule",    "windows with `"{1}`" in the title",
+        "appliesRuleGone", "rule `"{1}`" (no longer exists)",
+        "appliesStd",     "all {1} windows",
+        "dlgSaveTitle",   "DalSegno - save window position",
+        "dlgEditRuleTitle", "DalSegno - edit rule",
+        "dlgSaveIntro",   "What should this position apply to?",
+        "dlgRuleIntro",   "This window matches the rule «{1}». Windows with the text below in the title share one position.",
+        "dlgPre",         "Windows with",
+        "dlgPost",        "in the title",
+        "dlgRegex",       "The text is a regular expression",
+        "dlgEnabled",     "Rule is active",
+        "dlgSavePos",     "Save this window's current position as the rule's position",
+        "dlgOk",          "OK",
+        "dlgCancel",      "Cancel",
+        "ruleOff",        "Rule «{1}» is switched off - the position was not saved.",
+        "ruleNoMatch",    "Rule «{1}» no longer matches this window - the position was not saved.",
+        "ruleNotInTitle", "The text is not part of this window's title - nothing saved:",
+        "ruleShadowed",   "Rule «{1}» saved, but this window is caught by the earlier rule «{2}», which takes precedence. Reorder the rules in the config file.",
+        "ruleSaved",      "Rule «{1}» = «{2}» created and the window's position saved. Windows with that text in the title now land here.",
         "badMenuHotkey",  "MenuButton in the settings is not a valid button:",
         "badHotkey",      "Not a valid key name:",
         "dupHotkey",      "Already used by another hotkey:",
         "cannotHandle",   "The active window cannot be managed (no title, ignored, or matches no rule).",
-        "cannotSave",     "Could not save - the window is minimized or maximized.",
-        "cannotSaveWin",  "Could not save the position (window closed, minimized or maximized?).",
+        "cannotHandleWin", "The window cannot be managed (no title, ignored, or matches no rule).",
+        "cannotSaveMin",  "Could not save - the window is minimized.",
+        "cannotSaveGone", "Could not save - the window no longer exists.",
+        "cannotSaveWrite", "Could not save - writing to the positions file failed (locked by OneDrive?):",
+        "cannotSaveWin",  "Could not save the position.",
+        "maximized",      "maximized",
         "forgot",         "Forgot the position for:",
         "nothingForget",  "No saved position to forget for the active window.",
         "movedAll",       "{1} windows were moved to their saved positions.",
         "noMatch",        "No open window matches that saved position.",
-        "rulesSaved",     "Rules saved.",
         "configReloaded", "{1} title rules, {2} ignored programs, {3} ignored titles.",
         "configReloadedTitle", "Settings reloaded",
         "uiFail",         "Could not start the GUI (WebView2 runtime missing?).",
-        "tmSave",         "Save window position",
-        "tmMove",         "Move to saved position",
-        "tmForget",       "Forget saved position",
-        "tmRule",         "Create title rule…",
         "hkTitle",        "DalSegno Window Keeper - hotkeys",
         "hkText",         "
         (
@@ -249,28 +275,46 @@ Tr(id) {
         "autoSaveOff",    "Sparar läge vid manuell flytt: AV",
         "toastSaved",     "Fönsterläge sparat",
         "savedTitle",     "Läge sparat",
-        "menuSave",       "Spara fönstrets läge",
+        "menuSave",       "Spara fönstrets läge…",
+        "menuEditRule",   "Ändra regel…",
         "menuMove",       "Flytta till sparat läge",
         "menuForget",     "Glöm sparat läge",
-        "menuRule",       "Skapa titelregel…",
+        "appliesRule",    "fönster med `"{1}`" i titeln",
+        "appliesRuleGone", "regeln `"{1}`" (finns inte längre)",
+        "appliesStd",     "alla {1}-fönster",
+        "dlgSaveTitle",   "DalSegno - spara fönstrets läge",
+        "dlgEditRuleTitle", "DalSegno - ändra regel",
+        "dlgSaveIntro",   "Vad ska läget gälla?",
+        "dlgRuleIntro",   "Fönstret matchar regeln «{1}». Fönster med texten nedan i titeln delar ett läge.",
+        "dlgPre",         "Fönster med",
+        "dlgPost",        "i titeln",
+        "dlgRegex",       "Texten är ett reguljärt uttryck",
+        "dlgEnabled",     "Regeln är aktiv",
+        "dlgSavePos",     "Spara fönstrets nuvarande läge som regelns läge",
+        "dlgOk",          "OK",
+        "dlgCancel",      "Avbryt",
+        "ruleOff",        "Regeln «{1}» är avstängd - läget sparades inte.",
+        "ruleNoMatch",    "Regeln «{1}» matchar inte längre fönstret - läget sparades inte.",
+        "ruleNotInTitle", "Texten finns inte i fönstrets titel - inget sparades:",
+        "ruleShadowed",   "Regeln «{1}» sparades, men fönstret fångas av den tidigare regeln «{2}» som har företräde. Ändra ordningen i konfigfilen.",
+        "ruleSaved",      "Regeln «{1}» = «{2}» skapad och fönstrets läge sparat. Fönster med den texten i titeln hamnar nu här.",
         "badMenuHotkey",  "MenuButton i inställningarna är inte en giltig knapp:",
         "badHotkey",      "Ogiltigt tangentnamn:",
         "dupHotkey",      "Används redan av ett annat kortkommando:",
         "cannotHandle",   "Det aktiva fönstret hanteras inte (saknar titel, är ignorerat, eller matchar ingen regel).",
-        "cannotSave",     "Kunde inte spara - fönstret är minimerat eller maximerat.",
-        "cannotSaveWin",  "Kunde inte spara läget (fönstret stängt, minimerat eller maximerat?).",
+        "cannotHandleWin", "Fönstret hanteras inte (saknar titel, är ignorerat, eller matchar ingen regel).",
+        "cannotSaveMin",  "Kunde inte spara - fönstret är minimerat.",
+        "cannotSaveGone", "Kunde inte spara - fönstret finns inte längre.",
+        "cannotSaveWrite", "Kunde inte spara - skrivningen till positionsfilen misslyckades (låst av OneDrive?):",
+        "cannotSaveWin",  "Kunde inte spara läget.",
+        "maximized",      "maximerat",
         "forgot",         "Glömde läget för:",
         "nothingForget",  "Inget sparat läge att glömma för det aktiva fönstret.",
         "movedAll",       "{1} fönster flyttades till sina sparade lägen.",
         "noMatch",        "Inget öppet fönster matchar det sparade läget.",
-        "rulesSaved",     "Regler sparade.",
         "configReloaded", "{1} titelregler, {2} ignorerade program, {3} ignorerade titlar.",
         "configReloadedTitle", "Inställningar omlästa",
         "uiFail",         "Kunde inte starta GUI:t (saknas WebView2-runtime?).",
-        "tmSave",         "Spara fönstrets läge",
-        "tmMove",         "Flytta till sparat läge",
-        "tmForget",       "Glöm sparat läge",
-        "tmRule",         "Skapa titelregel…",
         "hkTitle",        "DalSegno Fönsterlägen - kortkommandon",
         "hkText",         "
         (
@@ -322,7 +366,34 @@ SetLanguage(lang) {
 ; becomes the rule's alias - independent of the program, so the same position
 ; applies to e.g. both Edge and Chrome.
 KeyFor(hwnd) {
-    global ignoreExe, ignoreTitles, titleRules, rulesOnly
+    global titleRules, rulesOnly
+    info := BaseInfo(hwnd)
+    if (info = "")
+        return ""
+    for rule in titleRules
+        if (rule.enabled && RuleMatches(rule, info.title))
+            return "rule:" rule.alias
+    ; Programs listed under [RulesOnlyExe] get no program-wide identity: a
+    ; browser's popups are separate windows that would otherwise all share one
+    ; position with every other window of the browser, so the first popup the
+    ; user saved would drag all the others along. Title rules above still
+    ; apply to them - that is the only way their windows are managed.
+    if IsRulesOnly(info.exe)
+        return ""
+    ; Deliberately WITHOUT the title: titles embed documents, tabs and record
+    ; ids, so an exact-title identity would almost never match a new window.
+    ; All normal windows of an app share one position - the last one the user
+    ; moved defines it. Title rules above carve out per-popup exceptions.
+    return rulesOnly ? "" : info.exe "|" info.cls
+}
+
+; The facts about a window that decide whether it may be touched at all: ""
+; for system windows, tool windows, cloaked UWP ghosts, our own windows and
+; anything on the ignore lists; otherwise { title, cls, exe }. A window that
+; passes here but gets no key from KeyFor can still be given one by a rule -
+; which is what the window menu's save dialog offers for it.
+BaseInfo(hwnd) {
+    global ignoreExe, ignoreTitles
     static ownPid := ProcessExist()
     static systemClasses := Map(
         "Progman", 1, "WorkerW", 1, "Shell_TrayWnd", 1, "Shell_SecondaryTrayWnd", 1,
@@ -344,21 +415,36 @@ KeyFor(hwnd) {
         exe := WinGetProcessName(hwnd)
     } catch
         return ""
-
     for e in ignoreExe
         if (StrLower(e) = StrLower(exe))
             return ""
     for frag in ignoreTitles
         if InStr(title, frag)
             return ""
-    for rule in titleRules
-        if (rule.regex ? RegExMatch(title, rule.pattern) : InStr(title, rule.pattern))
-            return "rule:" rule.alias
-    ; Deliberately WITHOUT the title: titles embed documents, tabs and record
-    ; ids, so an exact-title identity would almost never match a new window.
-    ; All normal windows of an app share one position - the last one the user
-    ; moved defines it. Title rules above carve out per-popup exceptions.
-    return rulesOnly ? "" : exe "|" cls
+    return { title: title, cls: cls, exe: exe }
+}
+
+; A rule's pattern is typed by the user and may be a broken regex - that must
+; never take the scan timer down, so it simply does not match.
+RuleMatches(rule, title) {
+    try return rule.regex ? RegExMatch(title, rule.pattern) : InStr(title, rule.pattern)
+    return false
+}
+
+IsRulesOnly(exe) {
+    global rulesOnlyExe
+    for e in rulesOnlyExe
+        if (StrLower(e) = StrLower(exe))
+            return true
+    return false
+}
+
+RuleByAlias(alias) {
+    global titleRules
+    for r in titleRules
+        if (r.alias = alias)
+            return r
+    return ""
 }
 
 ; UWP apps leave invisible "cloaked" windows behind that would otherwise get
@@ -372,6 +458,34 @@ IsCloaked(hwnd) {
 ; Positions are kept separate per monitor count + virtual desktop width + computer.
 SetupKey() {
     return MonitorGetCount() "x" SysGet(78) "_" A_ComputerName
+}
+
+; What a saved position applies to, in words: the rule's text or the program -
+; never the one window it happened to be saved from, which is what the stored
+; title suggests and what misled the first users of the positions list.
+DescribeKey(key) {
+    global titleRules
+    if (SubStr(key, 1, 5) = "rule:") {
+        alias := SubStr(key, 6)
+        for r in titleRules
+            if (r.alias = alias)
+                return Format(Tr("appliesRule"), r.pattern)
+        return Format(Tr("appliesRuleGone"), alias)
+    }
+    return Format(Tr("appliesStd"), StrSplit(key, "|")[1])
+}
+
+; The pattern of the rule a key refers to, "" for program identities and for
+; rules that no longer exist.
+PatternFor(key) {
+    global titleRules
+    if (SubStr(key, 1, 5) != "rule:")
+        return ""
+    alias := SubStr(key, 6)
+    for r in titleRules
+        if (r.alias = alias)
+            return r.pattern
+    return ""
 }
 
 ; Ini section name: hash of the key + setup. The hash turns arbitrary titles
@@ -393,15 +507,27 @@ Hash32(s) {
 ;  Saving and restoring positions
 ; =============================================================================
 
-; Saves the window's current position under its key. False for minimized and
-; maximized windows - minimized ones report -32000 and would end up off
-; screen, and a maximized position is pointless to restore to.
+; Saves the window's current position under its key. A maximized window is
+; saved as its normal (restored) rectangle plus Max=1, so that a new window
+; ends up maximized on the same monitor and comes back to the same normal
+; size when un-maximized. Minimized windows are refused - they report -32000
+; and would end up off screen. False on failure, with the reason in
+; g_saveError for SaveErrorText().
 SavePos(key, hwnd) {
-    global posIni
+    global posIni, g_saveError, g_saveErrorText
+    g_saveError := "", g_saveErrorText := ""
+    if !WinExist(hwnd) {
+        g_saveError := "gone"
+        return false
+    }
     try {
-        if WinGetMinMax(hwnd) != 0
+        mm := WinGetMinMax(hwnd)
+        if (mm = -1) {
+            g_saveError := "min"
             return false
-        WinGetPos(&x, &y, &w, &h, hwnd)
+        }
+        if (mm != 1 || !NormalRect(hwnd, &x, &y, &w, &h))
+            WinGetPos(&x, &y, &w, &h, hwnd)
         section := SectionFor(key)
         IniWrite(key, posIni, section, "Key")
         IniWrite(WinGetProcessName(hwnd) " | " SubStr(WinGetTitle(hwnd), 1, 60), posIni, section, "Info")
@@ -409,12 +535,46 @@ SavePos(key, hwnd) {
         IniWrite(y, posIni, section, "Y")
         IniWrite(w, posIni, section, "W")
         IniWrite(h, posIni, section, "H")
+        IniWrite(mm = 1 ? 1 : 0, posIni, section, "Max")
         return true
-    } catch
+    } catch as e {
+        g_saveError := "write", g_saveErrorText := e.Message
         return false
+    }
+}
+
+; The reason the last SavePos failed, as a message for the user.
+SaveErrorText() {
+    global g_saveError, g_saveErrorText
+    switch g_saveError {
+        case "min":   return Tr("cannotSaveMin")
+        case "gone":  return Tr("cannotSaveGone")
+        case "write": return Tr("cannotSaveWrite") "`n" g_saveErrorText
+    }
+    return Tr("cannotSaveWin")
+}
+
+; The rectangle a maximized window returns to when restored, in screen
+; coordinates. GetWindowPlacement reports it in "workspace" coordinates -
+; relative to the primary monitor's work area, so a taskbar at the top or
+; left of the primary monitor shifts them - hence the conversion.
+NormalRect(hwnd, &x, &y, &w, &h) {
+    wp := Buffer(44, 0)
+    NumPut("UInt", 44, wp, 0)
+    if !DllCall("GetWindowPlacement", "ptr", hwnd, "ptr", wp)
+        return false
+    l := NumGet(wp, 28, "Int"), t := NumGet(wp, 32, "Int")
+    r := NumGet(wp, 36, "Int"), b := NumGet(wp, 40, "Int")
+    if (r <= l || b <= t)
+        return false
+    MonitorGetWorkArea(MonitorGetPrimary(), &wl, &wt)
+    x := l + wl, y := t + wt, w := r - l, h := b - t
+    return true
 }
 
 ; The saved position for the key in the CURRENT monitor setup, or "" if none.
+; max is true when the window was maximized when saved (files written by
+; older versions have no Max key = false).
 LoadPos(key) {
     global posIni
     section := SectionFor(key)
@@ -426,26 +586,53 @@ LoadPos(key) {
     h := IniRead(posIni, section, "H", "")
     if (x = "" || y = "" || w = "" || h = "")
         return ""
-    return [Integer(x), Integer(y), Integer(w), Integer(h)]
+    return { x: Integer(x), y: Integer(y), w: Integer(w), h: Integer(h)
+        , max: IniRead(posIni, section, "Max", 0) = 1 }
 }
 
 ; Moves the window to its saved position. True = the window is fully handled
-; (a position existed, or the window is minimized/maximized and must be left
-; alone). False = no saved position exists yet.
+; (a position existed and was applied, or the window is minimized and must be
+; left alone). False = no saved position exists yet.
+;
+; The saved state is reproduced whole: a position saved from a maximized
+; window puts the window at its normal rectangle first - that is what decides
+; the monitor - and maximizes it there; a window that opens maximized but was
+; saved normal is restored and moved. Minimized windows are never touched.
 MoveToSaved(hwnd, key) {
     p := LoadPos(key)
     if (p = "")
         return false
     try {
-        if WinGetMinMax(hwnd) != 0
+        mm := WinGetMinMax(hwnd)
+        if (mm = -1)
             return true
-        WinMove(p[1], p[2], p[3], p[4], hwnd)
+        if (mm = 1) {
+            ; already maximized on the right monitor: done - a restore and
+            ; maximize round trip would only flicker
+            if (p.max && MonitorFromWindow(hwnd) = MonitorAtPoint(p.x + p.w // 2, p.y + p.h // 2))
+                return true
+            WinRestore(hwnd)
+        }
+        WinMove(p.x, p.y, p.w, p.h, hwnd)
         ; The move is done twice: otherwise width/height do not stick when the
         ; window jumps to a monitor with different resolution/scaling.
         Sleep 100
-        WinMove(p[1], p[2], p[3], p[4], hwnd)
+        WinMove(p.x, p.y, p.w, p.h, hwnd)
+        if p.max
+            WinMaximize(hwnd)
     }
     return true
+}
+
+; Index of the monitor containing the point; 0 if none (which the Monitor*
+; functions treat as the primary monitor).
+MonitorAtPoint(x, y) {
+    loop MonitorGetCount() {
+        MonitorGet(A_Index, &l, &t, &r, &b)
+        if (x >= l && x < r && y >= t && y < b)
+            return A_Index
+    }
+    return 0
 }
 
 ; The timer: finds new windows and moves them to their saved positions.
@@ -553,13 +740,14 @@ SaveActive() {
         return
     }
     if SavePos(key, hwnd) {
-        WinGetPos(&x, &y, &w, &h, hwnd)
-        TrayTip SubStr(WinGetTitle(hwnd), 1, 60) "`n(" x ", " y ", " w " × " h ")", Tr("savedTitle")
+        p := LoadPos(key)
+        where := (p != "") ? "`n(" p.x ", " p.y ", " p.w " × " p.h (p.max ? ", " Tr("maximized") : "") ")" : ""
+        TrayTip DescribeKey(key) where, Tr("savedTitle")
         if winInfo.Has(hwnd)
             winInfo[hwnd].done := true
         PushStateSoon()
     } else
-        TrayTip Tr("cannotSave"), Tr("appTitle")
+        TrayTip SaveErrorText(), Tr("appTitle")
 }
 
 ; Removes the saved position for the CURRENT monitor setup. Positions for
@@ -576,7 +764,7 @@ ForgetActive() {
         return
     }
     try IniDelete(posIni, SectionFor(key))
-    TrayTip Tr("forgot") "`n" SubStr(WinGetTitle(hwnd), 1, 60), Tr("appTitle")
+    TrayTip Tr("forgot") "`n" DescribeKey(key), Tr("appTitle")
     PushStateSoon()
 }
 
@@ -807,15 +995,21 @@ ShowWindowMenu(*) {
             return
         key := ""
         try key := KeyFor(win)
-        if (key = "")
-            return
-        hasPos := LoadPos(key) != ""
+        if (key = "") {
+            info := ""
+            try info := BaseInfo(win)
+            if (info = "")
+                return                 ; never touched - no menu either
+        }
+        hasPos := key != "" && LoadPos(key) != ""
+        isRule := SubStr(key, 1, 5) = "rule:"
         m := Menu()
-        m.Add(Tr("menuSave"), (*) => SetTimer(TmSave.Bind(win), -1))
+        ; one save item; the dialog behind it settles what the position
+        ; applies to, and for a rule-matched window it edits the rule - the
+        ; label says which of the two it will be
+        m.Add(Tr(isRule ? "menuEditRule" : "menuSave"), (*) => SetTimer(TmSaveOrRule.Bind(win), -1))
         m.Add(Tr("menuMove"), (*) => SetTimer(TmMove.Bind(win), -1))
         m.Add(Tr("menuForget"), (*) => SetTimer(TmForget.Bind(win), -1))
-        m.Add()
-        m.Add(Tr("menuRule"), (*) => SetTimer(TmCreateRuleFromWin.Bind(win), -1))
         if !hasPos {
             m.Disable(Tr("menuMove"))
             m.Disable(Tr("menuForget"))
@@ -864,29 +1058,33 @@ ExternalCommand(wParam, lParam, msg, hwnd) {
     if (lParam = 0) {   ; capability query
         key := ""
         try key := KeyFor(target)
-        if (key = "")
-            return 0
-        return LoadPos(key) != "" ? 3 : 1
+        if (key = "") {
+            ; no identity yet - but a rule can give it one, so the save item
+            ; (whose dialog then offers exactly that) is still on the menu
+            info := ""
+            try info := BaseInfo(target)
+            return (info != "") ? 1 : 0
+        }
+        return 1 | (LoadPos(key) != "" ? 2 : 0) | (SubStr(key, 1, 5) = "rule:" ? 4 : 0)
     }
     switch lParam {
-        case 1: SetTimer(TmSave.Bind(target), -1)
+        case 1, 4: SetTimer(TmSaveOrRule.Bind(target), -1)
         case 2: SetTimer(TmMove.Bind(target), -1)
         case 3: SetTimer(TmForget.Bind(target), -1)
-        case 4: SetTimer(TmCreateRuleFromWin.Bind(target), -1)
     }
     return 1
 }
 
-TmSave(hwnd) {
+; Saves the window under the key and says what the position now applies to.
+SaveUnderKey(hwnd, key) {
     global winInfo
-    key := KeyFor(hwnd)
-    if (key != "" && SavePos(key, hwnd)) {
+    if SavePos(key, hwnd) {
         if winInfo.Has(hwnd)
             winInfo[hwnd].done := true
-        try TrayTip SubStr(WinGetTitle(hwnd), 1, 60), Tr("savedTitle")
+        TrayTip DescribeKey(key), Tr("savedTitle")
         PushStateSoon()
     } else
-        TrayTip Tr("cannotSaveWin"), Tr("appTitle")
+        TrayTip SaveErrorText(), Tr("appTitle")
 }
 
 TmMove(hwnd) {
@@ -901,36 +1099,235 @@ TmForget(hwnd) {
     if (key = "" || LoadPos(key) = "")
         return
     try IniDelete(posIni, SectionFor(key))
-    TrayTip Tr("forgot") "`n" SubStr(WinGetTitle(hwnd), 1, 60), Tr("appTitle")
+    TrayTip Tr("forgot") "`n" DescribeKey(key), Tr("appTitle")
     PushStateSoon()
 }
 
-TmCreateRuleFromWin(hwnd) {
-    exe := "", title := ""
-    try exe := WinGetProcessName(hwnd)
-    try title := WinGetTitle(hwnd)
-    TmCreateRule(exe, title)
+; The window menu's save item: ONE dialog that settles what the position
+; applies to. It replaces the earlier pair of items - save under the current
+; identity, create a rule - whose difference was invisible in the menu and
+; wrong by default for browser popups.
+;   - A window matching an active rule gets "Edit rule": the rule's text,
+;     regex flag and Active tick, plus whether to store this window's
+;     position under the rule (ticked by default).
+;   - Any other window gets the choice between all windows of its program and
+;     a new rule from the title, with the stable part of the title suggested.
+;     Rules-only programs (and rules-only mode) get the title option only.
+; On OK the rule is written and the config reloaded BEFORE the position is
+; saved, so the position lands under exactly what the dialog said.
+TmSaveOrRule(hwnd) {
+    global g_ruleDlg, rulesOnly
+    info := BaseInfo(hwnd)
+    if (info = "") {
+        TrayTip Tr("cannotHandleWin"), Tr("appTitle")
+        return
+    }
+    key := KeyFor(hwnd)
+    rule := SubStr(key, 1, 5) = "rule:" ? RuleByAlias(SubStr(key, 6)) : ""
+    if g_ruleDlg
+        try g_ruleDlg.Destroy()
+    g := Gui("+AlwaysOnTop", Tr(rule ? "dlgEditRuleTitle" : "dlgSaveTitle"))
+    g_ruleDlg := g
+    g.SetFont("s10", "Segoe UI")
+    g.MarginX := 16, g.MarginY := 14
+    ctl := Map()
+    if rule {
+        g.AddText("w560", Format(Tr("dlgRuleIntro"), rule.alias))
+        g.AddText("xm y+14", Tr("dlgPre"))
+        ctl["pattern"] := g.AddEdit("x+6 yp-4 w360", rule.pattern)
+        g.AddText("x+6 yp+4", Tr("dlgPost"))
+        ctl["regex"] := g.AddCheckbox("xm y+12", Tr("dlgRegex"))
+        ctl["regex"].Value := rule.regex ? 1 : 0
+        ctl["enabled"] := g.AddCheckbox("xm y+6", Tr("dlgEnabled"))
+        ctl["enabled"].Value := rule.enabled ? 1 : 0
+        ctl["save"] := g.AddCheckbox("xm y+6 Checked", Tr("dlgSavePos"))
+    } else {
+        g.AddText("w560", Tr("dlgSaveIntro"))
+        progOption := !rulesOnly && !IsRulesOnly(info.exe)
+        if progOption {
+            ctl["prog"] := g.AddRadio("xm y+14 Checked", Format(Tr("appliesStd"), info.exe))
+            ctl["byTitle"] := g.AddRadio("xm y+8", Tr("dlgPre"))
+        } else
+            g.AddText("xm y+14", Tr("dlgPre"))
+        ctl["pattern"] := g.AddEdit("x+6 yp-4 w360", SuggestPattern(info.title))
+        g.AddText("x+6 yp+4", Tr("dlgPost"))
+        ctl["regex"] := g.AddCheckbox("xm y+12", Tr("dlgRegex"))
+        if progOption   ; clicking into the text is choosing the rule
+            ctl["pattern"].OnEvent("Focus", (*) => ctl["byTitle"].Value := 1)
+    }
+    ok := g.AddButton("xm y+18 w100 Default", Tr("dlgOk"))
+    cancel := g.AddButton("x+8 w100", Tr("dlgCancel"))
+    ok.OnEvent("Click", (*) => RuleDialogOk(g, hwnd, rule ? rule.alias : "", ctl, info))
+    cancel.OnEvent("Click", (*) => g.Destroy())
+    g.OnEvent("Escape", (*) => g.Destroy())
+    g.OnEvent("Close", (*) => g.Destroy())
+    ; centered on the monitor the window is on, not on the primary one
+    g.Show("Hide")
+    WinGetPos(, , &gw, &gh, g.Hwnd)
+    MonitorGetWorkArea(MonitorFromWindow(hwnd), &l, &t, &r, &b)
+    g.Show(Format("x{} y{}", l + (r - l - gw) // 2, t + (b - t - gh) // 2))
+    if rule
+        ctl["pattern"].Focus()
 }
 
-; Opens the GUI on the Rules tab with a new rule prefilled from the window:
-; the title as pattern, the exe name (sans .exe) as alias suggestion. The
-; user trims the pattern down to the stable part and saves.
-TmCreateRule(exe, title) {
-    global g_uiReady
-    alias := RegExReplace(StrLower(RegExReplace(exe, "i)\.exe$", "")), "[^a-z0-9]", "")
-    payload := JSON.Dump(Map("alias", alias, "pattern", title))
-    OpenUi()
-    attempts := 0
-    trySend() {
-        global g_uiReady
-        if g_uiReady {
-            UiSend("window.prefillRule(" payload ")")
+; The OK handler only reads the controls and validates; the work runs in a
+; timer thread after the dialog is hidden, and the Gui is destroyed there.
+; Doing it all inside the button's own event handler - Destroy, then a
+; config reload allocating new rule objects - left one rule object with a
+; property table that enumerated "enabled" but could not find it, i.e. heap
+; corruption; deferring past the handler's return is what cured it.
+RuleDialogOk(g, hwnd, alias, ctl, info) {
+    pattern := Trim(ctl["pattern"].Value)
+    regex := ctl["regex"].Value ? true : false
+    enabled := true, savePos := true, useProg := false
+    if (alias != "") {
+        if (pattern = "")
+            return
+        enabled := ctl["enabled"].Value ? true : false
+        savePos := ctl["save"].Value ? true : false
+    } else if (ctl.Has("prog") && ctl["prog"].Value) {
+        useProg := true
+    } else {
+        if (pattern = "")
+            return
+        matches := false
+        try matches := regex ? RegExMatch(info.title, pattern) : InStr(info.title, pattern)
+        if !matches {
+            TrayTip Tr("ruleNotInTitle") "`n" pattern, Tr("appTitle")
+            return                      ; the dialog stays open for a correction
+        }
+    }
+    g.Hide()
+    SetTimer(RuleDialogApply.Bind(hwnd, alias, pattern, regex, enabled, savePos, useProg, info.exe), -1)
+}
+
+RuleDialogApply(hwnd, alias, pattern, regex, enabled, savePos, useProg, exe) {
+    global g_ruleDlg
+    if g_ruleDlg {
+        try g_ruleDlg.Destroy()
+        g_ruleDlg := 0
+    }
+    if (alias != "") {
+        ApplyRuleEdit(alias, pattern, regex, enabled)
+        if !savePos {
+            PushStateSoon()
             return
         }
-        if (++attempts <= 25)   ; the GUI needs a moment on first open
-            SetTimer(trySend, -200)
+        if !enabled {
+            TrayTip Format(Tr("ruleOff"), alias), Tr("appTitle")
+            PushStateSoon()
+            return
+        }
+        key := KeyFor(hwnd)
+        if (key = "rule:" alias)
+            SaveUnderKey(hwnd, key)
+        else if (SubStr(key, 1, 5) = "rule:")
+            TrayTip Format(Tr("ruleShadowed"), alias, SubStr(key, 6)), Tr("appTitle")
+        else
+            TrayTip Format(Tr("ruleNoMatch"), alias), Tr("appTitle")
+        PushStateSoon()
+        return
     }
-    SetTimer(trySend, -200)
+    if useProg {
+        key := KeyFor(hwnd)
+        if (key = "")
+            TrayTip Tr("cannotHandleWin"), Tr("appTitle")
+        else
+            SaveUnderKey(hwnd, key)
+        return
+    }
+    CreateRuleAndSave(hwnd, pattern, regex, exe)
+}
+
+; Writes a rule for the pattern - or reuses an identical existing one,
+; switching it back on if it was ticked off - reloads, and saves the window's
+; position under it.
+CreateRuleAndSave(hwnd, pattern, regex, exe) {
+    global configIni, titleRules, winInfo
+    alias := ""
+    for r in titleRules
+        if (r.regex = regex && r.pattern == pattern) {
+            alias := r.alias
+            if !r.enabled
+                ApplyRuleEdit(alias, "", regex, true)
+        }
+    if (alias = "") {
+        alias := SuggestAlias(pattern, exe)
+        IniWrite((regex ? "re:" : "") pattern, configIni, "TitleRules", alias)
+        LoadConfig()
+    }
+    key := KeyFor(hwnd)
+    if (key = "") {
+        TrayTip Tr("cannotHandleWin"), Tr("appTitle")
+        return
+    }
+    if (key != "rule:" alias) {
+        ; rules match in file order, and an earlier one also fits this title
+        TrayTip Format(Tr("ruleShadowed"), alias, SubStr(key, 6)), Tr("appTitle")
+        PushStateSoon()
+        return
+    }
+    if SavePos(key, hwnd) {
+        if winInfo.Has(hwnd)
+            winInfo[hwnd].done := true
+        TrayTip Format(Tr("ruleSaved"), alias, pattern), Tr("appTitle")
+    } else
+        TrayTip SaveErrorText(), Tr("appTitle")
+    PushStateSoon()
+}
+
+; One rule's editable parts written to the config and reloaded. An empty
+; pattern leaves the text as it is.
+ApplyRuleEdit(alias, pattern, regex, enabled) {
+    global configIni
+    if (pattern != "")
+        IniWrite((regex ? "re:" : "") pattern, configIni, "TitleRules", alias)
+    if enabled {
+        try IniDelete(configIni, "DisabledRules", alias)
+    } else
+        IniWrite(1, configIni, "DisabledRules", alias)
+    LoadConfig()
+}
+
+; The part of a title that tends to stay the same from window to window: the
+; text before the first " - ", " – " or " | " separator, minus trailing words
+; that carry digits (sample ids, counters).
+;   "Whole Genome View - 26MD12102_260901.cyhd_Accel.ND.cychp" -> "Whole Genome View"
+;   "Förhandsgranska 26MD12097 - lims-lab1.i.skane.se/…"        -> "Förhandsgranska"
+; The whole title when nothing is left; the dialog lets the user edit it anyway.
+SuggestPattern(title) {
+    s := RegExReplace(title, "\s+[-–|]\s+.*$", "")
+    s := RegExReplace(s, "(\s+\S*\d\S*)+\s*$", "")
+    s := Trim(s, " `t:-–")
+    return (s != "") ? s : title
+}
+
+; Alias for a new rule: the pattern folded to a-z0-9 and cut to 24 characters
+; ("Whole Genome View" -> "wholegenomeview"), made unique among the existing
+; rules. The exe name is the fallback for a pattern without letters.
+SuggestAlias(pattern, exe) {
+    global titleRules
+    base := SubStr(FoldAscii(pattern), 1, 24)
+    if (base = "")
+        base := FoldAscii(RegExReplace(exe, "i)\.exe$", ""))
+    if (base = "")
+        base := "rule"
+    taken := Map()
+    for r in titleRules
+        taken[StrLower(r.alias)] := true
+    if !taken.Has(base)
+        return base
+    n := 2
+    while taken.Has(base n)
+        n++
+    return base n
+}
+
+FoldAscii(s) {
+    static from := "åäöéèüáàóòíìúùñçÅÄÖÉÈÜÁÀÓÒÍÌÚÙÑÇ", to := "aaoeeuaaooiiuuncaaoeeuaaooiiuunc"
+    loop parse from
+        s := StrReplace(s, A_LoopField, SubStr(to, A_Index, 1), true)
+    return RegExReplace(StrLower(s), "[^a-z0-9]", "")
 }
 
 ; =============================================================================
@@ -1000,6 +1397,17 @@ Reload = F5
 ; Example - remove the semicolon to activate:
 ;preview = Print preview
 
+[RulesOnlyExe]
+; Programs handled ONLY through title rules - their other windows are left
+; alone. The natural setting for a browser: every popup is a separate window
+; that would otherwise share one position with all the browser's windows.
+; One per line: x = exename
+;1 = msedge.exe
+
+[DisabledRules]
+; Rules ticked off ("Active") in the GUI's list. They stay in [TitleRules] so
+; they can be ticked on again. One per line: alias = 1
+
 [IgnoreExe]
 ; Programs whose windows must never be touched. One per line: x = exename
 ;1 = mstsc.exe
@@ -1013,9 +1421,22 @@ Reload = F5
 }
 
 ; A whole section as text. Empty string when the file or section is missing.
+; A sharing violation - OneDrive syncing the file right after it was written,
+; which is exactly when a reload happens - is retried briefly: an empty result
+; here would silently load NO rules, and every rule-managed window would then
+; be left alone until the next reload.
 ConfigSection(name) {
     global configIni
-    try return IniRead(configIni, name)
+    loop 6 {
+        try return IniRead(configIni, name)
+        catch as e {
+            ; a missing section is a plain Error, not an OSError - only the
+            ; sharing/lock/access-denied codes are worth waiting for
+            if !(e is OSError && (e.Number = 32 || e.Number = 33 || e.Number = 5))
+                return ""
+            Sleep 150
+        }
+    }
     return ""
 }
 
@@ -1031,7 +1452,7 @@ SplitConfigLine(line) {
 }
 
 LoadConfig() {
-    global ignoreExe, ignoreTitles, titleRules, rulesOnly, configIni
+    global ignoreExe, ignoreTitles, titleRules, rulesOnly, rulesOnlyExe, configIni
     global g_modifier, g_menuButton, g_autoSaveModOnly, g_hk
     rulesOnly := IniRead(configIni, "Settings", "RulesOnly", 0) = 1
     g_modifier := Trim(IniRead(configIni, "Settings", "Modifier", "CapsLock"))
@@ -1048,16 +1469,28 @@ LoadConfig() {
     ignoreExe := []
     ignoreTitles := []
     titleRules := []
+    rulesOnlyExe := []
 
     for line in StrSplit(ConfigSection("IgnoreExe"), "`n") {
         p := SplitConfigLine(line)
         if (p != "" && p.value != "")
             ignoreExe.Push(p.value)
     }
+    for line in StrSplit(ConfigSection("RulesOnlyExe"), "`n") {
+        p := SplitConfigLine(line)
+        if (p != "" && p.value != "")
+            rulesOnlyExe.Push(p.value)
+    }
     for line in StrSplit(ConfigSection("IgnoreTitles"), "`n") {
         p := SplitConfigLine(line)
         if (p != "" && p.value != "")
             ignoreTitles.Push(p.value)
+    }
+    disabled := Map()
+    for line in StrSplit(ConfigSection("DisabledRules"), "`n") {
+        p := SplitConfigLine(line)
+        if (p != "")
+            disabled[StrLower(p.key)] := true
     }
     for line in StrSplit(ConfigSection("TitleRules"), "`n") {
         p := SplitConfigLine(line)
@@ -1066,7 +1499,8 @@ LoadConfig() {
         isRegex := 0
         pattern := RegExReplace(p.value, "^re:", , &isRegex)
         if (pattern != "")
-            titleRules.Push({ alias: p.key, pattern: pattern, regex: isRegex > 0 })
+            titleRules.Push({ alias: p.key, pattern: pattern, regex: isRegex > 0
+                , enabled: !disabled.Has(StrLower(p.key)) })
     }
 }
 
@@ -1370,8 +1804,16 @@ UiMessage(sender, args) {
             UiSaveWin(msg["hwnd"])
         case "moveWin":
             UiMoveWin(msg["hwnd"])
-        case "saveRules":
-            UiSaveRules(msg)
+        case "setRule":
+            UiSetRule(msg)
+        case "addRule":
+            UiAddRule(msg)
+        case "deleteRule":
+            UiDeleteRule(msg["alias"])
+        case "setManaged":
+            UiSetManaged(msg)
+        case "ruleFromWin":
+            SetTimer(TmSaveOrRule.Bind(Integer(msg["hwnd"])), -1)
         case "setLang":
             SetLanguage(msg["lang"])
         case "setHotkey":
@@ -1395,12 +1837,13 @@ PushStateSoon() {
 PushState() {
     global g_uiReady, moveEnabled, autoSaveEnabled, notifyEnabled, rulesOnly, g_lang
     global g_autoSaveModOnly, g_modifier, g_hk
-    global titleRules, ignoreExe, ignoreTitles
+    global titleRules, ignoreExe, ignoreTitles, rulesOnlyExe
     if !g_uiReady
         return
     rules := []
     for r in titleRules
-        rules.Push(Map("alias", r.alias, "pattern", r.pattern, "regex", r.regex ? 1 : 0))
+        rules.Push(Map("alias", r.alias, "pattern", r.pattern, "regex", r.regex ? 1 : 0
+            , "enabled", r.enabled ? 1 : 0))
     state := Map("settings", Map("move", moveEnabled ? 1 : 0, "autosave", autoSaveEnabled ? 1 : 0
             , "notify", notifyEnabled ? 1 : 0, "rulesOnly", rulesOnly ? 1 : 0, "lang", g_lang
             , "modOnly", g_autoSaveModOnly ? 1 : 0, "modifier", g_modifier
@@ -1410,6 +1853,7 @@ PushState() {
         , "rules", rules
         , "ignoreExe", ignoreExe
         , "ignoreTitles", ignoreTitles
+        , "rulesOnlyExe", rulesOnlyExe
         , "windows", ListWindows())
     UiSend("window.receiveState(" JSON.Dump(state) ")")
 }
@@ -1423,28 +1867,32 @@ ListPositions() {
     for sec in StrSplit(sections, "`n") {
         if !RegExMatch(sec, "^K[0-9A-F]{8}_(.+)$", &m)
             continue   ; [General], [Window] etc. are not saved positions
+        key := IniRead(posIni, sec, "Key", "")
         list.Push(Map("section", sec, "setup", m[1]
             , "info", IniRead(posIni, sec, "Info", "")
-            , "key", IniRead(posIni, sec, "Key", "")
+            , "key", key, "pattern", PatternFor(key)
             , "x", IniRead(posIni, sec, "X", ""), "y", IniRead(posIni, sec, "Y", "")
-            , "w", IniRead(posIni, sec, "W", ""), "h", IniRead(posIni, sec, "H", "")))
+            , "w", IniRead(posIni, sec, "W", ""), "h", IniRead(posIni, sec, "H", "")
+            , "max", IniRead(posIni, sec, "Max", 0) = 1 ? 1 : 0))
     }
     return list
 }
 
 ; Every open window DalSegno can manage right now.
+; Every open window DalSegno may touch: the managed ones, and those of
+; rules-only programs that match no rule yet (managed = 0) - the list is
+; where a rule for them can be started.
 ListWindows() {
     list := []
     for hwnd in WinGetList() {
-        key := KeyFor(hwnd)
-        if (key = "")
+        info := BaseInfo(hwnd)
+        if (info = "")
             continue
-        exe := "", title := ""
-        try exe := WinGetProcessName(hwnd)
-        try title := WinGetTitle(hwnd)
-        list.Push(Map("hwnd", hwnd + 0, "exe", exe, "title", SubStr(title, 1, 80)
+        key := KeyFor(hwnd)
+        list.Push(Map("hwnd", hwnd + 0, "exe", info.exe, "title", SubStr(info.title, 1, 80)
             , "rule", SubStr(key, 1, 5) = "rule:" ? SubStr(key, 6) : ""
-            , "saved", LoadPos(key) != "" ? 1 : 0))
+            , "managed", key != "" ? 1 : 0
+            , "saved", key != "" && LoadPos(key) != "" ? 1 : 0))
     }
     return list
 }
@@ -1541,12 +1989,16 @@ UiSaveWin(hwnd) {
     global winInfo
     hwnd := Integer(hwnd)
     key := KeyFor(hwnd)
-    if (key != "" && SavePos(key, hwnd)) {
+    if (key = "") {
+        TrayTip Tr("cannotHandleWin"), Tr("appTitle")
+        return
+    }
+    if SavePos(key, hwnd) {
         if winInfo.Has(hwnd)
             winInfo[hwnd].done := true
         PushState()
     } else
-        TrayTip Tr("cannotSaveWin"), Tr("appTitle")
+        TrayTip SaveErrorText(), Tr("appTitle")
 }
 
 UiMoveWin(hwnd) {
@@ -1560,30 +2012,62 @@ UiMoveWin(hwnd) {
     }
 }
 
-; Rewrites the rule sections in the config file from the GUI and reloads them.
-; Comments INSIDE those three sections disappear on the first save - the file
-; can still be edited by hand, the GUI is just the more convenient way.
-UiSaveRules(msg) {
+; The list edits one rule at a time and saves at once - no dirty state and no
+; Save button. The alias is the ini key and names the saved positions, so it
+; is never edited here; the pattern, the regex flag and the Active tick are.
+UiSetRule(msg) {
+    alias := Trim(msg["alias"])
+    if (alias = "")
+        return
+    ApplyRuleEdit(alias, Trim(msg["pattern"]), msg["regex"] ? true : false, msg["enabled"] ? true : false)
+    PushState()
+}
+
+UiAddRule(msg) {
     global configIni
-    try IniDelete(configIni, "TitleRules")
-    try IniDelete(configIni, "IgnoreExe")
-    try IniDelete(configIni, "IgnoreTitles")
-    for r in msg["rules"] {
-        alias := Trim(r["alias"]), pattern := Trim(r["pattern"])
-        if (alias = "" || pattern = "")
+    pattern := Trim(msg["pattern"])
+    if (pattern = "")
+        return
+    alias := SuggestAlias(pattern, "")
+    IniWrite((msg["regex"] ? "re:" : "") pattern, configIni, "TitleRules", alias)
+    LoadConfig()
+    PushState()
+}
+
+; Deletes the rule and every position saved under it, in all monitor setups -
+; a position without its rule could never apply again and would only sit in
+; the list as "rule no longer exists".
+UiDeleteRule(alias) {
+    global configIni, posIni
+    alias := Trim(alias)
+    if (alias = "")
+        return
+    try IniDelete(configIni, "TitleRules", alias)
+    try IniDelete(configIni, "DisabledRules", alias)
+    for p in ListPositions()
+        if (p["key"] = "rule:" alias)
+            try IniDelete(posIni, p["section"])
+    LoadConfig()
+    PushState()
+}
+
+; The "which windows are managed" settings, rewritten as a whole whenever one
+; of them changes on the Settings tab. Comments inside the three list sections
+; disappear on the first save - the file can still be edited by hand.
+UiSetManaged(msg) {
+    global configIni
+    static sections := Map("IgnoreExe", "ignoreExe", "IgnoreTitles", "ignoreTitles"
+        , "RulesOnlyExe", "rulesOnlyExe")
+    for sec, field in sections {
+        try IniDelete(configIni, sec)
+        if !msg.Has(field)
             continue
-        IniWrite((r["regex"] ? "re:" : "") pattern, configIni, "TitleRules", alias)
+        n := 0
+        for v in msg[field]
+            if (Trim(v) != "")
+                IniWrite(Trim(v), configIni, sec, ++n)
     }
-    n := 0
-    for v in msg["ignoreExe"]
-        if (Trim(v) != "")
-            IniWrite(Trim(v), configIni, "IgnoreExe", ++n)
-    n := 0
-    for v in msg["ignoreTitles"]
-        if (Trim(v) != "")
-            IniWrite(Trim(v), configIni, "IgnoreTitles", ++n)
     IniWrite(msg["rulesOnly"] ? 1 : 0, configIni, "Settings", "RulesOnly")
     LoadConfig()
     PushState()
-    TrayTip Tr("rulesSaved"), Tr("appTitle")
 }
