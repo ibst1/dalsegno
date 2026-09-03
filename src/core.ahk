@@ -609,14 +609,20 @@ SuggestPattern(title) {
 ; anything on the ignore lists; otherwise { title, cls, exe }. A window that
 ; passes here but gets no key from KeyFor can still be given one by a rule -
 ; which is what the window menu's save dialog offers for it.
-BaseInfo(hwnd) {
+; allowCloaked: the Windows tab lists windows parked on other virtual
+; desktops too (cloaked, but real); the scan and the menu never touch them.
+BaseInfo(hwnd, allowCloaked := false) {
     global ignoreExe, ignoreTitles
     static ownPid := ProcessExist()
+    ; IME / MSCTFIME UI: every process's "Default IME" helper window - titled,
+    ; WS_VISIBLE, and pure furniture; they filled the Windows tab and would
+    ; get positions from Save all
     static systemClasses := Map(
         "Progman", 1, "WorkerW", 1, "Shell_TrayWnd", 1, "Shell_SecondaryTrayWnd", 1,
         "NotifyIconOverflowWindow", 1, "Windows.UI.Core.CoreWindow", 1,
         "ForegroundStaging", 1, "XamlExplorerHostIslandWindow", 1,
-        "TopLevelWindowForOverflowXamlIsland", 1, "tooltips_class32", 1)
+        "TopLevelWindowForOverflowXamlIsland", 1, "tooltips_class32", 1,
+        "IME", 1, "MSCTFIME UI", 1)
     title := "", cls := "", exe := ""
     try {
         title := WinGetTitle(hwnd)
@@ -627,7 +633,7 @@ BaseInfo(hwnd) {
             return ""
         if WinGetExStyle(hwnd) & 0x80   ; WS_EX_TOOLWINDOW
             return ""
-        if IsCloaked(hwnd)
+        if (!allowCloaked && IsCloaked(hwnd))
             return ""
         exe := WinGetProcessName(hwnd)
     } catch
@@ -646,10 +652,12 @@ BaseInfo(hwnd) {
 ; mode, every window) that match no active rule. When a rule matches, the key
 ; is the rule's alias - independent of the program.
 KeyFor(hwnd) {
-    global titleRules, rulesOnly
     info := BaseInfo(hwnd)
-    if (info = "")
-        return ""
+    return (info = "") ? "" : KeyForInfo(info)
+}
+
+KeyForInfo(info) {
+    global titleRules, rulesOnly
     for rule in titleRules
         if (rule.enabled && RuleMatches(rule, info))
             return "rule:" rule.alias

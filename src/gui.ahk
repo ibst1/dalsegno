@@ -47,6 +47,9 @@ OpenUi(*) {
             return
         }
     } else {
+        ; a hidden window comes back on the desktop it was last on; the user
+        ; expects it where they are
+        DesktopBringHere(g_uiWin.Hwnd)
         g_uiWin.Show()
         FitUiToScreen()
         PushStateSoon()
@@ -229,19 +232,50 @@ PushState() {
 
 ; Every open window DalSegno may touch: the managed ones, and those of
 ; rules-only programs that match no rule yet (managed = 0).
+;
+; Two filters keep the list to what can be acted on. A window on no virtual
+; desktop (Task Switching, tray overflow, every hidden helper a program keeps
+; around - titled top-level windows all) cannot be moved to one and is not a
+; window the user sees; only skipped when the desktop number is trustworthy,
+; i.e. the dll is loaded. And rows identical in program, title and desktop
+; collapse into one with a count: their identity is the same, so saving from
+; any of them saves the same thing.
 ListWindows() {
-    global g_modDesktops
+    global g_modDesktops, g_dllLoaded
+    global g_uiWin
     list := []
+    seen := Map()
     for hwnd in WinGetList() {
-        info := BaseInfo(hwnd)
+        ; our own window is listed, greyed out: rules never apply to it (a
+        ; settings window that walks off to another desktop while you edit
+        ; the rules that move it is its own trap), and it needs no position
+        if (IsObject(g_uiWin) && hwnd = g_uiWin.Hwnd) {
+            list.Push(Map("hwnd", hwnd + 0, "exe", A_ScriptName, "title", Tr("appTitle")
+                , "rule", "", "managed", 0, "own", 1, "n", 1
+                , "desktop", g_modDesktops ? DesktopOf(hwnd) : "", "saved", 0))
+            continue
+        }
+        ; windows parked on other desktops are cloaked but real - listed, so
+        ; they can be brought here; ghosts on no desktop are dropped below
+        info := BaseInfo(hwnd, g_modDesktops && g_dllLoaded)
         if (info = "")
             continue
-        key := KeyFor(hwnd)
-        list.Push(Map("hwnd", hwnd + 0, "exe", info.exe, "title", SubStr(info.title, 1, 80)
+        desktop := g_modDesktops ? DesktopOf(hwnd) : ""
+        if (g_modDesktops && g_dllLoaded && desktop = "")
+            continue
+        dup := info.exe "|" info.title "|" desktop
+        if seen.Has(dup) {
+            seen[dup]["n"] := seen[dup]["n"] + 1
+            continue
+        }
+        key := KeyForInfo(info)
+        row := Map("hwnd", hwnd + 0, "exe", info.exe, "title", SubStr(info.title, 1, 80)
             , "rule", SubStr(key, 1, 5) = "rule:" ? SubStr(key, 6) : ""
             , "managed", key != "" ? 1 : 0
-            , "desktop", g_modDesktops ? DesktopOf(hwnd) : ""
-            , "saved", key != "" && LoadPos(key) != "" ? 1 : 0))
+            , "desktop", desktop, "n", 1
+            , "saved", key != "" && LoadPos(key) != "" ? 1 : 0)
+        seen[dup] := row
+        list.Push(row)
     }
     return list
 }
