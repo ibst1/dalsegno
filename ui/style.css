@@ -20,20 +20,6 @@ body {
   flex-direction: column;
   overflow: hidden;
 }
-
-/* ── topbar ──────────────────────────────────────────────────────────── */
-#topbar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 8px 12px;
-  background: var(--bg3);
-  border-bottom: 1px solid var(--border);
-}
-#logo { font-size: 20px; color: var(--accent); line-height: 1; }
-#appname { font-weight: 600; font-size: 14px; margin-right: 10px; }
-#appname .sub { font-weight: 400; color: var(--text-dim); }
-#langSel { padding: 3px 6px; }
 .spacer { flex: 1; }
 
 button {
@@ -50,10 +36,12 @@ button:disabled { opacity: .45; cursor: default; }
 button.primary { background: var(--accent); border-color: var(--accent2); color: #1e1e1e; font-weight: 600; }
 button.primary:hover { background: var(--accent2); }
 button.small { padding: 2px 8px; font-size: 12px; }
+button.tiny { padding: 0 5px; font-size: 11px; line-height: 18px; }
 th.selcol, td.selcol { width: 28px; text-align: center; }
 .hkrow { display: flex; align-items: center; gap: 12px; margin: 4px 0; }
 .hkcombo { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .hkkey { width: 90px; }
+.hkkey.wide { width: 130px; }
 .hklbl { color: var(--text-dim); }
 button.danger-armed { background: var(--red); border-color: #f05050; color: #fff; }
 
@@ -68,6 +56,10 @@ button.danger-armed { background: var(--red); border-color: #f05050; color: #fff
 }
 .toggle input { accent-color: var(--accent); cursor: pointer; }
 .toggle:hover { color: var(--text); }
+.field { display: flex; gap: 18px; flex-wrap: wrap; margin: 8px 0; }
+.field label { color: var(--text-dim); display: inline-flex; align-items: center; gap: 6px; }
+.field input.short { width: 110px; }
+.field input.wide { width: 420px; max-width: 100%; }
 
 /* ── tabs ────────────────────────────────────────────────────────────── */
 #tabs {
@@ -100,7 +92,7 @@ button.danger-armed { background: var(--red); border-color: #f05050; color: #fff
 }
 .pane-head label { color: var(--text-dim); }
 .hint { color: var(--text-dim); font-style: italic; }
-select, input[type=text], textarea {
+select, input[type=text], input:not([type]), textarea {
   font: inherit;
   color: var(--text);
   background: var(--bg2);
@@ -108,7 +100,7 @@ select, input[type=text], textarea {
   border-radius: 4px;
   padding: 4px 8px;
 }
-select:focus, input[type=text]:focus, textarea:focus { outline: 1px solid var(--accent); }
+select:focus, input:focus, textarea:focus { outline: 1px solid var(--accent); }
 
 .tablewrap { flex: 1; overflow: auto; min-height: 0; }
 table { width: 100%; border-collapse: collapse; }
@@ -149,13 +141,15 @@ td.actions button { margin-left: 6px; }
 .badge.rule { color: var(--accent2); border-color: var(--accent); }
 .ok { color: var(--green); }
 .dim { color: var(--text-dim); }
+body.no-desktops .deskcol, body.no-desktops td.deskcell { display: none; }
 
 /* ── positions list: rules edited in place ───────────────────────────── */
 #posBody td.applies { white-space: nowrap; }
 #posBody td.applies .pre, #posBody td.applies .post { color: var(--text-dim); }
-#posBody td.applies .r-pattern { width: 240px; margin: 0 6px; padding: 2px 6px; }
+#posBody td.applies .r-pattern { width: 220px; margin: 0 6px; padding: 2px 6px; }
+#posBody td.applies .r-exe { width: 120px; margin: 0 6px; padding: 2px 6px; }
 #posBody td.applies label.rx {
-  margin-left: 10px;
+  margin-left: 8px;
   color: var(--text-dim);
   font-size: 11px;
   cursor: pointer;
@@ -164,25 +158,31 @@ td.actions button { margin-left: 6px; }
 #posBody td.applies label.rx input { accent-color: var(--accent); vertical-align: middle; }
 #posBody td.active { text-align: center; }
 #posBody td.active input { accent-color: var(--accent); cursor: pointer; }
+#posBody td.deskcell { white-space: nowrap; }
+#posBody td.deskcell select { padding: 2px 4px; }
+#posBody td.deskcell label { color: var(--text-dim); font-size: 11px; margin-left: 6px; cursor: pointer; }
+#posBody td.deskcell label input { accent-color: var(--accent); vertical-align: middle; }
 #posBody tr.off td { opacity: .55; }
 #posBody tr.off td.active { opacity: 1; }
 #posBody td.nopos { text-align: center; font-style: italic; }
 #posBody tr.new { background: var(--bg3); }
+#winBody td.deskcell select { padding: 2px 4px; }
 
-/* ── settings ────────────────────────────────────────────────────────── */
-#tab-settings { overflow-y: auto; display: none; }
-#tab-settings.active { display: block; }
-#tab-settings .inner { padding: 12px 16px; max-width: 860px; }
-#tab-settings h2 {
+/* ── settings-like panes ─────────────────────────────────────────────── */
+#tab-settings, #tab-desktops { overflow-y: auto; display: none; }
+#tab-settings.active, #tab-desktops.active { display: block; }
+#tab-settings .inner, #tab-desktops .inner { padding: 12px 16px; max-width: 860px; }
+#tab-settings h2, #tab-desktops h2 {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: .5px;
   color: var(--text-dim);
   margin: 18px 0 6px;
 }
-#tab-settings h2:first-child { margin-top: 0; }
+#tab-settings h2:first-child, #tab-desktops h2:first-child { margin-top: 0; }
 #tab-settings h3 { font-size: 12px; color: var(--text-dim); margin: 12px 0 4px; font-weight: 600; }
-#tab-settings p.help { color: var(--text-dim); margin: 4px 0 10px; }
+#tab-settings p.help, #tab-desktops p.help { color: var(--text-dim); margin: 4px 0 10px; }
+p.help.warn { color: #e0b95c; }
 .radio {
   display: flex;
   align-items: center;
