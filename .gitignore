@@ -9,9 +9,10 @@ DalSegno config.v1.bak
 DalSegno positions.ini
 *.bak
 
-# Third-party binary - download from Ciantic/VirtualDesktopAccessor releases,
-# see README
+# Third-party binaries - download from Ciantic/VirtualDesktopAccessor releases,
+# see README (the build in the 23H2 folder is for Windows 11 23H2)
 VirtualDesktopAccessor.dll
+23H2/VirtualDesktopAccessor.dll
 
 # Build output (attached to GitHub releases instead) and cached toolchain
 dist/

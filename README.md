@@ -100,7 +100,8 @@ Ctrl+Alt = move and follow*. All are configurable in the GUI.
 | Win+Alt+↓ | the window menu for the active window (Alt+Tab friendly) |
 
 Mouse: scroll the wheel over the taskbar to switch desktop; left-click the
-numbered tray icon or the taskbar name label for a desktop picker; right-click
+numbered tray icon or the taskbar name label for a desktop picker, whose
+checked entry renames the desktop you are on; right-click
 the label for the GUI; two optional tray arrow icons switch one step.
 
 ## GUI
@@ -158,7 +159,7 @@ old             = /desktop:2 /off re:^Something$
 | `ui/` | the WebView2 GUI |
 | `lib/`, `ComVar.ahk`, `Promise.ahk` | WebView2 + JSON libraries |
 | `icons/`, `app.ico` | tray icons: the desktop numbers, the arrows, the segno |
-| `VirtualDesktopAccessor.dll` | not in the repository — see Requirements |
+| `VirtualDesktopAccessor.dll`, `23H2\VirtualDesktopAccessor.dll` | not in the repository — see Requirements |
 
 The config file can be edited by hand (then *Reload settings* in the tray
 menu) or from the GUI. Edits from the GUI rewrite the sections they touch,
@@ -194,18 +195,29 @@ hidden main window:
 | 8 | Open the GUI |
 | 9 | Open the save/rule dialog for window `lParam` |
 | 10 | Query window `lParam` (SendMessage): 1 = manageable, +2 = saved position, +4 = matches a rule |
+| 11 | Open the rename prompt for desktop `lParam` (1-based) |
 | 100 | Ping — writes `ping.txt` next to the script (test hook) |
 
 ## Requirements
 
-- Windows 11 (developed on build 22631 / 23H2).
+- Windows 11 (developed on build 22631 / 23H2 and used on 24H2).
 - [AutoHotkey v2](https://www.autohotkey.com/) — the Microsoft Store edition
   works on locked-down machines.
 - [VirtualDesktopAccessor.dll](https://github.com/Ciantic/VirtualDesktopAccessor)
   by Jarkko Pöyry (Ciantic), MIT — required for *moving windows between
-  desktops*: **<https://github.com/Ciantic/VirtualDesktopAccessor/releases/latest/download/VirtualDesktopAccessor.dll>**
-  next to `DalSegno.ahk`. Without it everything else works; desktop switching
-  falls back to sending `Ctrl+Win+arrow`.
+  desktops* and for *renaming* them. The dll is built against one Windows
+  feature update's internal interfaces, so two builds go next to
+  `DalSegno.ahk` and the running Windows build picks one:
+  - `VirtualDesktopAccessor.dll` for 24H2 and later:
+    **<https://github.com/Ciantic/VirtualDesktopAccessor/releases/latest/download/VirtualDesktopAccessor.dll>**
+  - `23H2\VirtualDesktopAccessor.dll` for 23H2 (build 22631): the 2024-01-25
+    release, in a `23H2` folder next to the script (same file name, so the
+    module name the calls use is the same):
+    **<https://github.com/Ciantic/VirtualDesktopAccessor/releases/download/2024-01-25-windows11/VirtualDesktopAccessor.dll>**
+
+  With the wrong build, moving and switching still work but renaming fails.
+  Without any dll everything else works; desktop switching falls back to
+  sending `Ctrl+Win+arrow`.
 - WebView2 runtime (preinstalled on Windows 10/11) — only for the GUI.
 
 ## Installation

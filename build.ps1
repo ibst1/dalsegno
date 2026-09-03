@@ -33,10 +33,19 @@ if (-not (Test-Path $base)) {
     Expand-Archive (Join-Path $tools 'ahk2.zip') (Join-Path $tools 'base') -Force
 }
 
+# Two builds of the dll: the latest release fits Windows 11 24H2 and later,
+# the 2024-01-25 release fits 23H2 (build 22631), whose internal COM VTable
+# differs. DalSegno loads the one matching the running Windows build; the
+# 23H2 build keeps its file name in a 23H2 folder so the module name is the same.
 $dll = Join-Path $tools 'VirtualDesktopAccessor.dll'
 if (-not (Test-Path $dll)) {
-    Write-Host 'Downloading VirtualDesktopAccessor.dll...'
+    Write-Host 'Downloading VirtualDesktopAccessor.dll (24H2+)...'
     Invoke-WebRequest 'https://github.com/Ciantic/VirtualDesktopAccessor/releases/latest/download/VirtualDesktopAccessor.dll' -OutFile $dll
+}
+$dll23 = Join-Path $tools 'VirtualDesktopAccessor-23H2.dll'
+if (-not (Test-Path $dll23)) {
+    Write-Host 'Downloading VirtualDesktopAccessor-23H2.dll (23H2)...'
+    Invoke-WebRequest 'https://github.com/Ciantic/VirtualDesktopAccessor/releases/download/2024-01-25-windows11/VirtualDesktopAccessor.dll' -OutFile $dll23
 }
 
 # clear dist with retries - OneDrive/AV can hold freshly written files briefly
@@ -53,7 +62,7 @@ if (Test-Path $dist) {
     }
     if (-not $done) { throw "Could not clear $dist - is DalSegno.exe running or the folder open?" }
 }
-foreach ($sub in 'icons', 'src', 'ui', 'lib') {
+foreach ($sub in 'icons', 'src', 'ui', 'lib', '23H2') {
     New-Item -ItemType Directory -Force (Join-Path $dist $sub) | Out-Null
 }
 
@@ -69,10 +78,12 @@ Copy-Item (Join-Path $root 'ComVar.ahk') $dist
 Copy-Item (Join-Path $root 'Promise.ahk') $dist
 Copy-Item (Join-Path $root 'icons\*.ico') (Join-Path $dist 'icons')
 Copy-Item $dll $dist
+Copy-Item $dll23 (Join-Path $dist '23H2\VirtualDesktopAccessor.dll')
 Copy-Item (Join-Path $root 'THIRD-PARTY.txt') $dist
 
 $zip = Join-Path $dist "DalSegno-$version.zip"
 $content = @('DalSegno.exe', 'DalSegno.ahk', 'DalSegnoArrow.ahk', 'app.ico', 'src', 'ui', 'lib'
-    , 'ComVar.ahk', 'Promise.ahk', 'icons', 'VirtualDesktopAccessor.dll', 'THIRD-PARTY.txt') | ForEach-Object { Join-Path $dist $_ }
+    , 'ComVar.ahk', 'Promise.ahk', 'icons', 'VirtualDesktopAccessor.dll', '23H2'
+    , 'THIRD-PARTY.txt') | ForEach-Object { Join-Path $dist $_ }
 Compress-Archive -Path $content -DestinationPath $zip -Force
 Write-Host "Done: $zip"
