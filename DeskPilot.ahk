@@ -417,8 +417,8 @@ T(k) {
         "rulePrompt2", ".`nPre-filled: the exact current title. Tip: (?i) = case-insensitive.",
         "ruleInvalid", "Invalid regex – the rule was not saved",
         "ruleSaved", "Rule saved → ",
-        "dsSave", "Save window position", "dsMove", "Move to saved position",
-        "dsForget", "Forget saved position", "dsRule", "Create title rule…",
+        "dsSave", "Save window position…", "dsMove", "Move to saved position",
+        "dsForget", "Forget saved position", "dsEditRule", "Edit rule…",
         "trayOpenUi", "Open DeskPilot…",
         "trayShowName", "Show desktop name", "trayOpenConfig", "Open configuration",
         "trayReloadConfig", "Reload configuration", "trayLanguage", "Language",
@@ -440,8 +440,8 @@ T(k) {
         "rulePrompt2", ".`nFörifyllt: exakt nuvarande titel. Tips: (?i) = skiftlägesokänslig.",
         "ruleInvalid", "Ogiltig regex – regeln sparades inte",
         "ruleSaved", "Regel sparad → ",
-        "dsSave", "Spara fönstrets läge", "dsMove", "Flytta till sparat läge",
-        "dsForget", "Glöm sparat läge", "dsRule", "Skapa titelregel…",
+        "dsSave", "Spara fönstrets läge…", "dsMove", "Flytta till sparat läge",
+        "dsForget", "Glöm sparat läge", "dsEditRule", "Ändra regel…",
         "trayOpenUi", "Öppna DeskPilot…",
         "trayShowName", "Visa skrivbordsnamn", "trayOpenConfig", "Öppna konfigurationen",
         "trayReloadConfig", "Läs om konfigurationen", "trayLanguage", "Språk",
@@ -871,8 +871,9 @@ VisaFönsterMeny(*) {
 ; ─── DalSegno integration ────────────────────────────────────────────────
 ; DalSegno (the window position keeper) exposes a command interface over the
 ; DALSEGNO_CMD registered message: wParam = target window, lParam 0 = query
-; (returns 1 = manageable, +2 = saved position exists), 1 = save position,
-; 2 = move to saved, 3 = forget, 4 = create title rule.
+; (returns 1 = manageable, +2 = saved position exists, +4 = matches an active
+; rule), 1 = save position (DalSegno's dialog settles what it applies to; for
+; a rule-matched window it edits that rule), 2 = move to saved, 3 = forget.
 
 ; The hwnd is cached: the full hidden-window title scan is too slow to run
 ; on every menu open, and the whole query sits in the gap between the eaten
@@ -1028,6 +1029,7 @@ VisaFönstermenyn(win, s, vidFönstret := false) {
     dsFlaggor := DalSegnoFlaggor(win)
     if dsFlaggor {
         harPos := dsFlaggor & 2
+        harRegel := dsFlaggor & 4
         ; A Windows menu has no real section header, so the heading is an item
         ; that is disabled and does nothing - the standard way to label a group.
         ; Headings appear ONLY when both scripts contribute: with DalSegno not
@@ -1035,10 +1037,14 @@ VisaFönstermenyn(win, s, vidFönstret := false) {
         ; there is would say nothing the menu does not already say.
         m.Add("DalSegno", (*) => "")
         m.Disable("DalSegno")
-        m.Add(T("dsSave"), (*) => DalSegnoKommando(win, 1))
+        ; One save item: DalSegno's dialog settles what the position applies
+        ; to, and for a window that already matches a rule the same command
+        ; edits that rule - so the label says which of the two it will be. The
+        ; separate "create title rule" item is gone: it and "save position"
+        ; differed only in a way the menu could not show.
+        m.Add(T(harRegel ? "dsEditRule" : "dsSave"), (*) => DalSegnoKommando(win, 1))
         m.Add(T("dsMove"), (*) => DalSegnoKommando(win, 2))
         m.Add(T("dsForget"), (*) => DalSegnoKommando(win, 3))
-        m.Add(T("dsRule"), (*) => DalSegnoKommando(win, 4))
         if !harPos {
             m.Disable(T("dsMove"))
             m.Disable(T("dsForget"))
@@ -1872,12 +1878,17 @@ VäxlaAutostart(*) {
     if FileExist(länk) {
         try FileDelete(länk)
     } else {
-        try {
-            if A_IsCompiled
-                FileCreateShortcut(A_ScriptFullPath, länk, A_ScriptDir)
-            else
-                FileCreateShortcut(A_AhkPath, länk, A_ScriptDir, '"' A_ScriptFullPath '"')
-        }
+        ; The shortcut points at the SCRIPT, not at AutoHotkey with the script
+        ; as an argument. A_ScriptFullPath is already the .exe when compiled, so
+        ; the two branches this used to have were one line saying it twice -
+        ; and the script branch was the broken one.
+        ;
+        ; Targeting A_AhkPath breaks on this machine: AutoHotkey is the Store
+        ; Edition, so it lives under Program Files\WindowsApps in a path
+        ; carrying its version number. The next AutoHotkey update changes that
+        ; path and the shortcut silently stops working - with nothing in the
+        ; Startup folder looking wrong.
+        try FileCreateShortcut(A_ScriptFullPath, länk, A_ScriptDir)
     }
     InitTray()   ; refresh the check mark
 }
