@@ -1,0 +1,18 @@
+# Runtime artifacts
+error.log
+selftest.txt
+ping.txt
+
+# User configuration (auto-generated with defaults on first run)
+DeskPilot config.ini
+
+# Third-party binary - download from Ciantic/VirtualDesktopAccessor releases,
+# see README
+VirtualDesktopAccessor.dll
+
+# Backups
+*.backup-*
+
+# Build output (attached to GitHub releases instead) and cached toolchain
+dist/
+build/
