@@ -10,19 +10,31 @@
 ;    HKCU\...\Explorer\VirtualDesktops\Desktops\{GUID}\Name   (name, if renamed)
 ;  Moving windows requires VirtualDesktopAccessor.dll (Ciantic, MIT) in the
 ;  script folder - the public IVirtualDesktopManager::MoveWindowToDesktop
-;  returns E_ACCESSDENIED for other processes' windows. Without the dll
-;  everything except window moves still works; switching falls back to
-;  sending Ctrl+Win+arrow.
+;  returns E_ACCESSDENIED for other processes' windows - and so does renaming
+;  desktops. Without the dll everything else still works; switching falls
+;  back to sending Ctrl+Win+arrow. The dll build must match the Windows
+;  feature update (see VDA_DLL below).
 ;
 ;  IPC: other scripts post RegisterWindowMessage("DESKPILOT_CMD") (or
 ;  "DALSEGNO_CMD") to this script's hidden main window. wParam: 1=switch,
 ;  2=move active window, 3=move+follow, 4=show name OSD, 5=reload config,
-;  6=next desktop, 7=previous, 8=open the GUI, 100=ping (writes ping.txt).
-;  lParam: desktop N (cmd 1-3).
+;  6=next desktop, 7=previous, 8=open the GUI, 9=save/rule dialog for a
+;  window, 10=query a window's flags, 11=rename prompt for a desktop,
+;  100=ping (writes ping.txt). lParam: desktop N (cmd 1-3, 11) or hwnd (9, 10).
 ; =============================================================================
 
 VD_KEY := "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops"
+; The dll is built against one Windows feature update's internal COM
+; interfaces: 24H2 (build 26100) restructured the VTable, so the current
+; release only fits 24H2 and later, while 23H2 (22631) needs the release
+; built for it. Calls that sit before the inserted slot happen to work with
+; the wrong dll (moving, switching); SetDesktopName does not. Both ship,
+; the build decides.
+; The 23H2 build keeps the file name, in its own folder, so the module name
+; the DllCalls use ("VirtualDesktopAccessor") is the same whichever loads.
 VDA_DLL := A_ScriptDir "\VirtualDesktopAccessor.dll"
+if (VerCompare(A_OSVersion, "10.0.26100") < 0 && FileExist(A_ScriptDir "\23H2\VirtualDesktopAccessor.dll"))
+    VDA_DLL := A_ScriptDir "\23H2\VirtualDesktopAccessor.dll"
 
 g_dllLoaded := false
 g_desktopHotkeys := []   ; what ApplyDesktopHotkeys registered
@@ -121,7 +133,7 @@ ReadDesktopStatus() {
             break
         }
     guid := HexToGuid(cur)
-    name := guid != "" ? RegRead(VD_KEY "\Desktops\" guid, "Name", "") : ""
+    name := index ? DesktopRawName(index, guid) : ""
     return {index: index, count: count, name: name, guid: guid}
 }
 
@@ -138,12 +150,30 @@ HexToGuid(hex) {
 }
 
 NameForIndex(i) {
-    global VD_KEY
-    ids := RegRead(VD_KEY, "VirtualDesktopIDs", "")
-    hex := SubStr(ids, (i - 1) * 32 + 1, 32)
-    guid := StrLen(hex) = 32 ? HexToGuid(hex) : ""
-    name := guid != "" ? RegRead(VD_KEY "\Desktops\" guid, "Name", "") : ""
+    name := DesktopRawName(i)
     return name != "" ? i " · " name : Tr("desktop") " " i
+}
+
+; A desktop's own name, "" when it has none. From the dll when it is loaded:
+; that is Explorer's live state, what Task View shows and what a rename
+; changes at once. The registry value is Explorer's saved copy, which it
+; writes back only now and then - a rename made through the dll does not
+; reach it - so it is the fallback, not the source.
+DesktopRawName(i, guid := "") {
+    global g_dllLoaded, VD_KEY
+    if g_dllLoaded {
+        try {
+            buf := Buffer(1024, 0)
+            if (DllCall("VirtualDesktopAccessor\GetDesktopName", "int", i - 1, "ptr", buf, "uptr", 1024, "int") > 0)
+                return StrGet(buf, "UTF-8")
+        }
+    }
+    if (guid = "") {
+        ids := RegRead(VD_KEY, "VirtualDesktopIDs", "")
+        hex := SubStr(ids, (i - 1) * 32 + 1, 32)
+        guid := StrLen(hex) = 32 ? HexToGuid(hex) : ""
+    }
+    return guid != "" ? RegRead(VD_KEY "\Desktops\" guid, "Name", "") : ""
 }
 
 ; "1 · Klinik", "2 · Lab", ... for every desktop; empty when the registry has
@@ -251,6 +281,7 @@ IpcCommand(wParam, lParam, msg, hwnd) {
         case 7: SwitchRelative(-1)
         case 8: OpenUi()
         case 9: SetTimer(TmSaveOrRule.Bind(lParam), -1)   ; the save/rule dialog for window lParam
+        case 11: SetTimer(RenameDesktopPrompt.Bind(lParam), -1)   ; the rename prompt for desktop lParam (1-based)
         case 10:   ; flags for window lParam: 1 = manageable, +2 = saved position, +4 = matches a rule
             key := ""
             try key := KeyFor(lParam)
@@ -497,7 +528,9 @@ ShowDesktopPicker() {
     m := Menu()
     loop s.count {
         n := A_Index
-        m.Add(NameForIndex(n), PickDesktop.Bind(n))
+        ; the desktop you are already on cannot be switched to - clicking it
+        ; renames it instead
+        m.Add(NameForIndex(n), n = s.index ? RenameDesktopPrompt.Bind(n) : PickDesktop.Bind(n))
         if (n = s.index)
             m.Check(NameForIndex(n))
     }
@@ -511,6 +544,69 @@ ShowDesktopPicker() {
 
 PickDesktop(n, *) {
     SwitchTo(n)
+}
+
+; Renames desktop n (1-based) after asking for the name - the current name
+; is prefilled, an empty name goes back to Windows' default. The prompt
+; opens on the monitor the mouse is on (the picker was just clicked there).
+RenameDesktopPrompt(n, *) {
+    global g_lastState
+    s := ReadDesktopStatus()
+    if (!s || n < 1 || n > s.count)
+        return
+    current := DesktopRawName(n)
+    opt := "w420 h140"
+    CoordMode("Mouse", "Screen")
+    MouseGetPos(&mx, &my)
+    loop MonitorGetCount() {
+        MonitorGetWorkArea(A_Index, &l, &t, &r, &b)
+        if (mx >= l && mx < r && my >= t && my < b) {
+            opt .= " x" ((l + r) // 2 - 210) " y" ((t + b) // 2 - 70)
+            break
+        }
+    }
+    ib := InputBox(Format(Tr("renamePrompt"), n), Tr("renameTitle"), opt, current)
+    if (ib.Result != "OK")
+        return
+    name := Trim(ib.Value)
+    if (name = current)
+        return
+    if !SetDesktopName(n, name) {
+        ShowOsdText(Tr("renameFailed"))
+        return
+    }
+    g_lastState := ""   ; the label and tray pick the new name up on the next poll
+    ShowOsdText(name != "" ? n " · " name : Tr("desktop") " " n)
+}
+
+; Through the dll when it is loaded: Explorer then shows the name everywhere
+; at once. The dll must match the Windows build - the wrong build's call
+; returns -1 (see VDA_DLL) and an old build has no SetDesktopName at all -
+; and then the rename fails rather than half-happens. The registry value is
+; Explorer's saved copy of the name: it does not write it back itself for a
+; while after a rename through the dll, so it is written here too, and
+; without the dll it is all there is to write (Task View then keeps the old
+; name until Explorer restarts).
+SetDesktopName(n, name) {
+    global g_dllLoaded, VD_KEY
+    if g_dllLoaded {
+        try {
+            buf := Buffer(StrPut(name, "UTF-8"), 0)
+            StrPut(name, buf, "UTF-8")
+            if (DllCall("VirtualDesktopAccessor\SetDesktopName", "int", n - 1, "ptr", buf, "int") != 1)
+                return false
+        } catch {
+            return false
+        }
+    }
+    try {
+        ids := RegRead(VD_KEY, "VirtualDesktopIDs", "")
+        guid := HexToGuid(SubStr(ids, (n - 1) * 32 + 1, 32))
+        if (guid = "")
+            return !!g_dllLoaded
+        RegWrite(name, "REG_SZ", VD_KEY "\Desktops\" guid, "Name")
+    }
+    return true
 }
 
 ; True when the cursor is inside the (visible) name label's rectangle - the

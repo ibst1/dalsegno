@@ -50,7 +50,7 @@ if (A_Args.Length && A_Args[1] = "/selftest") {
     out .= "`ndesktopHotkeys(" g_desktopHotkeys.Length ")=" keys
     s := ReadDesktopStatus()
     out .= "`ndesktops=" (s ? "index:" s.index " count:" s.count " name:" s.name : "(registry not readable)")
-    out .= "`ndll=" (FileExist(VDA_DLL) ? "present" : "missing")
+    out .= "`ndll=" (FileExist(VDA_DLL) ? "present " VDA_DLL : "missing")
     out .= "`nsetup=" SetupKey()
     try FileDelete(A_ScriptDir "\selftest.txt")
     FileAppend(out "`n", A_ScriptDir "\selftest.txt", "UTF-8")

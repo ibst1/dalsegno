@@ -22,6 +22,14 @@ config is a fresh file (see README), the positions file is unchanged.
   and `DALSEGNO_CMD` is the same interface under the new name.
 - Identifiers in English throughout; DeskPilot's history lives on under
   `legacy/deskpilot/`.
+- Rename the current desktop: in the desktop picker (left-click on the tray
+  icon or the taskbar label) the checked entry opens a rename prompt; an
+  empty name restores Windows' default.
+- Two builds of VirtualDesktopAccessor.dll ship and the running Windows build
+  picks one (the 23H2 build lives in the `23H2` folder). The latest
+  release is built for 24H2; on 23H2 (22631) its
+  internal COM VTable is off by one slot, which left moving and switching
+  working but renaming failing.
 
 The entries below are DeskPilot's, which this changelog continues.
 

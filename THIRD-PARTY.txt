@@ -9,8 +9,9 @@ Copyright (c) AutoHotkey Foundation and contributors
 https://github.com/AutoHotkey/AutoHotkey
 Licensed under the GNU General Public License v2.
 
-VirtualDesktopAccessor.dll
---------------------------
+VirtualDesktopAccessor.dll, 23H2\VirtualDesktopAccessor.dll
+------------------------------------------------------------
+(two builds of the same library, for Windows 11 24H2+ and 23H2)
 Copyright (c) Jarkko Pöyry (Ciantic)
 https://github.com/Ciantic/VirtualDesktopAccessor
 Licensed under the MIT License:
