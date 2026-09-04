@@ -57,9 +57,67 @@ OpenPositionsFile(*) {
     try Run('notepad.exe "' posIni '"')
 }
 
-; Positions are kept separate per monitor count + virtual desktop width + computer.
+; Positions are kept separate per monitor setup + computer. The setup is the
+; monitor count, the virtual screen width and a hash of every monitor's
+; rectangle: count + width alone let two docking stations with the same
+; screens but a different arrangement (one above the other here, side by
+; side there) share positions - and a position from the other arrangement
+; can lie entirely outside the screens.
+; Always measured system-DPI-aware: the window menu switches the thread to
+; per-monitor awareness while it is shown, and in that mode the same screens
+; measure differently (4x9600 instead of 4x10400 here) - a timer running
+; then would see a "new setup" and move every window to its saved place.
 SetupKey() {
-    return MonitorGetCount() "x" SysGet(78) "_" A_ComputerName
+    prev := DllCall("SetThreadDpiAwarenessContext", "ptr", -2, "ptr")   ; SYSTEM_AWARE
+    try return MonitorGetCount() "x" SysGet(78) "_" Hash32(MonitorLayout()) "_" A_ComputerName
+    finally {
+        if prev
+            DllCall("SetThreadDpiAwarenessContext", "ptr", prev, "ptr")
+    }
+}
+
+; The setup key as it was before the layout hash (2.0.x): positions saved
+; under it are still read when the current layout has none of its own.
+LegacySetupKey() {
+    prev := DllCall("SetThreadDpiAwarenessContext", "ptr", -2, "ptr")
+    try return MonitorGetCount() "x" SysGet(78) "_" A_ComputerName
+    finally {
+        if prev
+            DllCall("SetThreadDpiAwarenessContext", "ptr", prev, "ptr")
+    }
+}
+
+; Every monitor's rectangle, sorted so that the enumeration order does not
+; matter.
+MonitorLayout() {
+    rects := []
+    loop MonitorGetCount() {
+        MonitorGet(A_Index, &l, &t, &r, &b)
+        rects.Push(Format("{},{},{},{}", l, t, r, b))
+    }
+    ; insertion sort - a handful of items
+    loop rects.Length - 1 {
+        i := A_Index + 1
+        v := rects[i]
+        while (i > 1 && StrCompare(rects[i - 1], v) > 0)
+            rects[i] := rects[i - 1], i--
+        rects[i] := v
+    }
+    out := ""
+    for r in rects
+        out .= r ";"
+    return out
+}
+
+; True when at least a 100 px wide piece of the rectangle's title band (its
+; top 40 px) lies on some monitor, i.e. the window can be grabbed there.
+RectOnScreen(x, y, w, h) {
+    loop MonitorGetCount() {
+        MonitorGet(A_Index, &l, &t, &r, &b)
+        if (Min(x + w, r) - Max(x, l) >= 100 && Min(y + 40, b) > Max(y, t))
+            return true
+    }
+    return false
 }
 
 ; Ini section name: hash of the key + setup. The hash turns arbitrary titles
@@ -102,6 +160,7 @@ SavePos(key, hwnd) {
         IniWrite(w, posIni, section, "W")
         IniWrite(h, posIni, section, "H")
         IniWrite(mm = 1 ? 1 : 0, posIni, section, "Max")
+        Trace(Format("saved {} key={} {},{} {}x{} max={}", TraceWin(hwnd), key, x, y, w, h, mm = 1 ? 1 : 0))
         return true
     } catch as e {
         g_saveError := "write", g_saveErrorText := e.Message
@@ -141,6 +200,30 @@ NormalRect(hwnd, &x, &y, &w, &h) {
 LoadPos(key) {
     global posIni
     section := SectionFor(key)
+    p := ReadPosSection(key, section)
+    if (p != "")
+        return p
+    ; nothing for this layout yet: a position saved before the layout became
+    ; part of the setup key is adopted - copied to this layout's section - if
+    ; it lies on the screens as they are now
+    legacy := "K" Hash32(key) "_" LegacySetupKey()
+    p := ReadPosSection(key, legacy)
+    if (p = "" || !RectOnScreen(p.x, p.y, p.w, p.h))
+        return ""
+    try {
+        IniWrite(key, posIni, section, "Key")
+        IniWrite(IniRead(posIni, legacy, "Info", ""), posIni, section, "Info")
+        IniWrite(p.x, posIni, section, "X")
+        IniWrite(p.y, posIni, section, "Y")
+        IniWrite(p.w, posIni, section, "W")
+        IniWrite(p.h, posIni, section, "H")
+        IniWrite(p.max ? 1 : 0, posIni, section, "Max")
+    }
+    return p
+}
+
+ReadPosSection(key, section) {
+    global posIni
     if (IniRead(posIni, section, "Key", "") != key)
         return ""
     x := IniRead(posIni, section, "X", "")
@@ -164,23 +247,47 @@ MoveToSaved(hwnd, key) {
     p := LoadPos(key)
     if (p = "")
         return false
+    ; never push a window off the screens: a position whose title bar would
+    ; land outside every monitor is left unused (the window stays where the
+    ; app put it, and the next deliberate save replaces the position)
+    if !RectOnScreen(p.x, p.y, p.w, p.h) {
+        Trace(Format("move {} saved {},{} {}x{} max={} is OFF SCREEN - not applied", hwnd, p.x, p.y, p.w, p.h, p.max))
+        return true
+    }
     try {
         mm := WinGetMinMax(hwnd)
+        WinGetPos(&x, &y, &w, &h, hwnd)
+        Trace(Format("move {} saved {},{} {}x{} max={}; now {},{} {}x{} minmax={}", hwnd, p.x, p.y, p.w, p.h, p.max, x, y, w, h, mm))
         if (mm = -1)
             return true
         if (mm = 1) {
             if (p.max && MonitorFromWindow(hwnd) = MonitorAtPoint(p.x + p.w // 2, p.y + p.h // 2))
                 return true
             WinRestore(hwnd)
+            ; a Java frame restores asynchronously and then applies
+            ; its own bounds - moving before that is done gets undone
+            loop 10 {
+                Sleep 100
+                if (WinGetMinMax(hwnd) = 0)
+                    break
+            }
+            Trace("move " hwnd " restored after " A_Index "00 ms, minmax=" WinGetMinMax(hwnd))
         }
-        WinMove(p.x, p.y, p.w, p.h, hwnd)
-        ; twice: otherwise width/height do not stick when the window jumps to
-        ; a monitor with different resolution/scaling
-        Sleep 100
-        WinMove(p.x, p.y, p.w, p.h, hwnd)
+        ; repeated until the rectangle sticks: width/height do not take on
+        ; the first try when the window jumps to a monitor with a different
+        ; scaling, and a slow app may still be laying itself out
+        loop 4 {
+            WinMove(p.x, p.y, p.w, p.h, hwnd)
+            Sleep 100
+            WinGetPos(&x, &y, &w, &h, hwnd)
+            Trace(Format("move {} try {}: now {},{} {}x{}", hwnd, A_Index, x, y, w, h))
+            if (x = p.x && y = p.y && w = p.w && h = p.h)
+                break
+        }
         if p.max
             WinMaximize(hwnd)
-    }
+    } catch as e
+        Trace("move " hwnd " FAILED: " e.Message)
     return true
 }
 
@@ -218,23 +325,76 @@ PositionsPlace(hwnd, info, setup) {
         info.done := false
         info.seen := A_TickCount
     }
-    if (info.done || !moveEnabled)
+    if !moveEnabled
         return
+    if info.done {
+        PositionsSettle(hwnd, info)
+        return
+    }
+    if !WindowReady(hwnd)
+        return              ; 0x0 so far - the scan holds the grace for it
     if (A_TickCount - info.seen > PLACEMENT_GRACE_MS) {
         info.done := true   ; never got a recognizable title - give up
+        Trace("place " TraceWin(hwnd) " - grace over, giving up")
         return
     }
     key := KeyFor(hwnd)
     if (key = "")
         return              ; the title may arrive later - keep watching
-    if MoveToSaved(hwnd, key)
+    Trace("place " TraceWin(hwnd) " key=" key)
+    info.key := key
+    if MoveToSaved(hwnd, key) {
         info.done := true
+        ; the settling phase: see PositionsSettle
+        info.placed := LoadPos(key), info.settleUntil := A_TickCount + SETTLE_MS, info.reapplied := 0
+    } else
+        Trace("place " hwnd " - no saved position, keep watching")
+}
+
+; For SETTLE_MS after a placement the window is watched: an app that applies
+; its own bounds right after being shown (Java restores its last bounds and
+; maximized state, some apps re-center themselves) undoes the placement, so
+; it is applied again - at most twice; an app that insists wins. A move by
+; the user's hand (OnMoveEnd) ends the watch at once.
+SETTLE_MS := 3000
+PositionsSettle(hwnd, info) {
+    if !info.HasProp("settleUntil")
+        return
+    if (A_TickCount > info.settleUntil || info.HasProp("hand") || info.placed = "") {
+        info.DeleteProp("settleUntil"), info.DeleteProp("placed"), info.DeleteProp("reapplied")
+        return
+    }
+    try {
+        p := info.placed
+        mm := WinGetMinMax(hwnd)
+        WinGetPos(&x, &y, &w, &h, hwnd)
+        same := p.max ? (mm = 1) : (mm = 0 && x = p.x && y = p.y && w = p.w && h = p.h)
+        if (same || mm = -1)
+            return
+        if (info.reapplied >= 2) {
+            Trace(Format("settle {}: app keeps it at {},{} {}x{} minmax={} - giving up", hwnd, x, y, w, h, mm))
+            info.DeleteProp("settleUntil"), info.DeleteProp("placed"), info.DeleteProp("reapplied")
+            return
+        }
+        info.reapplied++
+        Trace(Format("settle {}: app moved it to {},{} {}x{} minmax={} - placing again ({})", hwnd, x, y, w, h, mm, info.reapplied))
+        MoveToSaved(hwnd, info.key)
+        info.settleUntil := A_TickCount + SETTLE_MS
+    }
 }
 
 ; Called by Windows when the user has released a window after moving/resizing.
 OnMoveEnd(hHook, event, hwnd, idObject, idChild, idThread, time) {
-    global autoSaveEnabled, g_modPositions
-    if (idObject != 0 || !autoSaveEnabled || !g_modPositions)
+    global autoSaveEnabled, g_modPositions, winInfo
+    if (idObject != 0 || !g_modPositions)
+        return
+    ; a window moved or resized by hand stays that way: the scan must never
+    ; pull it back to the saved position, whatever state it is in
+    if winInfo.Has(hwnd) {
+        winInfo[hwnd].done := true, winInfo[hwnd].hand := true
+        try winInfo[hwnd].key := KeyFor(hwnd)   ; so a later title change is not "new"
+    }
+    if !autoSaveEnabled
         return
     ; default: a drag only saves when the modifier is held while dropping -
     ; saving is then a deliberate gesture. Read HERE, at the drop.

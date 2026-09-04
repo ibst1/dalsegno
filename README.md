@@ -47,8 +47,11 @@ lives on under `legacy/deskpilot/`; the design of the merge is in
   matching — a window you drag back by hand stays there. All existing windows
   are evaluated once at start.
 - **Per monitor setup and computer**: positions are keyed by monitor count +
-  virtual desktop width + computer name, so laptop/docked layouts and
-  different machines never overwrite each other.
+  virtual desktop width + the monitors' arrangement + computer name, so
+  laptop/docked layouts and different machines never overwrite each other,
+  and a position from a docking station with the same screens arranged
+  differently is never applied. A position that would put the title bar
+  outside every monitor is left unused.
 
 ## The window menu
 
@@ -65,8 +68,12 @@ Hold **CapsLock** (configurable) and right-click anywhere in a window:
 The save item's dialog settles what the position applies to. For a window
 that matches no rule: *all windows of this program*, or *windows with … in
 the title* — a new rule, with the stable part of the title suggested
-(`Whole Genome View - 26MD12102_….cychp` → `Whole Genome View`). Programs
-marked rules-only get the title option alone. With the Desktops module on,
+(`Report View - 2026-09-04_run17.pdf` → `Report View`). The title
+option combines with the program: *only Viewer.exe windows* (ticked by
+default) makes the rule `/exe:Viewer.exe Settings` — Viewer windows called
+Settings, nothing else; untick it for a title that should match in every
+program. Programs marked rules-only get the title option alone. With the
+Desktops module on,
 the dialog also has a **Desktop** row (with *follow*): the rule's windows are
 moved there from now on; picking a desktop for "all windows of the program"
 creates a program rule so the decision shows up in the list. For a window

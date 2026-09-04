@@ -1,5 +1,56 @@
 # Changelog
 
+## 2.0.1 (2026-09-04)
+
+- Fix: a rule's desktop was not applied to a window that had just appeared.
+  Windows reports no desktop at all for a new window during its first tens
+  of milliseconds (longer for heavy apps), and the one early
+  attempt was silently lost. The desktop rules are now retried on every scan
+  for up to ten seconds after a title change, until the window can be moved.
+- Fix: the save dialog's text box wrapped and overlapped the controls below
+  when the suggested title contained a line break; the suggestion and the
+  typed text are now collapsed to one line, and the box is single-line.
+- Fix: windows placed outside the screens. Positions were keyed by monitor
+  count + virtual screen width only, so two docking stations with the same
+  screens arranged differently shared positions. The monitors' arrangement
+  is now part of the setup key (positions saved under the old key are
+  adopted the first time they are needed, if they lie on the current
+  screens), and a position whose title bar would land outside every monitor
+  is never applied.
+- Swedish: "läge" is now "position" throughout ("Spara fönstrets nuvarande
+  position", "Sparad position", …).
+- The save dialog's title option can be combined with the program: "only
+  Viewer.exe windows" (ticked by default) writes `/exe:Viewer.exe Settings`, so
+  the rule catches Viewer windows called Settings and nothing else. The rule
+  editor shows the same box; the descriptions read "Viewer.exe windows with
+  "Settings" in the title".
+- Fix: a rule with both a desktop and a saved position gave a slow app (Java)
+  the desktop but not the position. The scan now places the window before
+  the desktop move, waits for a maximized window to finish restoring, and
+  repeats the move until the rectangle sticks.
+- A window moved or resized by hand is never pulled back by the scan,
+  whatever state it is in.
+- Fix: a Java app got neither position nor desktop at start. Its
+  main frame is created 0x0, already titled, and shown for real only after
+  login and loading; the 0x0 frame was "placed" and the desktop rule gave up
+  on it, and when Java finally showed the frame with its own bounds nothing
+  happened any more. A window is now left alone until it has a size (the
+  grace periods start then), a title that changes a window's identity makes
+  it a new placement, and for three seconds after a placement the window is
+  watched: an app that applies its own bounds gets placed again (twice at
+  most; a move by hand ends the watch).
+- Placement trace: `Trace=1` under `[General]` writes what the scan decides
+  for each window to `trace.log` next to `error.log`. Note that the Store
+  edition of AutoHotkey redirects `%LOCALAPPDATA%` to its package folder
+  (`…\Packages\53721Descolada.AutoHotkeyv2StoreEdition_…\LocalCache\Local\DalSegno`).
+- Fix: picking an item in the window menu could snap every window with a
+  saved position back to it (a maximized window lost its size on
+  *Edit rule…*). The menu runs the thread per-monitor DPI aware while it is
+  shown; a scan interrupting it measured the screens in that mode, got a
+  different setup key (4x9600 instead of 4x10400) and treated every window
+  as new. The setup key is now always measured system-DPI-aware, and the
+  scan does not run while the menu is up.
+
 ## 2.0.0 (2026-09-03) — DalSegno Window Manager
 
 DalSegno (window positions) and DeskPilot (virtual desktops) merged into one

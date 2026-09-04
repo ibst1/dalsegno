@@ -81,7 +81,7 @@ characters in the title text (the pattern is everything after the switches):
 ; alias = [/exe:<program>] [/desktop:<n>] [/follow] [/off] <text or re:regex>
 forhandsgranska = Förhandsgranska
 patienthistorik = /exe:msedge.exe MED_PatientHistoryPopup
-whole           = Whole Genome View
+whole           = Report View
 expanto         = /desktop:5 re:^Expanto$
 deskpilot       = /desktop:2 /off re:^DeskPilot$
 spotify         = /exe:spotify.exe /desktop:2 /follow
@@ -144,8 +144,8 @@ The first item's dialog is today's DalSegno dialog with one row added:
 
 ```
 Vad ska läget gälla?
- ( ) Alla ChAS.exe-fönster
- (•) Fönster med [Whole Genome View     ] i titeln    [ ] regex
+ ( ) Alla Viewer.exe-fönster
+ (•) Fönster med [Report View           ] i titeln    [ ] regex
 Skrivbord:  [ (inget) ▾ ]   [ ] följ efter
 [x] Spara fönstrets nuvarande läge
                                          [ OK ]  [ Avbryt ]
@@ -170,7 +170,7 @@ module switches and DeskPilot's menu settings.
 
 | Gäller | Identitet | Aktiv | Skrivbord | X | Y | Bredd | Höjd | |
 |---|---|---|---|---|---|---|---|---|
-| fönster med `Whole Genome View` i titeln | regel: whole | ☑ | (inget) ▾ | −1851 | 1142 | 1799 | 944 | Flytta nu · Glöm · Ta bort · ↑↓ |
+| fönster med `Report View` i titeln | regel: whole | ☑ | (inget) ▾ | −1851 | 1142 | 1799 | 944 | Flytta nu · Glöm · Ta bort · ↑↓ |
 | fönster med `Förhandsgranska` i titeln, msedge.exe | regel: forhandsgranska | ☑ | 3 Klinik ▾ ☐ följ | 1951 | 34 | 1026 | 1008 | … |
 | fönster med `^Expanto$` (regex) i titeln | regel: expanto | ☑ | 5 ▾ | *inget läge ännu* | | | | |
 | alla EXCEL.EXE-fönster | standard | – | – | 1952 | 2700 | 228 | 703 | Flytta nu · Glöm |
