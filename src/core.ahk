@@ -50,6 +50,8 @@ rulesOnly    := false
 ;   done   fully handled by the positions module, never touched again
 ;   title  the title at the last scan - the desktop rules fire when a title
 ;          CHANGES into matching, not while it keeps matching
+;   deskOld/deskSince  present while a title change is still waiting for the
+;          desktop rules: the title before the change, and when it changed
 winInfo := Map()
 firstScan := true
 PLACEMENT_GRACE_MS := 10000
@@ -97,6 +99,8 @@ Tr(id) {
         "cannotSaveWin",  "Could not save the position.",
         "maximized",      "maximized",
         "appliesRule",    "windows with `"{1}`" in the title",
+        "appliesRuleExe", "{2} windows with `"{1}`" in the title",
+        "dlgExeOnly",     "only {1} windows",
         "appliesRuleGone", "rule `"{1}`" (no longer exists)",
         "appliesStd",     "all {1} windows",
         "menuSave",       "Save window position…",
@@ -159,45 +163,47 @@ Tr(id) {
     "sv", Map(
         "appTitle",       "DalSegno Window Manager",
         "trayOpen",       "Öppna DalSegno ({mod} + {kOpenUi})",
-        "trayMove",       "Flytta nya fönster till sparade lägen ({mod} + {kToggleMove})",
-        "trayAutoSave",   "Spara läge när fönster flyttas för hand",
-        "trayAutoSaveMod", "Spara läge när fönster flyttas med {mod} nedtryckt",
-        "trayToasts",     "Visa liten notis när läge sparas",
-        "traySaveAll",    "Spara alla öppna fönsters lägen",
-        "trayApplyAll",   "Flytta alla öppna fönster till sina lägen ({mod} + {kApplyAll})",
+        "trayMove",       "Flytta nya fönster till sparade positioner ({mod} + {kToggleMove})",
+        "trayAutoSave",   "Spara position när fönster flyttas för hand",
+        "trayAutoSaveMod", "Spara position när fönster flyttas med {mod} nedtryckt",
+        "trayToasts",     "Visa liten notis när position sparas",
+        "traySaveAll",    "Spara alla öppna fönsters positioner",
+        "trayApplyAll",   "Flytta alla öppna fönster till sina positioner ({mod} + {kApplyAll})",
         "trayShowName",   "Visa skrivbordsnamn",
         "trayLanguage",   "Språk",
         "trayConfig",     "Öppna konfigfilen…",
         "trayReload",     "Läs om inställningar",
-        "trayPositions",  "Öppna filen med sparade lägen…",
+        "trayPositions",  "Öppna filen med sparade positioner…",
         "trayAutostart",  "Starta med Windows",
         "trayRestart",    "Starta om ({mod} + {kReload})",
         "trayExit",       "Avsluta",
         "moveOn",         "Automatisk flyttning: PÅ",
         "moveOff",        "Automatisk flyttning: AV",
-        "autoSaveOn",     "Sparar läge vid manuell flytt: PÅ",
-        "autoSaveOff",    "Sparar läge vid manuell flytt: AV",
-        "toastSaved",     "Fönsterläge sparat",
-        "savedTitle",     "Läge sparat",
-        "savedAll",       "{1} fönsterlägen sparade.",
-        "movedAll",       "{1} fönster flyttades till sina sparade lägen.",
-        "noMatch",        "Inget öppet fönster matchar det sparade läget.",
-        "forgot",         "Glömde läget för:",
-        "nothingForget",  "Inget sparat läge att glömma för det aktiva fönstret.",
+        "autoSaveOn",     "Sparar position vid manuell flytt: PÅ",
+        "autoSaveOff",    "Sparar position vid manuell flytt: AV",
+        "toastSaved",     "Fönsterposition sparad",
+        "savedTitle",     "Position sparad",
+        "savedAll",       "{1} fönsterpositioner sparade.",
+        "movedAll",       "{1} fönster flyttades till sina sparade positioner.",
+        "noMatch",        "Inget öppet fönster matchar den sparade positionen.",
+        "forgot",         "Glömde positionen för:",
+        "nothingForget",  "Ingen sparad position att glömma för det aktiva fönstret.",
         "cannotHandle",   "Det aktiva fönstret hanteras inte (saknar titel, är ignorerat, eller matchar ingen regel).",
         "cannotHandleWin", "Fönstret hanteras inte (saknar titel, är ignorerat, eller matchar ingen regel).",
         "cannotSaveMin",  "Kunde inte spara - fönstret är minimerat.",
         "cannotSaveGone", "Kunde inte spara - fönstret finns inte längre.",
         "cannotSaveWrite", "Kunde inte spara - skrivningen till positionsfilen misslyckades (låst av OneDrive?):",
-        "cannotSaveWin",  "Kunde inte spara läget.",
+        "cannotSaveWin",  "Kunde inte spara positionen.",
         "maximized",      "maximerat",
         "appliesRule",    "fönster med `"{1}`" i titeln",
+        "appliesRuleExe", "{2}-fönster med `"{1}`" i titeln",
+        "dlgExeOnly",     "bara {1}-fönster",
         "appliesRuleGone", "regeln `"{1}`" (finns inte längre)",
         "appliesStd",     "alla {1}-fönster",
-        "menuSave",       "Spara fönstrets läge…",
+        "menuSave",       "Spara fönstrets position…",
         "menuEditRule",   "Ändra regel…",
-        "menuMove",       "Flytta till sparat läge",
-        "menuForget",     "Glöm sparat läge",
+        "menuMove",       "Flytta till sparad position",
+        "menuForget",     "Glöm sparad position",
         "menuMoveTo",     "Flytta till skrivbord",
         "menuMoveFollow", "Flytta och följ efter",
         "menuPin",        "Visa på alla skrivbord",
@@ -210,15 +216,15 @@ Tr(id) {
         "renameTitle",    "DalSegno - byt namn på skrivbord",
         "renamePrompt",   "Nytt namn för skrivbord {1} (tomt = Windows standardnamn):",
         "renameFailed",   "Kunde inte byta namn på skrivbordet",
-        "dlgSaveTitle",   "DalSegno - spara fönstrets läge",
+        "dlgSaveTitle",   "DalSegno - spara fönstrets position",
         "dlgEditRuleTitle", "DalSegno - ändra regel",
-        "dlgSaveIntro",   "Vad ska läget gälla?",
-        "dlgRuleIntro",   "Fönstret matchar regeln «{1}». Fönster med texten nedan i titeln delar ett läge.",
+        "dlgSaveIntro",   "Vad ska positionen gälla?",
+        "dlgRuleIntro",   "Fönstret matchar regeln «{1}». Fönster med texten nedan i titeln delar en position.",
         "dlgPre",         "Fönster med",
         "dlgPost",        "i titeln",
         "dlgRegex",       "Texten är ett reguljärt uttryck",
         "dlgEnabled",     "Regeln är aktiv",
-        "dlgSavePos",     "Spara fönstrets nuvarande läge",
+        "dlgSavePos",     "Spara fönstrets nuvarande position",
         "dlgDesktop",     "Skrivbord:",
         "dlgNoDesktop",   "(inget)",
         "dlgFollow",      "följ efter",
@@ -226,9 +232,9 @@ Tr(id) {
         "dlgCancel",      "Avbryt",
         "ruleNotInTitle", "Texten finns inte i fönstrets titel - inget sparades:",
         "ruleShadowed",   "Regeln «{1}» sparades, men fönstret fångas av den tidigare regeln «{2}» som har företräde. Ändra ordningen i listan.",
-        "ruleSaved",      "Regeln «{1}» = «{2}» skapad och fönstrets läge sparat. Fönster med den texten i titeln hamnar nu här.",
-        "ruleOff",        "Regeln «{1}» är avstängd - läget sparades inte.",
-        "ruleNoMatch",    "Regeln «{1}» matchar inte längre fönstret - läget sparades inte.",
+        "ruleSaved",      "Regeln «{1}» = «{2}» skapad och fönstrets position sparad. Fönster med den texten i titeln hamnar nu här.",
+        "ruleOff",        "Regeln «{1}» är avstängd - positionen sparades inte.",
+        "ruleNoMatch",    "Regeln «{1}» matchar inte längre fönstret - positionen sparades inte.",
         "badMenuHotkey",  "Knappen i inställningarna är inte en giltig knapp:",
         "badHotkey",      "Ogiltigt tangentnamn:",
         "dupHotkey",      "Används redan av ett annat kortkommando:",
@@ -240,10 +246,10 @@ Tr(id) {
         "hkText",         "
         (
         {mod} + {kOpenUi}  -  öppna DalSegno-fönstret
-        {mod} + {kSaveActive}  -  spara det aktiva fönstrets läge
-        {mod} + {kSaveAll}  -  spara alla öppna fönsters lägen
-        {mod} + {kForgetActive}  -  glöm det aktiva fönstrets sparade läge
-        {mod} + {kApplyAll}  -  flytta alla öppna fönster till sina sparade lägen
+        {mod} + {kSaveActive}  -  spara det aktiva fönstrets position
+        {mod} + {kSaveAll}  -  spara alla öppna fönsters positioner
+        {mod} + {kForgetActive}  -  glöm det aktiva fönstrets sparade position
+        {mod} + {kApplyAll}  -  flytta alla öppna fönster till sina sparade positioner
         {mod} + {kToggleMove}  -  av/på: flytta nya fönster automatiskt
         {mod} + {kReload}  -  starta om skriptet
         {mod} + högerklick  -  fönstermenyn
@@ -483,6 +489,8 @@ LoadConfig() {
     g_modPositions := IniRead(configIni, "Modules", "Positions", 1) != "0"
     g_modDesktops  := IniRead(configIni, "Modules", "Desktops", 1) != "0"
     g_lang := IniRead(configIni, "General", "Language", "sv") = "en" ? "en" : "sv"
+    global g_trace
+    g_trace := IniRead(configIni, "General", "Trace", 0) = 1
     g_modifier := Trim(IniRead(configIni, "Menu", "Modifier", "CapsLock"))
     g_menuButton := Trim(IniRead(configIni, "Menu", "Button", "RButton"))
     g_menuOn := IniRead(configIni, "Menu", "Enabled", 1) != "0"
@@ -567,7 +575,7 @@ DeleteRule(alias) {
 }
 
 ; Alias for a new rule: the pattern folded to a-z0-9 and cut to 24 characters
-; ("Whole Genome View" -> "wholegenomeview"), made unique among the existing
+; ("Report View" -> "reportview"), made unique among the existing
 ; rules. The exe name is the fallback for a pattern without letters.
 SuggestAlias(pattern, exe) {
     global titleRules
@@ -597,10 +605,13 @@ FoldAscii(s) {
 ; The part of a title that tends to stay the same from window to window: the
 ; text before the first " - ", " – " or " | " separator, minus trailing words
 ; that carry digits (sample ids, counters).
-;   "Whole Genome View - 26MD12102_260901.cyhd_Accel.ND.cychp" -> "Whole Genome View"
-;   "Förhandsgranska 26MD12097 - lims-lab1.i.skane.se/…"        -> "Förhandsgranska"
+;   "Report View - 2026-09-04_run17.pdf" -> "Report View"
+;   "Preview 4711 - intranet.example.org/…"          -> "Preview"
 SuggestPattern(title) {
-    s := RegExReplace(title, "\s+[-–|]\s+.*$", "")
+    ; a line break in a title (some Java apps) would make the dialog's Edit
+    ; multi-line and split the ini value: one line, single spaces
+    s := RegExReplace(title, "\s+", " ")
+    s := RegExReplace(s, "\s+[-–|]\s+.*$", "")
     s := RegExReplace(s, "(\s+\S*\d\S*)+\s*$", "")
     s := Trim(s, " `t:-–")
     return (s != "") ? s : title
@@ -724,8 +735,13 @@ DescribeKey(key) {
     if (SubStr(key, 1, 5) = "rule:") {
         alias := SubStr(key, 6)
         r := RuleByAlias(alias)
-        if (r != "")
-            return Format(Tr("appliesRule"), r.pattern != "" ? r.pattern : r.exe)
+        if (r != "") {
+            if (r.pattern = "")
+                return Format(Tr("appliesStd"), r.exe)
+            if (r.exe != "")
+                return Format(Tr("appliesRuleExe"), r.pattern, r.exe)
+            return Format(Tr("appliesRule"), r.pattern)
+        }
         return Format(Tr("appliesRuleGone"), alias)
     }
     return Format(Tr("appliesStd"), StrSplit(key, "|")[1])
@@ -745,6 +761,27 @@ PatternFor(key) {
 ; =============================================================================
 
 ScanWindows() {
+    global winInfo, firstScan, g_modPositions, g_modDesktops, g_menuOpen
+    ; Never while the window menu is up. The menu runs the thread per-monitor
+    ; DPI aware, and a timer interrupting it inherits that: every coordinate
+    ; read or written here would be in the wrong space - the setup key
+    ; changed, every window looked new and was moved to its saved place
+    ; (a maximized window snapped back to its old rectangle when
+    ; "Edit rule" was picked). Checked directly, the menu flag as well.
+    if g_menuOpen
+        return
+    ; and whatever context the interrupted thread left, the scan measures
+    ; and moves in the system-aware one - the space every saved position is
+    ; in - and hands the previous context back when it is done
+    prevDpi := DllCall("SetThreadDpiAwarenessContext", "ptr", -2, "ptr")   ; SYSTEM_AWARE
+    try ScanWindowsBody()
+    finally {
+        if prevDpi
+            DllCall("SetThreadDpiAwarenessContext", "ptr", prevDpi, "ptr")
+    }
+}
+
+ScanWindowsBody() {
     global winInfo, firstScan, g_modPositions, g_modDesktops
     setup := SetupKey()
     alive := Map()
@@ -757,14 +794,62 @@ ScanWindows() {
             ; otherwise the whole desktop would get rearranged on every start.
             ; The desktop rules DO see them once (old title = ""), as they
             ; always have.
-            winInfo[hwnd] := { seen: A_TickCount, setup: setup, done: firstScan, title: "" }
+            ; key: the identity the window was placed under; "*" for the
+            ; windows found at start (never placed, never re-placed)
+            winInfo[hwnd] := { seen: A_TickCount, setup: setup, done: firstScan, title: ""
+                , key: firstScan ? "*" : "" }
+            if !firstScan
+                Trace("new window " TraceWin(hwnd))
         }
         info := winInfo[hwnd]
-        if (g_modDesktops && title != "" && title != info.title)
-            DesktopRuleSweep(hwnd, title, info.title)
-        info.title := title
+        ready := WindowReady(hwnd)
+        if (title != "" && title != info.title) {
+            Trace("title " hwnd " [" SubStr(info.title, 1, 40) "] -> [" SubStr(title, 1, 40) "]")
+            ; a title that changes the window's IDENTITY (untitled -> titled,
+            ; or into a rule) makes it a new placement: a Java app can sit
+            ; untitled for a minute of loading before the real title comes
+            if (g_modPositions && info.done && info.key != "*") {
+                k := KeyFor(hwnd)
+                if (k != "" && k != info.key) {
+                    info.done := false, info.seen := A_TickCount
+                    Trace("identity " hwnd " [" info.key "] -> [" k "], placing again")
+                }
+            }
+        }
+        ; a window that is not real yet - no size (a Java frame is created
+        ; 0x0 with its title and shown for real much later) - is neither
+        ; placed nor timed: the grace periods start when it becomes real
+        if !ready {
+            info.seen := A_TickCount
+            if info.HasProp("deskSince")
+                info.deskSince := A_TickCount
+        }
+        ; the position BEFORE the desktop: a window sent to another desktop
+        ; is cloaked and has no identity until the desktop is shown, and a
+        ; slow app (Java) gets its place while it is still settling
         if g_modPositions
             PositionsPlace(hwnd, info, setup)
+        if (g_modDesktops && title != "" && title != info.title) {
+            if firstScan {
+                ; the windows found at start: one look, as always
+                DesktopRuleSweep(hwnd, title, "")
+            } else if !info.HasProp("deskOld") {
+                ; a new title: the desktop rules get a look. Not just once -
+                ; for up to PLACEMENT_GRACE_MS (counted from when the window
+                ; is real) the sweep is repeated until it can act: a window
+                ; that has just appeared has no desktop yet (the DLL reports
+                ; -1 for the first tens of ms; a Java frame is 0x0 until it
+                ; is shown), and a single early attempt was silently lost.
+                info.deskOld := info.title, info.deskSince := A_TickCount
+            }
+        }
+        if (info.HasProp("deskOld") && ready) {
+            swept := DesktopRuleSweep(hwnd, title, info.deskOld)
+            Trace("desktop sweep " hwnd " -> " (swept ? "settled" : "retry"))
+            if (swept || A_TickCount - info.deskSince > PLACEMENT_GRACE_MS)
+                info.DeleteProp("deskOld"), info.DeleteProp("deskSince")
+        }
+        info.title := title
     }
     ; Prune closed windows so the map does not grow all day.
     stale := []
@@ -1123,10 +1208,16 @@ TmSaveOrRule(hwnd) {
     if rule {
         g.AddText("w560", Format(Tr("dlgRuleIntro"), rule.alias))
         g.AddText("xm y+14", Tr("dlgPre"))
-        ctl["pattern"] := g.AddEdit("x+6 yp-4 w360", rule.pattern)
+        ctl["pattern"] := g.AddEdit("x+6 yp-4 w400 r1", rule.pattern)
         g.AddText("x+6 yp+4", Tr("dlgPost"))
         ctl["regex"] := g.AddCheckbox("xm y+12", Tr("dlgRegex"))
         ctl["regex"].Value := rule.regex ? 1 : 0
+        ; the program condition: the rule's own program, or this window's
+        ; when the rule has none yet (regex programs are left to the list)
+        if !rule.exeRegex {
+            ctl["exeOnly"] := g.AddCheckbox("xm y+6", Format(Tr("dlgExeOnly"), rule.exe != "" ? rule.exe : info.exe))
+            ctl["exeOnly"].Value := rule.exe != "" ? 1 : 0
+        }
         ctl["enabled"] := g.AddCheckbox("xm y+6", Tr("dlgEnabled"))
         ctl["enabled"].Value := rule.enabled ? 1 : 0
     } else {
@@ -1137,11 +1228,16 @@ TmSaveOrRule(hwnd) {
             ctl["byTitle"] := g.AddRadio("xm y+8", Tr("dlgPre"))
         } else
             g.AddText("xm y+14", Tr("dlgPre"))
-        ctl["pattern"] := g.AddEdit("x+6 yp-4 w360", SuggestPattern(info.title))
+        ctl["pattern"] := g.AddEdit("x+6 yp-4 w400 r1", SuggestPattern(info.title))
         g.AddText("x+6 yp+4", Tr("dlgPost"))
         ctl["regex"] := g.AddCheckbox("xm y+12", Tr("dlgRegex"))
-        if progOption   ; clicking into the text is choosing the rule
+        ; program AND title: "Viewer.exe windows with Settings in the title" -
+        ; ticked by default, a title alone is rarely what is meant
+        ctl["exeOnly"] := g.AddCheckbox("xm y+6 Checked", Format(Tr("dlgExeOnly"), info.exe))
+        if progOption {   ; clicking into the text is choosing the rule
             ctl["pattern"].OnEvent("Focus", (*) => ctl["byTitle"].Value := 1)
+            ctl["exeOnly"].OnEvent("Click", (*) => ctl["byTitle"].Value := 1)
+        }
     }
     ; the desktop row: which desktop the rule's windows go to
     if g_modDesktops {
@@ -1174,23 +1270,26 @@ TmSaveOrRule(hwnd) {
 }
 
 RuleDialogOk(g, hwnd, alias, ctl, info) {
-    pattern := Trim(ctl["pattern"].Value)
+    pattern := Trim(RegExReplace(ctl["pattern"].Value, "\s*[\r\n]+\s*", " "))
     regex := ctl["regex"].Value ? true : false
     enabled := true, useProg := false
     keepPos := ctl["save"].Value ? true : false
     desktop := ctl.Has("desktop") ? ctl["desktop"].Value - 1 : 0
     follow := ctl.Has("follow") && ctl["follow"].Value ? true : false
+    ; the program condition of a title rule; "" = the rule keeps what it has
+    ; (a regex program has no checkbox), "-" = no program condition
+    exeCond := ctl.Has("exeOnly") ? (ctl["exeOnly"].Value ? info.exe : "-") : ""
     if (alias != "") {
-        if (pattern = "")
-            return
+        if (pattern = "" && exeCond = "-")
+            return                      ; a rule needs a text or a program
         enabled := ctl["enabled"].Value ? true : false
     } else if (ctl.Has("prog") && ctl["prog"].Value) {
         useProg := true
     } else {
-        if (pattern = "")
+        if (pattern = "" && exeCond = "-")
             return
-        matches := false
-        try matches := regex ? RegExMatch(info.title, pattern) : InStr(info.title, pattern)
+        matches := pattern = ""
+        try matches := matches || (regex ? RegExMatch(info.title, pattern) : InStr(info.title, pattern))
         if !matches {
             TrayTip Tr("ruleNotInTitle") "`n" pattern, Tr("appTitle")
             return                      ; the dialog stays open for a correction
@@ -1198,10 +1297,10 @@ RuleDialogOk(g, hwnd, alias, ctl, info) {
     }
     g.Hide()
     SetTimer(RuleDialogApply.Bind(hwnd, alias, pattern, regex, enabled, keepPos, useProg
-        , desktop, follow, info.exe), -1)
+        , desktop, follow, info.exe, exeCond), -1)
 }
 
-RuleDialogApply(hwnd, alias, pattern, regex, enabled, keepPos, useProg, desktop, follow, exe) {
+RuleDialogApply(hwnd, alias, pattern, regex, enabled, keepPos, useProg, desktop, follow, exe, exeCond) {
     global g_ruleDlg
     if g_ruleDlg {
         try g_ruleDlg.Destroy()
@@ -1213,6 +1312,10 @@ RuleDialogApply(hwnd, alias, pattern, regex, enabled, keepPos, useProg, desktop,
             return
         r.pattern := pattern, r.regex := regex, r.enabled := enabled
         r.desktop := desktop, r.follow := follow
+        if (exeCond = "-")
+            r.exe := "", r.exeRegex := false
+        else if (exeCond != "" && r.exe = "")
+            r.exe := exeCond, r.exeRegex := false
         WriteRule(r)
         LoadConfig()
         ; the position is saved BEFORE the window is sent to its desktop: a
@@ -1247,7 +1350,7 @@ RuleDialogApply(hwnd, alias, pattern, regex, enabled, keepPos, useProg, desktop,
             SaveUnderKey(hwnd, key)
         return
     }
-    CreateRuleAndSave(hwnd, pattern, regex, "", desktop, follow, keepPos)
+    CreateRuleAndSave(hwnd, pattern, regex, exeCond = "-" ? "" : exeCond, desktop, follow, keepPos)
 }
 
 ; Writes a rule for the pattern (or the program, when the pattern is empty) -
@@ -1261,7 +1364,7 @@ CreateRuleAndSave(hwnd, pattern, regex, exe, desktop, follow, keepPos) {
     global configIni, titleRules, winInfo
     alias := ""
     for r in titleRules
-        if (r.regex = regex && r.pattern == pattern && (pattern != "" ? r.exe = "" : StrLower(r.exe) = StrLower(exe))) {
+        if (r.regex = regex && r.pattern == pattern && !r.exeRegex && StrLower(r.exe) = StrLower(exe)) {
             alias := r.alias
             r.enabled := true, r.desktop := desktop, r.follow := follow
             WriteRule(r)
@@ -1269,7 +1372,7 @@ CreateRuleAndSave(hwnd, pattern, regex, exe, desktop, follow, keepPos) {
         }
     if (alias = "") {
         alias := SuggestAlias(pattern, exe)
-        WriteRule({ alias: alias, pattern: pattern, regex: regex, exe: pattern = "" ? exe : ""
+        WriteRule({ alias: alias, pattern: pattern, regex: regex, exe: exe
             , exeRegex: false, desktop: desktop, follow: follow, enabled: true })
     }
     LoadConfig()
@@ -1410,6 +1513,46 @@ ErrorLogPath() {
     dir := EnvGet("LOCALAPPDATA") "\DalSegno"
     try DirCreate(dir)
     return path := dir "\error.log"
+}
+
+; Placement trace, on with [General] Trace=1: what the scan decides for each
+; window (identity, saved position, moves and their outcome), next to the
+; error log. For the "it went to the wrong place" reports.
+g_trace := false
+Trace(msg) {
+    global g_trace
+    if !g_trace
+        return
+    try FileAppend(FormatTime(, "HH:mm:ss") "." Mod(A_TickCount, 1000) "  " msg "`n"
+        , TracePath(), "UTF-8")
+}
+
+TracePath() {
+    static path := ""
+    if (path != "")
+        return path
+    dir := EnvGet("LOCALAPPDATA") "\DalSegno"
+    try DirCreate(dir)
+    return path := dir "\trace.log"
+}
+
+; A window that exists for real: it has a size. Java creates its frames 0x0
+; (already titled) and gives them their bounds when it finally shows them -
+; anything done to the 0x0 frame is overwritten then, and the desktop
+; manager does not know it yet either.
+WindowReady(hwnd) {
+    try {
+        WinGetPos(, , &w, &h, hwnd)
+        return w > 0 && h > 0
+    }
+    return false
+}
+
+; Short description of a window for the trace: hwnd, program, class, title.
+TraceWin(hwnd) {
+    s := hwnd
+    try s .= " " WinGetProcessName(hwnd) "|" WinGetClass(hwnd) " [" SubStr(WinGetTitle(hwnd), 1, 40) "]"
+    return s
 }
 
 ; Silent tray apps need a trace when something breaks; no dialog, or a

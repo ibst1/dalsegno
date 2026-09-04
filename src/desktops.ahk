@@ -444,33 +444,49 @@ DesktopBringHere(hwnd) {
 }
 
 ; A rule with a desktop, applied to one window: moved if it is elsewhere,
-; followed if the rule says so.
+; followed if the rule says so. False = could not act YET: a window that has
+; only just appeared is not on any desktop as far as the DLL is concerned
+; (GetWindowDesktopNumber returns -1 for the first tens of ms, longer for
+; heavy apps) and the move fails - the caller is expected to try again.
 DesktopApplyToWindow(hwnd, desktop, follow) {
     global g_dllLoaded, g_modDesktops
     if (!g_modDesktops || !g_dllLoaded || !desktop)
-        return
+        return true
     nr := -1
     try nr := DllCall("VirtualDesktopAccessor\GetWindowDesktopNumber", "ptr", hwnd, "int")
-    if (nr < 0 || nr = desktop - 1)
-        return
-    if (DllCall("VirtualDesktopAccessor\MoveWindowToDesktopNumber"
-        , "ptr", hwnd, "int", desktop - 1, "int") && follow) {
+    if (nr < 0)
+        return false
+    if (nr = desktop - 1)
+        return true
+    if !DllCall("VirtualDesktopAccessor\MoveWindowToDesktopNumber"
+        , "ptr", hwnd, "int", desktop - 1, "int")
+        return false
+    if follow {
         SwitchTo(desktop)
         SetTimer(ActivateWindow.Bind(hwnd), -400)
     }
+    return true
 }
 
 ; Called from the window scan for a window that is new (old title "") or
 ; whose title changed. The first active rule WITH a desktop that matches is
 ; applied - and only when the title CHANGED into matching: a window dragged
 ; back by hand stays where it was put. Exe-only rules act on new windows.
+; Returns true when the sweep is finished with this title change (rule
+; applied, or no rule wants the window) and false when it should be repeated
+; on the next scan: the window has no identity yet, or no desktop yet.
 DesktopRuleSweep(hwnd, title, oldTitle) {
     global titleRules, g_dllLoaded
     if !g_dllLoaded
-        return
+        return true
     info := BaseInfo(hwnd)
-    if (info = "")
-        return
+    if (info = "") {
+        ; try again only while the rejection can still pass: cloaked or
+        ; untitled while appearing. Our own windows, tool windows, ignored
+        ; programs are settled at once.
+        cloaked := IsCloaked(hwnd)
+        return !(cloaked || title = "")
+    }
     for rule in titleRules {
         if (!rule.enabled || !rule.desktop)
             continue
@@ -481,9 +497,9 @@ DesktopRuleSweep(hwnd, title, oldTitle) {
                 continue   ; matched before too - no new event
         } else if (oldTitle != "")
             continue       ; exe-only rules act on new windows only
-        DesktopApplyToWindow(hwnd, rule.desktop, rule.follow)
-        break
+        return DesktopApplyToWindow(hwnd, rule.desktop, rule.follow)
     }
+    return true
 }
 
 ; The system DPI and font metrics are captured at process start, so the
