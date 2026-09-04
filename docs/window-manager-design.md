@@ -68,7 +68,7 @@ A rule is a **match** plus **actions**. The match is what DalSegno already
 has (text in the title, or `re:` regex) extended with DeskPilot's optional
 program match. The actions are a target desktop (DeskPilot) and being a
 position identity (DalSegno). Every rule is a position identity whether or
-not a position has been saved under it, so a desktop rule for LIMS popups
+not a position has been saved under it, so a desktop rule for a web app's popups
 also gives those popups a place to keep a position.
 
 ### Config line
@@ -79,9 +79,9 @@ characters in the title text (the pattern is everything after the switches):
 ```ini
 [Rules]
 ; alias = [/exe:<program>] [/desktop:<n>] [/follow] [/off] <text or re:regex>
-forhandsgranska = Förhandsgranska
-patienthistorik = /exe:msedge.exe MED_PatientHistoryPopup
-whole           = Report View
+preview         = Preview
+history         = /exe:msedge.exe CustomerHistoryPopup
+report          = Report View
 expanto         = /desktop:5 re:^Expanto$
 deskpilot       = /desktop:2 /off re:^DeskPilot$
 spotify         = /exe:spotify.exe /desktop:2 /follow
@@ -135,7 +135,7 @@ Spara fönstrets läge…      ← "Ändra regel…" when an active rule matches
 Flytta till sparat läge
 Glöm sparat läge
 ────────────────────────
-Flytta till skrivbord   ▸  1 Klinik · 2 Lab · 3 …
+Flytta till skrivbord   ▸  1 Work · 2 Home · 3 …
 Flytta och följ efter   ▸
 ☐ Visa på alla skrivbord
 ```
@@ -170,8 +170,8 @@ module switches and DeskPilot's menu settings.
 
 | Gäller | Identitet | Aktiv | Skrivbord | X | Y | Bredd | Höjd | |
 |---|---|---|---|---|---|---|---|---|
-| fönster med `Report View` i titeln | regel: whole | ☑ | (inget) ▾ | −1851 | 1142 | 1799 | 944 | Flytta nu · Glöm · Ta bort · ↑↓ |
-| fönster med `Förhandsgranska` i titeln, msedge.exe | regel: forhandsgranska | ☑ | 3 Klinik ▾ ☐ följ | 1951 | 34 | 1026 | 1008 | … |
+| fönster med `Report View` i titeln | regel: report | ☑ | (inget) ▾ | −1851 | 1142 | 1799 | 944 | Flytta nu · Glöm · Ta bort · ↑↓ |
+| fönster med `Preview` i titeln, msedge.exe | regel: preview | ☑ | 3 Office ▾ ☐ följ | 1951 | 34 | 1026 | 1008 | … |
 | fönster med `^Expanto$` (regex) i titeln | regel: expanto | ☑ | 5 ▾ | *inget läge ännu* | | | | |
 | alla EXCEL.EXE-fönster | standard | – | – | 1952 | 2700 | 228 | 703 | Flytta nu · Glöm |
 
