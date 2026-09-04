@@ -176,7 +176,7 @@ DesktopRawName(i, guid := "") {
     return guid != "" ? RegRead(VD_KEY "\Desktops\" guid, "Name", "") : ""
 }
 
-; "1 · Klinik", "2 · Lab", ... for every desktop; empty when the registry has
+; "1 · Work", "2 · Home", ... for every desktop; empty when the registry has
 ; nothing (module off or Explorer not ready).
 DesktopNames() {
     global g_modDesktops

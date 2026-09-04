@@ -137,8 +137,8 @@ Left-click the tray icon opens the desktop picker when Desktops is on;
 ```ini
 [Rules]
 ; alias = [/exe:<program>] [/desktop:<n>] [/follow] [/off] <text or re:regex>
-forhandsgranska = Förhandsgranska
-patienthistorik = /exe:msedge.exe MED_PatientHistoryPopup
+preview         = Preview
+history         = /exe:msedge.exe CustomerHistoryPopup
 expanto         = /desktop:5 re:^Expanto$
 spotify         = /exe:spotify.exe /desktop:2 /follow
 old             = /desktop:2 /off re:^Something$
