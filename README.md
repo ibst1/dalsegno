@@ -10,6 +10,9 @@ each switchable on its own:
 - **Positions** — move a window by hand and every window like it returns to
   that spot. Positions are kept per monitor setup and per computer;
   maximized windows come back maximized on the same monitor.
+  Office windows that open entirely off the screens are slid back on (a
+  safety net for the way Word reopens a document where a monitor used to
+  be).
 - **Desktops** — always see which virtual desktop you are on (numbered tray
   icon, overlay on every switch, the desktop name on the taskbar), and move
   windows between desktops with hotkeys, the mouse wheel, the window menu or
@@ -118,10 +121,15 @@ Left-click the tray icon opens the desktop picker when Desktops is on;
 
 - **Positions** — one row per rule for the selected monitor setup (with its
   position, or *no position yet*), plus program identities that have a
-  position. Text, regex flag, program and desktop are edited right in the
-  row and saved when you leave the field; **Active** switches a rule off
-  without deleting it; ▲▼ reorder rules (the first match wins). *Move now*,
-  *Forget* and *Delete rule* per row; *+ Add rule* for a new row.
+  position. **Identity** shows what the position is stored under: the
+  rule's name, or for a standard row the window class, which is what tells
+  one program's rows apart (main window, dialogs, helper windows). Text,
+  regex flag, program and desktop are edited right in the row and saved
+  when you leave the field; **Active** switches a rule off without deleting
+  it; ▲▼ reorder rules (the first match wins). *Move now*, *Forget* and
+  *Delete rule* per row; *+ Add rule* for a new row. The filter box in the
+  toolbar narrows the list to rows whose program, class, rule name, rule
+  text or saved-from title contains what you type (Esc clears).
 - **Windows** — the open windows: program, title, desktop (pick another to
   move it), identity, saved position; *Save position*, *Move there*, and
   *Rule…* / *Edit rule…* for the dialog.

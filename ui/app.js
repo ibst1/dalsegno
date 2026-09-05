@@ -21,7 +21,7 @@ const STR = {
     thWindow: 'Applies to', thIdentity: 'Identity', thActive: 'Active', thDesktop: 'Desktop',
     thWidth: 'Width', thHeight: 'Height',
     thWindowTip: 'Which windows the row applies to. A rule\'s text and program are edited right here and saved when you leave the field. Hover a row for the window the position was saved from.',
-    thIdentityTip: 'What the position is stored under - that is, which windows share it. "standard" means all windows of the same program and window class; "rule" means all windows the rule matches.',
+    thIdentityTip: 'What the position is stored under - that is, which windows share it. A standard row shows the window class: every window of that program with that class shares the position, so several rows for one program are its different kinds of window (main window, dialogs, helper windows). A rule row shows the rule\'s name: every window the rule matches shares the position.',
     thActiveTip: 'Untick to switch a rule off without deleting it: its windows are then treated like any other window of their program, and its saved position waits until it is ticked again.',
     thDesktopTip: 'The virtual desktop the rule\'s windows are moved to when they appear or their title changes into matching. "follow" switches along.',
     thXTip: 'Distance from the left edge of the desktop, in pixels.',
@@ -31,6 +31,9 @@ const STR = {
     forgetSel: 'Forget selected', saveAll: 'Save all now', saveAllTip: "Save every open window's current position",
     applyAll: 'Move all now', applyAllTip: 'Move every open window to its saved position ({mod} + Home)',
     addRule: '+ Add rule', addRuleTip: 'A new rule row - type the text and press Enter',
+    filterPh: 'Filter…',
+    filterTip: 'Show only rows whose program, window class, rule name, rule text or saved-from title contains this text. Esc clears it.',
+    posNoMatch: 'No rows match "{0}" in this monitor setup.',
     posEmpty: 'No rules and no saved positions for this monitor setup yet. Drag a window where you want it, save with {mod} + S, or hold {mod} and right-click a window.',
     badgeRule: 'rule', badgeStd: 'standard', badgeMax: 'maximized', badgeNew: 'new',
     moveNow: 'Move now', forget: 'Forget', sure: 'Sure?',
@@ -86,6 +89,8 @@ const STR = {
     tglModOnly: 'Only when {mod} is held while dropping',
     modOnlyHelp: 'Saving becomes a deliberate gesture: a sloppy drag cannot overwrite a carefully placed position. Deliberate saves ({mod} + S, the window menu, Save all) always work.',
     tglNotify: 'Toasts',
+    tglOnScreen: 'Keep Office windows on screen',
+    onScreenHelp: 'If Word, Excel or another Office window opens entirely off your monitors, slide it onto the nearest screen.',
     managedH: 'Which windows get positions',
     onlyRules: 'Manage <b>only</b> windows that match a rule',
     onlyRulesHelp: 'Off (default): every window is managed. A window that matches no rule is identified by its program and window class, so all windows of the same program share one position. On: only windows matching a rule get a position at all.',
@@ -101,6 +106,7 @@ const STR = {
     langH: 'Language', langHelp: 'Applies to this window, the tray menu, the window menu and the overlay.',
     filesH: 'Files', openIni: 'Open the saved positions file…', openConfig: 'Open the config file…', reload: 'Reload settings',
     status: (n, total, s) => `${n} saved positions for this monitor setup · ${total} total · setup: ${s}`,
+    statusFiltered: (shown, n) => ` · filter: ${shown} of ${n} rows shown`,
     statusDesktops: (n, i) => ` · ${n} desktops, on ${i}`,
     paused: '⏸ automatic moving is off'
   },
@@ -110,7 +116,7 @@ const STR = {
     thWindow: 'Gäller', thIdentity: 'Identitet', thActive: 'Aktiv', thDesktop: 'Skrivbord',
     thWidth: 'Bredd', thHeight: 'Höjd',
     thWindowTip: 'Vilka fönster raden gäller. En regels text och program redigeras direkt här och sparas när du lämnar fältet. Håll muspekaren över raden för att se fönstret positionen sparades från.',
-    thIdentityTip: 'Vad positionen sparas under - alltså vilka fönster som delar det. "standard" betyder alla fönster i samma program och fönsterklass; "regel" betyder alla fönster regeln matchar.',
+    thIdentityTip: 'Vad positionen sparas under - alltså vilka fönster som delar den. En standardrad visar fönsterklassen: alla fönster i det programmet med den klassen delar positionen, så flera rader för samma program är dess olika sorters fönster (huvudfönster, dialoger, hjälpfönster). En regelrad visar regelns namn: alla fönster regeln matchar delar positionen.',
     thActiveTip: 'Kryssa ur för att stänga av en regel utan att ta bort den: dess fönster behandlas då som vilka fönster som helst i sitt program, och den sparade positionen väntar tills regeln kryssas i igen.',
     thDesktopTip: 'Det virtuella skrivbord regelns fönster flyttas till när de dyker upp eller deras titel ändras till att matcha. "följ efter" växlar också dit.',
     thXTip: 'Avstånd från skrivbordets vänsterkant, i bildpunkter.',
@@ -120,6 +126,9 @@ const STR = {
     forgetSel: 'Glöm markerade', saveAll: 'Spara alla nu', saveAllTip: 'Spara alla öppna fönsters nuvarande positioner',
     applyAll: 'Flytta alla nu', applyAllTip: 'Flytta alla öppna fönster till sina sparade positioner ({mod} + Home)',
     addRule: '+ Lägg till regel', addRuleTip: 'En ny regelrad - skriv texten och tryck Enter',
+    filterPh: 'Filtrera…',
+    filterTip: 'Visa bara rader vars program, fönsterklass, regelnamn, regeltext eller ursprungsfönster innehåller texten. Esc rensar.',
+    posNoMatch: 'Inga rader matchar "{0}" i den här skärmuppsättningen.',
     posEmpty: 'Inga regler och inga sparade positioner för den här skärmuppsättningen ännu. Dra ett fönster dit du vill ha det, spara med {mod} + S, eller håll {mod} och högerklicka på ett fönster.',
     badgeRule: 'regel', badgeStd: 'standard', badgeMax: 'maximerat', badgeNew: 'ny',
     moveNow: 'Flytta nu', forget: 'Glöm', sure: 'Säkert?',
@@ -172,6 +181,8 @@ const STR = {
     tglModOnly: 'Bara när {mod} hålls nere vid släppet',
     modOnlyHelp: 'Sparandet blir en avsiktlig gest: en slarvig flytt kan inte skriva över ett omsorgsfullt placerad position. Avsiktliga sparningar ({mod} + S, fönstermenyn, Spara alla) fungerar alltid.',
     tglNotify: 'Notiser',
+    tglOnScreen: 'Håll Office-fönster på skärmen',
+    onScreenHelp: 'Om ett Word-, Excel- eller annat Office-fönster öppnas helt utanför skärmarna dras det in på närmaste skärm.',
     managedH: 'Vilka fönster får positioner',
     onlyRules: 'Hantera <b>endast</b> fönster som matchar en regel',
     onlyRulesHelp: 'Av (standard): alla fönster hanteras. Ett fönster som inte matchar någon regel identifieras av sitt program och sin fönsterklass, så alla fönster i samma program delar en position. På: bara fönster som matchar en regel får en position över huvud taget.',
@@ -187,6 +198,7 @@ const STR = {
     langH: 'Språk', langHelp: 'Gäller det här fönstret, tray-menyn, fönstermenyn och överlägget.',
     filesH: 'Filer', openIni: 'Öppna filen med sparade positioner…', openConfig: 'Öppna konfigfilen…', reload: 'Läs om inställningar',
     status: (n, total, s) => `${n} sparade positioner för denna skärmuppsättning · ${total} totalt · uppsättning: ${s}`,
+    statusFiltered: (shown, n) => ` · filter: ${shown} av ${n} rader visas`,
     statusDesktops: (n, i) => ` · ${n} skrivbord, du är på ${i}`,
     paused: '⏸ automatisk flyttning är avstängd'
   }
@@ -248,7 +260,7 @@ function localizeStatic() {
    'lblMenuButton|lblMenuButton', 'lblMenuWhole|tglMenuWhole', 'menuWholeHelp|menuWholeHelp',
    'lblMenuExclude|lblMenuExclude', 'menuExcludeHelp|menuExcludeHelp',
    'behaveH|behaveH', 'lblMove|tglMove', 'lblSave|tglSave', 'lblModOnly|tglModOnly', 'modOnlyHelp|modOnlyHelp',
-   'lblNotify|tglNotify', 'managedH|managedH', 'onlyRulesHelp|onlyRulesHelp',
+   'lblNotify|tglNotify', 'lblOnScreen|tglOnScreen', 'onScreenHelp|onScreenHelp', 'managedH|managedH', 'onlyRulesHelp|onlyRulesHelp',
    'onlyRulesExeH|onlyRulesExeH', 'onlyRulesExeHelp|onlyRulesExeHelp', 'ignoreH|ignoreH',
    'ignExeHelp|ignExeHelp', 'ignTitleHelp|ignTitleHelp', 'managedSavedHint|managedSavedHint',
    'hkH|hkH', 'hkHelp|hkHelp', 'langH|langH', 'langHelp|langHelp', 'filesH|filesH',
@@ -256,6 +268,8 @@ function localizeStatic() {
   ].forEach(pair => { const [id, key] = pair.split('|'); set(id, key); });
   $('lblOnlyRules').innerHTML = t('onlyRules');
   $('btnAddRule').title = t('addRuleTip');
+  $('posFilter').placeholder = t('filterPh');
+  $('posFilter').title = t('filterTip');
   $('btnSaveAll').title = t('saveAllTip');
   $('btnApplyAll').title = t('applyAllTip');
   [['thWindow', 'thWindowTip'], ['thIdentity', 'thIdentityTip'], ['thActive', 'thActiveTip'],
@@ -286,10 +300,12 @@ function renderSettings() {
   $('tglSave').checked = !!s.autosave;
   $('tglModOnly').checked = !!s.modOnly;
   $('tglNotify').checked = !!s.notify;
+  $('tglOnScreen').checked = !!s.keepOnScreen;
   $('tglMove').disabled = !positionsOn();
   $('tglSave').disabled = !positionsOn();
   $('tglModOnly').disabled = !positionsOn() || !s.autosave;
   $('tglNotify').disabled = !positionsOn();
+  $('tglOnScreen').disabled = !positionsOn();
   $('tglNameInTray').checked = !!s.nameInTray;
   $('tglWheel').checked = !!s.wheel;
   $('tglArrows').checked = !!s.arrowIcons;
@@ -324,6 +340,7 @@ $('tglMove').addEventListener('change', e => post({ action: 'toggle', name: 'mov
 $('tglSave').addEventListener('change', e => post({ action: 'toggle', name: 'autosave', value: e.target.checked ? 1 : 0 }));
 $('tglModOnly').addEventListener('change', e => post({ action: 'toggle', name: 'modOnly', value: e.target.checked ? 1 : 0 }));
 $('tglNotify').addEventListener('change', e => post({ action: 'toggle', name: 'notify', value: e.target.checked ? 1 : 0 }));
+$('tglOnScreen').addEventListener('change', e => post({ action: 'toggle', name: 'keepOnScreen', value: e.target.checked ? 1 : 0 }));
 $('btnSaveAll').addEventListener('click', () => post({ action: 'saveAll' }));
 $('btnApplyAll').addEventListener('click', () => post({ action: 'applyAll' }));
 $('btnOpenPositions').addEventListener('click', () => post({ action: 'openPositions' }));
@@ -376,6 +393,18 @@ document.querySelectorAll('#tabs .tab').forEach(btn => {
 
 // ── positions: rules and saved positions in one list ───────────────────
 const selPos = new Set();   // sections ticked for bulk forget
+let posFilter = '';         // the toolbar filter, lower-cased
+
+// The text a row can be found by: program, window class and saved-from
+// title for a position; name, text and program for a rule.
+function rowText(row) {
+  const parts = [];
+  if (row.rule) parts.push(row.rule.alias, row.rule.pattern, row.rule.exe);
+  if (row.pos) parts.push(row.pos.key, row.pos.info);
+  if (!row.pos && !row.rule) parts.push(row.kind);
+  return parts.filter(Boolean).join(' ').toLowerCase();
+}
+const rowMatches = row => !posFilter || rowText(row).includes(posFilter);
 
 function updateForgetSel() {
   const b = $('btnForgetSel');
@@ -436,8 +465,11 @@ function posRow(row, idx, count) {
     ident = `<span class="badge rule">${esc(t('badgeRule'))}: ${esc(key.slice(5))}</span>`;
     active = '<span class="dim">–</span>';
   } else {
+    // exe|class: the program is already in "applies to", the class is what
+    // tells this row from the program's other rows
+    const cls = key.split('|').slice(1).join('|');
     applies = esc(t('appliesStd').replace('{0}', key.split('|')[0]));
-    ident = `<span class="badge">${esc(t('badgeStd'))}</span>`;
+    ident = `<span class="badge">${esc(t('badgeStd'))}</span><span class="cls" title="${esc(key)}">${esc(cls)}</span>`;
     active = '<span class="dim">–</span>';
   }
   const maxBadge = p && String(p.max) === '1' ? ` <span class="badge">${esc(t('badgeMax'))}</span>` : '';
@@ -454,7 +486,7 @@ function posRow(row, idx, count) {
   return `<tr class="${row.kind}${off}" data-section="${esc(section)}" data-key="${esc(key)}"${r ? ` data-alias="${esc(r.alias)}"` : ''}>
     <td class="selcol">${p ? `<input type="checkbox" class="rowsel"${selPos.has(section) ? ' checked' : ''}>` : ''}</td>
     <td class="applies" title="${esc(tip)}">${applies}${maxBadge}</td>
-    <td>${ident}</td>
+    <td class="ident">${ident}</td>
     <td class="active">${active}</td>
     ${desktopCell(r)}
     ${nums}
@@ -488,23 +520,40 @@ function renderPositions() {
     `<option value="${esc(s)}"${s === curSetup ? ' selected' : ''}>` +
     `${esc(s)}${s === st.currentSetup ? esc(t('thisSetup')) : ''}</option>`).join('');
   if (editingRow()) return;   // never rebuild under the user's fingers
-  const rows = rowsForSetup();
+  const all = rowsForSetup();
+  const rows = all.filter(rowMatches);
   const body = $('posBody');
   if (!rows.length) {
-    body.innerHTML = `<tr class="empty-row"><td colspan="10">${esc(t('posEmpty'))}</td></tr>`;
+    const msg = all.length ? t('posNoMatch').replace('{0}', $('posFilter').value.trim()) : t('posEmpty');
+    body.innerHTML = `<tr class="empty-row"><td colspan="10">${esc(msg)}</td></tr>`;
     selPos.clear();
     updateForgetSel();
     return;
   }
-  const ruleCount = rows.filter(r => r.kind === 'rule').length;
-  body.innerHTML = rows.map((row, i) => posRow(row, i, ruleCount)).join('');
+  // the up/down buttons order the rules among ALL rules, filtered or not
+  const rulesAll = all.filter(r => r.kind === 'rule');
+  body.innerHTML = rows.map(row => posRow(row, rulesAll.indexOf(row), rulesAll.length)).join('');
   const withPos = rows.filter(r => r.pos);
   const shown = new Set(withPos.map(r => r.pos.section));
   for (const s of [...selPos]) if (!shown.has(s)) selPos.delete(s);
   $('selAllPos').checked = withPos.length > 0 && withPos.every(r => selPos.has(r.pos.section));
   updateForgetSel();
 }
-$('setupSel').addEventListener('change', e => { curSetup = e.target.value; renderPositions(); });
+$('setupSel').addEventListener('change', e => { curSetup = e.target.value; renderPositions(); renderStatus(); });
+
+// the filter lives in the toolbar, not the table, so a rebuild never steals
+// its focus; the selection follows the visible rows (Forget selected only
+// ever removes what is on screen)
+$('posFilter').addEventListener('input', e => {
+  posFilter = e.target.value.trim().toLowerCase();
+  if (st) { renderPositions(); renderStatus(); }
+});
+$('posFilter').addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  e.target.value = '';
+  posFilter = '';
+  if (st) { renderPositions(); renderStatus(); }
+});
 
 $('btnAddRule').addEventListener('click', () => {
   const body = $('posBody');
@@ -674,6 +723,10 @@ $('winBody').addEventListener('change', e => {
 function renderStatus() {
   const nCur = st.positions.filter(p => p.setup === st.currentSetup).length;
   let text = t('status')(nCur, st.positions.length, st.currentSetup);
+  if (posFilter) {
+    const all = rowsForSetup();
+    text += t('statusFiltered')(all.filter(rowMatches).length, all.length);
+  }
   if (desktopsOn() && st.desktops.count) text += t('statusDesktops')(st.desktops.count, st.desktops.index);
   $('status').textContent = text;
   $('statusPause').innerHTML = positionsOn() && !st.settings.move

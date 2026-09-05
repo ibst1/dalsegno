@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.0.2 (2026-09-04)
+
+- Keep windows on screen: a window that opens entirely off every monitor -
+  Office restores each document to coordinates a screen no longer covers, so
+  Word can open a document in the empty space beside an L-shaped layout - is
+  slid the smallest distance onto the nearest screen. On by default for Office
+  apps ([Positions] KeepOnScreen = office; all = every managed window, off =
+  never); a checkbox in Settings. A window parked at a screen edge on purpose
+  is left alone.
+
+- The positions list has a filter box in its toolbar: type part of a program
+  name, window class, rule name, rule text or the title the position was
+  saved from, and only matching rows remain. Esc clears it. The status bar
+  shows how many rows the filter lets through.
+- The Identity column now says what it is for: a standard row shows the
+  window class next to the "standard" badge, so the several rows one
+  program can have (main window, dialogs, helper windows) can be told
+  apart. Previously every such row showed just the badge.
+- Feedback for the hotkeys and the menu actions (position saved or
+  forgotten, all saved, moving on/off, rule created, settings reloaded,
+  errors) is an on-screen overlay on the monitor the mouse is on, in place
+  of Windows notifications. Windows 11 drops those silently under
+  do-not-disturb and for a process whose app id has no Start menu shortcut,
+  which DalSegno's becomes once the GUI has been opened - so CapsLock+S,
+  +A, +Backspace and +F10 looked like they did nothing.
+
 ## 2.0.1 (2026-09-04)
 
 - Fix: a rule's desktop was not applied to a window that had just appeared.

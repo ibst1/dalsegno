@@ -92,7 +92,7 @@ button.danger-armed { background: var(--red); border-color: #f05050; color: #fff
 }
 .pane-head label { color: var(--text-dim); }
 .hint { color: var(--text-dim); font-style: italic; }
-select, input[type=text], input:not([type]), textarea {
+select, input[type=text], input[type=search], input:not([type]), textarea {
   font: inherit;
   color: var(--text);
   background: var(--bg2);
@@ -101,6 +101,8 @@ select, input[type=text], input:not([type]), textarea {
   padding: 4px 8px;
 }
 select:focus, input:focus, textarea:focus { outline: 1px solid var(--accent); }
+.pane-head input.filter { width: 230px; padding: 3px 8px; }
+.pane-head input.filter::-webkit-search-cancel-button { filter: invert(.75); cursor: pointer; }
 
 .tablewrap { flex: 1; overflow: auto; min-height: 0; }
 table { width: 100%; border-collapse: collapse; }
@@ -156,6 +158,8 @@ body.no-desktops .deskcol, body.no-desktops td.deskcell { display: none; }
   user-select: none;
 }
 #posBody td.applies label.rx input { accent-color: var(--accent); vertical-align: middle; }
+#posBody td.ident { white-space: nowrap; }
+#posBody td.ident .cls { font-family: Consolas, monospace; font-size: 12px; color: var(--text-dim); margin-left: 6px; }
 #posBody td.active { text-align: center; }
 #posBody td.active input { accent-color: var(--accent); cursor: pointer; }
 #posBody td.deskcell { white-space: nowrap; }

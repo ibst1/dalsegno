@@ -17,13 +17,21 @@ g_autoSaveModOnly := true      ; autosave only when the modifier is held ([Posit
 g_saveError := "", g_saveErrorText := ""
 
 g_moveEndCb := 0, g_winEventHook := 0
+g_keepOnScreen := "off"   ; off | office | all  (see KeepOnScreenGuard)
+; Office frame processes. Their document windows carry real titles, so the
+; guard reaches them; the exe is what scopes the "office" setting.
+g_officeExe := Map("winword.exe", 1, "excel.exe", 1, "powerpnt.exe", 1
+    , "outlook.exe", 1, "onenote.exe", 1, "onenoteim.exe", 1, "mspub.exe", 1
+    , "msaccess.exe", 1, "visio.exe", 1, "winproj.exe", 1, "lync.exe", 1)
 
 PositionsLoadConfig() {
-    global configIni, moveEnabled, autoSaveEnabled, notifyEnabled, g_autoSaveModOnly
+    global configIni, moveEnabled, autoSaveEnabled, notifyEnabled, g_autoSaveModOnly, g_keepOnScreen
     moveEnabled     := IniRead(configIni, "Positions", "MoveWindows", 1) != "0"
     autoSaveEnabled := IniRead(configIni, "Positions", "AutoSave", 1) != "0"
     notifyEnabled   := IniRead(configIni, "Positions", "Notify", 1) != "0"
     g_autoSaveModOnly := IniRead(configIni, "Positions", "AutoSaveModifierOnly", 1) != "0"
+    v := StrLower(Trim(IniRead(configIni, "Positions", "KeepOnScreen", "office")))
+    g_keepOnScreen := (v = "all") ? "all" : (v = "0" || v = "off" || v = "") ? "off" : "office"
 }
 
 ; Autosave: Windows tells us exactly when a drag ends. EVENT_SYSTEM_MOVESIZEEND
@@ -312,6 +320,60 @@ MonitorFromWindow(hwnd) {
             return A_Index
     }
     return 0
+}
+
+; --- keep windows on screen -------------------------------------------------
+; Windows restores each app window - Office documents especially - to its last
+; coordinates, which can land in a monitor "dead zone" (a gap in an L-shaped
+; layout, or a screen that is now gone), opening the window where no monitor
+; is. This nudges such a window the smallest distance onto the nearest real
+; screen's work area. It acts ONLY on a window that sits entirely off every
+; monitor, so one parked at a screen edge on purpose is left alone. Called
+; from the scan for every ready window.
+KeepOnScreenGuard(hwnd) {
+    global g_keepOnScreen, g_officeExe
+    if (g_keepOnScreen = "off")
+        return
+    info := BaseInfo(hwnd)          ; real, titled, non-cloaked, non-tool, not ignored
+    if (info = "")
+        return
+    if (g_keepOnScreen = "office" && !g_officeExe.Has(StrLower(info.exe)))
+        return
+    mm := 0
+    try mm := WinGetMinMax(hwnd)
+    if (mm != 0)                    ; minimized (-1) or maximized (1): not off-screen
+        return
+    x := 0, y := 0, w := 0, h := 0
+    try WinGetPos(&x, &y, &w, &h, hwnd)
+    if (w <= 0 || h <= 0)
+        return
+    nx := 0, ny := 0
+    if !OffScreenTarget(x, y, w, h, &nx, &ny)
+        return
+    try WinMove(nx, ny, , , hwnd)
+    Trace("keep-on-screen " TraceWin(hwnd) " " x "," y " -> " nx "," ny)
+}
+
+; True (and sets nx,ny) when the rect is entirely off every monitor; nx,ny is
+; then the smallest move onto the nearest monitor's work area. False when any
+; part of the rect already overlaps a monitor (bounds, so a window under the
+; taskbar still counts as on-screen).
+OffScreenTarget(x, y, w, h, &nx, &ny) {
+    loop MonitorGetCount() {
+        MonitorGet(A_Index, &l, &t, &r, &b)
+        if (x < r && x + w > l && y < b && y + h > t)
+            return false
+    }
+    best := ""
+    loop MonitorGetCount() {
+        MonitorGetWorkArea(A_Index, &l, &t, &r, &b)
+        tx := (w >= r - l) ? l : Min(Max(x, l), r - w)
+        ty := (h >= b - t) ? t : Min(Max(y, t), b - h)
+        d := Abs(tx - x) + Abs(ty - y)
+        if (best = "" || d < best)
+            best := d, nx := tx, ny := ty
+    }
+    return true
 }
 
 ; Called from the window scan for every window: places new windows that have

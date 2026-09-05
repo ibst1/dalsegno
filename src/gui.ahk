@@ -193,7 +193,7 @@ PushStateSoon() {
 }
 
 PushState() {
-    global g_uiReady, moveEnabled, autoSaveEnabled, notifyEnabled, rulesOnly, g_lang
+    global g_uiReady, moveEnabled, autoSaveEnabled, notifyEnabled, rulesOnly, g_keepOnScreen, g_lang
     global g_autoSaveModOnly, g_modifier, g_menuButton, g_menuOn, g_menuWhole, g_menuExclude, g_hk
     global titleRules, ignoreExe, ignoreTitles, rulesOnlyExe, configIni
     global g_modPositions, g_modDesktops, g_nameInTray, g_wheel, g_arrowIcons, g_dllLoaded
@@ -212,7 +212,8 @@ PushState() {
     s := g_modDesktops ? ReadDesktopStatus() : 0
     state := Map("modules", Map("positions", g_modPositions ? 1 : 0, "desktops", g_modDesktops ? 1 : 0)
         , "settings", Map("move", moveEnabled ? 1 : 0, "autosave", autoSaveEnabled ? 1 : 0
-            , "notify", notifyEnabled ? 1 : 0, "rulesOnly", rulesOnly ? 1 : 0, "lang", g_lang
+            , "notify", notifyEnabled ? 1 : 0, "rulesOnly", rulesOnly ? 1 : 0
+            , "keepOnScreen", g_keepOnScreen != "off" ? 1 : 0, "lang", g_lang
             , "modOnly", g_autoSaveModOnly ? 1 : 0, "modifier", g_modifier
             , "menuButton", g_menuButton, "menuOn", g_menuOn ? 1 : 0
             , "menuWhole", g_menuWhole ? 1 : 0, "menuExclude", g_menuExclude
@@ -281,7 +282,7 @@ ListWindows() {
 }
 
 UiToggle(name, value) {
-    global moveEnabled, autoSaveEnabled, notifyEnabled, g_autoSaveModOnly, configIni
+    global moveEnabled, autoSaveEnabled, notifyEnabled, g_autoSaveModOnly, g_keepOnScreen, configIni
     v := value ? true : false
     switch name {
         case "move":
@@ -299,6 +300,11 @@ UiToggle(name, value) {
         case "notify":
             if (notifyEnabled != v)
                 ToggleToasts()
+        case "keepOnScreen":
+            if ((g_keepOnScreen != "off") != v) {
+                IniWrite(v ? "office" : "off", configIni, "Positions", "KeepOnScreen")
+                LoadConfig()
+            }
     }
     PushState()
 }

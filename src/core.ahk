@@ -340,6 +340,11 @@ AutoSaveModifierOnly=1
 Notify=1
 ; RulesOnly=1 means ONLY windows matching a rule are managed (positions).
 RulesOnly=0
+; KeepOnScreen: catch a window that opens ENTIRELY off every monitor (Office
+; restores documents to coordinates a screen no longer covers) and slide it
+; onto the nearest screen. office = Office apps only; all = every managed
+; window; off = never.
+KeepOnScreen=office
 
 [Desktops]
 ; NameInTray=1 shows the desktop name as text on the taskbar, left of the
@@ -840,8 +845,11 @@ ScanWindowsBody() {
         ; the position BEFORE the desktop: a window sent to another desktop
         ; is cloaked and has no identity until the desktop is shown, and a
         ; slow app (Java) gets its place while it is still settling
-        if g_modPositions
+        if g_modPositions {
             PositionsPlace(hwnd, info, setup)
+            if ready
+                KeepOnScreenGuard(hwnd)
+        }
         if (g_modDesktops && title != "" && title != info.title) {
             if firstScan {
                 ; the windows found at start: one look, as always
