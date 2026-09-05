@@ -43,7 +43,7 @@ OpenUi(*) {
         } catch {
             g_uiWin.Destroy()
             g_uiWin := 0, g_uiCtrl := 0, g_uiCore := 0
-            TrayTip Tr("uiFail"), Tr("appTitle")
+            Notify(Tr("uiFail"), Tr("appTitle"))
             return
         }
     } else {
@@ -338,7 +338,7 @@ UiSetHotkey(name, key) {
         if (key != "") {
             for other, k in g_hk
                 if (other != name && k != "" && StrLower(k) = StrLower(key)) {
-                    TrayTip Tr("dupHotkey") " " key, Tr("appTitle")
+                    Notify(Tr("dupHotkey") " " key, Tr("appTitle"))
                     PushState()
                     return
                 }
@@ -348,7 +348,7 @@ UiSetHotkey(name, key) {
                 HotIf()
             } catch {
                 HotIf()
-                TrayTip Tr("badHotkey") " " key, Tr("appTitle")
+                Notify(Tr("badHotkey") " " key, Tr("appTitle"))
                 PushState()
                 return
             }
@@ -390,7 +390,7 @@ UiMoveKey(key) {
             return
         }
     }
-    TrayTip Tr("noMatch"), Tr("appTitle")
+    Notify(Tr("noMatch"), Tr("appTitle"))
 }
 
 UiSaveWin(hwnd) {
@@ -398,7 +398,7 @@ UiSaveWin(hwnd) {
     hwnd := Integer(hwnd)
     key := KeyFor(hwnd)
     if (key = "") {
-        TrayTip Tr("cannotHandleWin"), Tr("appTitle")
+        Notify(Tr("cannotHandleWin"), Tr("appTitle"))
         return
     }
     if SavePos(key, hwnd) {
@@ -406,7 +406,7 @@ UiSaveWin(hwnd) {
             winInfo[hwnd].done := true
         PushState()
     } else
-        TrayTip SaveErrorText(), Tr("appTitle")
+        Notify(SaveErrorText(), Tr("appTitle"))
 }
 
 UiMoveWin(hwnd) {

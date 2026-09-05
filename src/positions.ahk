@@ -439,18 +439,18 @@ SaveActive() {
         return
     key := KeyFor(hwnd)
     if (key = "") {
-        TrayTip Tr("cannotHandle"), Tr("appTitle")
+        Notify(Tr("cannotHandle"), Tr("appTitle"))
         return
     }
     if SavePos(key, hwnd) {
         p := LoadPos(key)
         where := (p != "") ? "`n(" p.x ", " p.y ", " p.w " × " p.h (p.max ? ", " Tr("maximized") : "") ")" : ""
-        TrayTip DescribeKey(key) where, Tr("savedTitle")
+        Notify(DescribeKey(key) where, Tr("savedTitle"))
         if winInfo.Has(hwnd)
             winInfo[hwnd].done := true
         PushStateSoon()
     } else
-        TrayTip SaveErrorText(), Tr("appTitle")
+        Notify(SaveErrorText(), Tr("appTitle"))
 }
 
 ForgetActive() {
@@ -461,11 +461,11 @@ ForgetActive() {
         return
     key := KeyFor(hwnd)
     if (key = "" || LoadPos(key) = "") {
-        TrayTip Tr("nothingForget"), Tr("appTitle")
+        Notify(Tr("nothingForget"), Tr("appTitle"))
         return
     }
     try IniDelete(posIni, SectionFor(key))
-    TrayTip Tr("forgot") "`n" DescribeKey(key), Tr("appTitle")
+    Notify(Tr("forgot") "`n" DescribeKey(key), Tr("appTitle"))
     PushStateSoon()
 }
 
@@ -484,7 +484,7 @@ SaveAll(*) {
                 winInfo[hwnd].done := true
         }
     }
-    TrayTip Format(Tr("savedAll"), n), Tr("appTitle")
+    Notify(Format(Tr("savedAll"), n), Tr("appTitle"))
     PushStateSoon()
 }
 
@@ -503,7 +503,7 @@ ApplyAll(*) {
                 winInfo[hwnd].done := true
         }
     }
-    TrayTip Format(Tr("movedAll"), n), Tr("appTitle")
+    Notify(Format(Tr("movedAll"), n), Tr("appTitle"))
 }
 
 ToggleMove() {
@@ -511,7 +511,7 @@ ToggleMove() {
     moveEnabled := !moveEnabled
     IniWrite(moveEnabled ? 1 : 0, configIni, "Positions", "MoveWindows")
     BuildTrayMenu()
-    TrayTip Tr(moveEnabled ? "moveOn" : "moveOff")
+    Notify(Tr(moveEnabled ? "moveOn" : "moveOff"))
     PushStateSoon()
 }
 
@@ -520,7 +520,7 @@ ToggleAutoSave() {
     autoSaveEnabled := !autoSaveEnabled
     IniWrite(autoSaveEnabled ? 1 : 0, configIni, "Positions", "AutoSave")
     BuildTrayMenu()
-    TrayTip Tr(autoSaveEnabled ? "autoSaveOn" : "autoSaveOff")
+    Notify(Tr(autoSaveEnabled ? "autoSaveOn" : "autoSaveOff"))
     PushStateSoon()
 }
 

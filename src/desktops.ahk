@@ -251,7 +251,7 @@ ApplyDesktopHotkeys() {
             RegisterDesktopHotkey(p[1], pre . A_Index, p[3](A_Index), &bad)
     }
     if bad != "" {
-        TrayTip(Tr("invalidHotkeys") "`n" bad, Tr("appTitle"), "Iconx")
+        Notify(Tr("invalidHotkeys") "`n" bad, Tr("appTitle"))
         try FileAppend(FormatTime() "  Invalid hotkeys: " StrReplace(bad, "`n", " / ") "`n"
             , ErrorLogPath(), "UTF-8")
     }
@@ -979,17 +979,19 @@ ScreenDpiAtPoint(x, y) {
 ; placement runs per-monitor-v2 so the rectangles line up, the Gui is
 ; -DPIScale so AHK adds no scaling of its own, and the font and margins are
 ; scaled by the TARGET monitor's DPI.
-ShowOsdText(text) {
+; small: the message style used by Notify - a smaller face, long texts
+; wrapped to a third of the monitor, shown a little longer.
+ShowOsdText(text, small := false) {
     prevDpi := DllCall("SetThreadDpiAwarenessContext", "ptr", -4, "ptr")
     try
-        ShowOsdTextCore(text)
+        ShowOsdTextCore(text, small)
     finally {
         if prevDpi
             DllCall("SetThreadDpiAwarenessContext", "ptr", prevDpi, "ptr")
     }
 }
 
-ShowOsdTextCore(text) {
+ShowOsdTextCore(text, small := false) {
     global g_osd
     if IsObject(g_osd) {
         g_osd.Destroy()
@@ -1009,17 +1011,20 @@ ShowOsdTextCore(text) {
     osd := Gui("-DPIScale +AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
     osd.BackColor := "1E293B"
     osd.MarginX := Round(34 * scale), osd.MarginY := Round(18 * scale)
-    osd.SetFont("s" Round(20 * scale) " w700 cWhite", "Segoe UI")
-    osd.Add("Text", "Center", text)
+    osd.SetFont("s" Round((small ? 13 : 20) * scale) (small ? " w600" : " w700") " cWhite", "Segoe UI")
+    MonitorGetWorkArea(screen, &l, &t, &r, &b)
+    opt := "Center"
+    if (small && StrLen(text) > 56)
+        opt .= " w" Round((r - l) * 0.34)
+    osd.Add("Text", opt, text)
     DllCall("dwmapi\DwmSetWindowAttribute", "ptr", osd.Hwnd
         , "uint", 33, "uint*", 2, "uint", 4)   ; DWMWA_WINDOW_CORNER_PREFERENCE = ROUND
-    MonitorGetWorkArea(screen, &l, &t, &r, &b)
     osd.Show("NoActivate Hide AutoSize")
     osd.GetPos(, , &w, &h)
     osd.Show("NoActivate x" (l + (r - l - w) // 2) " y" (t + Round((b - t) * 0.10)))
     WinSetTransparent(242, osd)
     g_osd := osd
-    SetTimer(HideOsd, -1500)
+    SetTimer(HideOsd, -(small ? 2800 : 1500))
 }
 
 HideOsd() {

@@ -267,6 +267,19 @@ Tr(id) {
     return txt
 }
 
+; On-screen feedback for the hotkeys and the menu actions: the overlay the
+; Desktops module draws for desktop names, on the monitor the mouse is on.
+; Windows notifications (TrayTip) are not used for this any more. Windows 11
+; drops them silently under do-not-disturb, and for a process whose app id
+; has no Start menu shortcut - which this one becomes once the GUI has been
+; opened - so an action looked like it did nothing. A title other than the
+; app's own becomes the first line.
+Notify(text, title := "") {
+    if (title != "" && title != Tr("appTitle"))
+        text := title "`n" text
+    ShowOsdText(text, true)
+}
+
 SetLanguage(lang) {
     global g_lang, configIni, g_uiWin
     if (lang != "en" && lang != "sv") || (lang = g_lang)
@@ -526,8 +539,8 @@ ReloadConfig(*) {
     LoadConfig()
     BuildTrayMenu()
     DesktopsLanguageChanged()
-    TrayTip Format(Tr("configReloaded"), titleRules.Length, ignoreExe.Length, ignoreTitles.Length)
-        , Tr("configReloadedTitle")
+    Notify(Format(Tr("configReloaded"), titleRules.Length, ignoreExe.Length, ignoreTitles.Length)
+        , Tr("configReloadedTitle"))
     PushStateSoon()
 }
 
@@ -947,7 +960,7 @@ ApplyMenuHotkey() {
             g_menuKeys := [btn, btn " Up"]
         } catch {
             try Hotkey(btn, "Off")   ; the down half may have taken
-            TrayTip Tr("badMenuHotkey") "`n" g_menuButton, Tr("appTitle")
+            Notify(Tr("badMenuHotkey") "`n" g_menuButton, Tr("appTitle"))
         }
     }
     HotIf()
@@ -1153,7 +1166,7 @@ TmForget(hwnd) {
     if (key = "" || LoadPos(key) = "")
         return
     try IniDelete(posIni, SectionFor(key))
-    TrayTip Tr("forgot") "`n" DescribeKey(key), Tr("appTitle")
+    Notify(Tr("forgot") "`n" DescribeKey(key), Tr("appTitle"))
     PushStateSoon()
 }
 
@@ -1163,10 +1176,10 @@ SaveUnderKey(hwnd, key) {
     if SavePos(key, hwnd) {
         if winInfo.Has(hwnd)
             winInfo[hwnd].done := true
-        TrayTip DescribeKey(key), Tr("savedTitle")
+        Notify(DescribeKey(key), Tr("savedTitle"))
         PushStateSoon()
     } else
-        TrayTip SaveErrorText(), Tr("appTitle")
+        Notify(SaveErrorText(), Tr("appTitle"))
 }
 
 ; =============================================================================
@@ -1193,7 +1206,7 @@ TmSaveOrRule(hwnd) {
     global g_ruleDlg, rulesOnly, g_modDesktops
     info := BaseInfo(hwnd)
     if (info = "") {
-        TrayTip Tr("cannotHandleWin"), Tr("appTitle")
+        Notify(Tr("cannotHandleWin"), Tr("appTitle"))
         return
     }
     key := KeyFor(hwnd)
@@ -1291,7 +1304,7 @@ RuleDialogOk(g, hwnd, alias, ctl, info) {
         matches := pattern = ""
         try matches := matches || (regex ? RegExMatch(info.title, pattern) : InStr(info.title, pattern))
         if !matches {
-            TrayTip Tr("ruleNotInTitle") "`n" pattern, Tr("appTitle")
+            Notify(Tr("ruleNotInTitle") "`n" pattern, Tr("appTitle"))
             return                      ; the dialog stays open for a correction
         }
     }
@@ -1326,11 +1339,11 @@ RuleDialogApply(hwnd, alias, pattern, regex, enabled, keepPos, useProg, desktop,
             if (key = "rule:" alias)
                 SaveUnderKey(hwnd, key)
             else if (SubStr(key, 1, 5) = "rule:")
-                TrayTip Format(Tr("ruleShadowed"), alias, SubStr(key, 6)), Tr("appTitle")
+                Notify(Format(Tr("ruleShadowed"), alias, SubStr(key, 6)), Tr("appTitle"))
             else
-                TrayTip Format(Tr("ruleNoMatch"), alias), Tr("appTitle")
+                Notify(Format(Tr("ruleNoMatch"), alias), Tr("appTitle"))
         } else if (keepPos && !enabled)
-            TrayTip Format(Tr("ruleOff"), alias), Tr("appTitle")
+            Notify(Format(Tr("ruleOff"), alias), Tr("appTitle"))
         if (enabled && desktop)
             DesktopApplyToWindow(hwnd, desktop, follow)
         PushStateSoon()
@@ -1345,7 +1358,7 @@ RuleDialogApply(hwnd, alias, pattern, regex, enabled, keepPos, useProg, desktop,
         }
         key := KeyFor(hwnd)
         if (key = "")
-            TrayTip Tr("cannotHandleWin"), Tr("appTitle")
+            Notify(Tr("cannotHandleWin"), Tr("appTitle"))
         else if keepPos
             SaveUnderKey(hwnd, key)
         return
@@ -1380,12 +1393,12 @@ CreateRuleAndSave(hwnd, pattern, regex, exe, desktop, follow, keepPos) {
     ; another desktop is cloaked, and cloaked windows have no identity
     key := KeyFor(hwnd)
     if (key = "") {
-        TrayTip Tr("cannotHandleWin"), Tr("appTitle")
+        Notify(Tr("cannotHandleWin"), Tr("appTitle"))
         return
     }
     if (key != "rule:" alias) {
         ; rules match in order, and an earlier one also fits this window
-        TrayTip Format(Tr("ruleShadowed"), alias, SubStr(key, 6)), Tr("appTitle")
+        Notify(Format(Tr("ruleShadowed"), alias, SubStr(key, 6)), Tr("appTitle"))
         PushStateSoon()
         return
     }
@@ -1393,9 +1406,9 @@ CreateRuleAndSave(hwnd, pattern, regex, exe, desktop, follow, keepPos) {
         if SavePos(key, hwnd) {
             if winInfo.Has(hwnd)
                 winInfo[hwnd].done := true
-            TrayTip Format(Tr("ruleSaved"), alias, pattern != "" ? pattern : exe), Tr("appTitle")
+            Notify(Format(Tr("ruleSaved"), alias, pattern != "" ? pattern : exe), Tr("appTitle"))
         } else
-            TrayTip SaveErrorText(), Tr("appTitle")
+            Notify(SaveErrorText(), Tr("appTitle"))
     }
     if desktop
         DesktopApplyToWindow(hwnd, desktop, follow)
