@@ -123,12 +123,12 @@ Left-click the tray icon opens the desktop picker when Desktops is on;
   *Windows with rules* is what DalSegno acts on in the selected monitor
   setup: one row per rule (with its position, or *no position yet*) plus
   program rows - *all X windows* - that have a saved position; every row
-  says how many open windows it applies to right now. Rules are shared by
-  every setup, so a rule is listed only in the setups where it moves
-  windows, where it has a desktop or a position; elsewhere it does nothing
-  and stays out of the list (the status bar counts them: "3 rules with no
-  effect in this setup"). A rule just created from the list stays in view
-  until another setup is picked, so it can be given a desktop or a position.
+  says how many open windows it applies to right now. Every rule that
+  applies on the setup's computer is listed, dimmed where it has neither a
+  desktop nor a position yet (it moves nothing there, but its windows are
+  still its own: saving one puts the position under the rule). Rules for
+  other computers stay out of the list; the status bar counts them. A rule
+  just created from the list stays in view until another setup is picked.
   A position saved from a maximized window carries a *maximized* badge next
   to its height: the numbers are the rectangle it restores to, which decides
   the monitor, and a new window is maximized there. When a program has

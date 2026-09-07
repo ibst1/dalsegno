@@ -12,6 +12,14 @@
   computers is listed dimmed in the setups of those computers and ignored
   on this one.
 
+- The Windows tab lists every rule that applies on the setup's computer,
+  position or not. It used to list a rule only where it had a desktop or a
+  position, which made a rule look deleted in a setup where it still
+  claimed its windows: nothing under *Windows with rules* matched
+  "Patienthistorik", yet the window menu on that window said *Edit rule*,
+  and saving it put the position under the rule again. Rules without a
+  position here are dimmed, as newly created ones were.
+
 - Fix: the autosave modifier could read as held when it was not. The hook's
   physical state phantoms after another script reinstalls its hook ahead
   of DalSegno's mid-hold, and with *modifier only* on, every window then

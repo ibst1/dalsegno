@@ -60,7 +60,7 @@ const STR = {
     appliesRuleGone: 'rule "{0}" (no longer exists)', appliesStd: 'all {0} windows',
     appliesRule: 'windows with "{0}" in the title', appliesRuleExe: '{1} windows with "{0}" in the title',
     savedFromTip: 'Saved from: {0}', noPosYet: 'no position yet',
-    inertTip: 'This rule has no desktop and no position in this monitor setup yet, so it does nothing here. Pick a desktop, or save a matching window with {mod} + S. Rules are shared by every setup; a rule is listed only in the setups where it has a desktop or a position.',
+    inertTip: 'This rule has no desktop and no position in this monitor setup yet, so it moves nothing here - but its windows are still its own: saving one puts the position under the rule. Pick a desktop, or save a matching window with {mod} + S.',
     patternPh: 'text in the title', exePh: '(any)', regexLbl: 'regex',
     computerLbl: 'computer', computersPh: '(all)',
     computersTip: 'The computers the rule applies on, comma-separated. Empty: every computer. The config is shared between computers through the synced folder.',
@@ -127,7 +127,7 @@ const STR = {
     filesH: 'Files', openIni: 'Open the saved positions file…', openConfig: 'Open the config file…', reload: 'Reload settings',
     status: (n, total, s) => `${n} saved positions for this monitor setup · ${total} total · setup: ${s}`,
     statusFiltered: (shown, n) => ` · filter: ${shown} of ${n} rows shown`,
-    statusInert: n => ` · ${n} rule${n === 1 ? '' : 's'} with no effect in this setup`,
+    statusInert: n => ` · ${n} rule${n === 1 ? '' : 's'} for other computers`,
     statusDesktops: (n, i) => ` · ${n} desktops, on ${i}`,
     paused: '⏸ automatic moving is off'
   },
@@ -170,7 +170,7 @@ const STR = {
     appliesRuleGone: 'regeln "{0}" (finns inte längre)', appliesStd: 'alla {0}-fönster',
     appliesRule: 'fönster med "{0}" i titeln', appliesRuleExe: '{1}-fönster med "{0}" i titeln',
     savedFromTip: 'Sparat från: {0}', noPosYet: 'ingen position ännu',
-    inertTip: 'Regeln har varken skrivbord eller position i den här skärmuppsättningen ännu och gör därför ingenting här. Välj ett skrivbord, eller spara ett matchande fönster med {mod} + S. Reglerna är gemensamma för alla uppsättningar; en regel visas bara i de uppsättningar där den har skrivbord eller position.',
+    inertTip: 'Regeln har varken skrivbord eller position i den här skärmuppsättningen ännu och flyttar därför inget här - men dess fönster är fortfarande dess egna: sparar du ett hamnar positionen under regeln. Välj ett skrivbord, eller spara ett matchande fönster med {mod} + S.',
     patternPh: 'text i titeln', exePh: '(alla)', regexLbl: 'regex',
     computerLbl: 'dator', computersPh: '(alla)',
     computersTip: 'De datorer regeln gäller på, kommaseparerade. Tomt: alla datorer. Inställningarna delas mellan datorerna via den synkade mappen.',
@@ -234,7 +234,7 @@ const STR = {
     filesH: 'Filer', openIni: 'Öppna filen med sparade positioner…', openConfig: 'Öppna konfigfilen…', reload: 'Läs om inställningar',
     status: (n, total, s) => `${n} sparade positioner för denna skärmuppsättning · ${total} totalt · uppsättning: ${s}`,
     statusFiltered: (shown, n) => ` · filter: ${shown} av ${n} rader visas`,
-    statusInert: n => ` · ${n} ${n === 1 ? 'regel' : 'regler'} utan verkan i denna uppsättning`,
+    statusInert: n => ` · ${n} ${n === 1 ? 'regel' : 'regler'} för andra datorer`,
     statusDesktops: (n, i) => ` · ${n} skrivbord, du är på ${i}`,
     paused: '⏸ automatisk flyttning är avstängd'
   }
@@ -629,7 +629,11 @@ function newRuleRow() {
 // The rows this setup lists: a rule only where it has a desktop or a
 // position (the rule table is shared by every setup), plus the rules just
 // created here.
-const listed = row => !row.inert || revealed.has(row.rule.alias);
+// Listed: every rule that applies on the setup's computer, position or not -
+// what the window menu calls "Edit rule" must be on this list, or a rule
+// looks deleted while it still claims windows. Rules for other computers are
+// the ones left out (shown once if they were just created here).
+const listed = row => !row.foreign || revealed.has(row.rule.alias);
 
 function editingRow() {
   const ae = document.activeElement;
