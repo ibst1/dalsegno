@@ -62,6 +62,9 @@ const STR = {
     savedFromTip: 'Saved from: {0}', noPosYet: 'no position yet',
     inertTip: 'This rule has no desktop and no position in this monitor setup yet, so it does nothing here. Pick a desktop, or save a matching window with {mod} + S. Rules are shared by every setup; a rule is listed only in the setups where it has a desktop or a position.',
     patternPh: 'text in the title', exePh: '(any)', regexLbl: 'regex',
+    computerLbl: 'computer', computersPh: '(all)',
+    computersTip: 'The computers the rule applies on, comma-separated. Empty: every computer. The config is shared between computers through the synced folder.',
+    foreignTip: 'This rule applies on {0} only, so it does nothing on {1}.',
     noDesktop: '(none)', followLbl: 'follow',
     confirmDeleteRule: 'Delete the rule for {0}, and its saved positions in every monitor setup?',
     upTip: 'Move the rule up - earlier rules win', downTip: 'Move the rule down',
@@ -169,6 +172,9 @@ const STR = {
     savedFromTip: 'Sparat från: {0}', noPosYet: 'ingen position ännu',
     inertTip: 'Regeln har varken skrivbord eller position i den här skärmuppsättningen ännu och gör därför ingenting här. Välj ett skrivbord, eller spara ett matchande fönster med {mod} + S. Reglerna är gemensamma för alla uppsättningar; en regel visas bara i de uppsättningar där den har skrivbord eller position.',
     patternPh: 'text i titeln', exePh: '(alla)', regexLbl: 'regex',
+    computerLbl: 'dator', computersPh: '(alla)',
+    computersTip: 'De datorer regeln gäller på, kommaseparerade. Tomt: alla datorer. Inställningarna delas mellan datorerna via den synkade mappen.',
+    foreignTip: 'Regeln gäller bara på {0} och gör därför ingenting på {1}.',
     noDesktop: '(inget)', followLbl: 'följ efter',
     confirmDeleteRule: 'Ta bort regeln för {0}, och dess sparade positioner i alla skärmuppsättningar?',
     upTip: 'Flytta regeln uppåt - tidigare regler vinner', downTip: 'Flytta regeln nedåt',
@@ -473,9 +479,11 @@ function rowsForSetup(setup = curSetup) {
   const byKey = new Map(pos.map(p => [p.key, p]));
   // inert: a rule with no desktop and no position in this setup - it does
   // nothing here (the rule table is shared by every setup)
+  const pc = setupComputer(setup);
   const rows = st.rules.map(r => {
     const pos = byKey.get('rule:' + r.alias) || null;
-    return { kind: 'rule', rule: r, pos, inert: !pos && !(Number(r.desktop) > 0) };
+    return { kind: 'rule', rule: r, pos, foreign: !ruleOnComputer(r, pc),
+             inert: !pos && !(Number(r.desktop) > 0) };
   });
   const known = new Set(st.rules.map(r => 'rule:' + r.alias));
   // the rules in their own order (it decides which wins), then positions of
@@ -506,8 +514,16 @@ function patternCell(r, isNew) {
     `<span class="post">${esc(t('appliesPost'))}</span>` +
     `<label class="rx"><input type="checkbox" class="r-regex" data-alias="${a}"${r.regex ? ' checked' : ''}> ${esc(t('regexLbl'))}</label>` +
     `<span class="pre"> · ${esc(t('programLbl'))}</span>` +
-    `<input type="text" class="r-exe" data-alias="${a}" value="${esc(exe)}" placeholder="${esc(t('exePh'))}">`;
+    `<input type="text" class="r-exe" data-alias="${a}" value="${esc(exe)}" placeholder="${esc(t('exePh'))}">` +
+    `<span class="pre"> · ${esc(t('computerLbl'))}</span>` +
+    `<input type="text" class="r-computers" data-alias="${a}" value="${esc(r.computers || '')}" placeholder="${esc(t('computersPh'))}" title="${esc(t('computersTip'))}">`;
 }
+
+// the computer a setup key belongs to (its last segment), and whether a
+// rule applies there - a rule for other computers is listed dimmed
+const setupComputer = setup => (String(setup || '').split('_').pop() || '').toLowerCase();
+const ruleOnComputer = (r, pc) => !r.computers ||
+  r.computers.split(',').map(s => s.trim().toLowerCase()).includes(pc);
 
 function desktopCell(r, disabled = false) {
   if (!desktopsOn()) return '<td class="deskcell"></td>';
@@ -575,7 +591,8 @@ function posRow(row, idx, count) {
   // it restores to (which decides the monitor), and the window is maximized
   // there - the badge sits with the size it qualifies
   const maxBadge = p && String(p.max) === '1' ? ` <span class="badge">${esc(t('badgeMax'))}</span>` : '';
-  const tip = row.inert ? t('inertTip') : p ? t('savedFromTip').replace('{0}', p.info || key) + '\n' + key : key;
+  const tip = row.foreign ? t('foreignTip').replace('{0}', r.computers).replace('{1}', setupComputer(curSetup))
+    : row.inert ? t('inertTip') : p ? t('savedFromTip').replace('{0}', p.info || key) + '\n' + key : key;
   const nums = p
     ? `<td class="num">${esc(p.x)}</td><td class="num">${esc(p.y)}</td><td class="num">${esc(p.w)}</td><td class="num">${esc(p.h)}${maxBadge}</td>`
     : `<td class="num dim nopos" colspan="4">${esc(t('noPosYet'))}</td>`;
@@ -584,7 +601,7 @@ function posRow(row, idx, count) {
   const isRule = row.kind === 'rule';
   const btn = (cls, label, tipKey, enabled) =>
     `<button class="small ${cls}" title="${esc(t(tipKey))}"${enabled ? '' : ' disabled'}>${esc(t(label))}</button>`;
-  return `<tr class="${row.kind}${off}${row.inert ? ' inert' : ''}" data-section="${esc(section)}" data-key="${esc(key)}"${r ? ` data-alias="${esc(r.alias)}"` : ''}>
+  return `<tr class="${row.kind}${off}${row.inert ? ' inert' : ''}${row.foreign ? ' foreign' : ''}" data-section="${esc(section)}" data-key="${esc(key)}"${r ? ` data-alias="${esc(r.alias)}"` : ''}>
     <td class="selcol"><input type="checkbox" class="rowsel"${selPos.has(key) ? ' checked' : ''}></td>
     <td class="applies" title="${esc(tip)}">${applies}${openBadge(key)}</td>
     <td class="active">${active}</td>
@@ -602,7 +619,7 @@ function posRow(row, idx, count) {
 function newRuleRow() {
   return `<tr class="rule new">
     <td class="selcol"></td>
-    <td class="applies">${patternCell({ alias: '', pattern: '', regex: 0, exe: '' }, true)}</td>
+    <td class="applies">${patternCell({ alias: '', pattern: '', regex: 0, exe: '', computers: st.computer || '' }, true)}</td>
     <td class="active"><input type="checkbox" class="r-enabled" checked disabled></td>
     ${desktopCell({ desktop: 0, follow: 0 })}
     <td class="num dim nopos" colspan="4">${esc(t('noPosYet'))}</td>
@@ -680,6 +697,7 @@ function ruleFromRow(tr) {
     pattern: tr.querySelector('.r-pattern').value.trim(),
     regex: tr.querySelector('.r-regex').checked ? 1 : 0,
     exe: tr.querySelector('.r-exe').value.trim(),
+    computers: (tr.querySelector('.r-computers') || { value: '' }).value.trim(),
     desktop: desk ? Number(desk.value) : 0,
     follow: follow && follow.checked ? 1 : 0,
     enabled: enabled && enabled.checked ? 1 : 0
@@ -707,14 +725,14 @@ $('posBody').addEventListener('change', e => {
            enabled: tr.querySelector('.p-enabled').checked ? 1 : 0 });
     return;
   }
-  const editable = ['r-pattern', 'r-regex', 'r-exe', 'r-enabled', 'r-desktop', 'r-follow'].some(c => el.classList.contains(c));
+  const editable = ['r-pattern', 'r-regex', 'r-exe', 'r-computers', 'r-enabled', 'r-desktop', 'r-follow'].some(c => el.classList.contains(c));
   if (!editable) return;
   const r = ruleFromRow(tr);
   if (tr.classList.contains('new')) {
     if (!r.pattern && !r.exe) return;
     awaitingState = true;
     addPending = true;
-    post({ action: 'addRule', pattern: r.pattern, regex: r.regex, exe: r.exe, desktop: r.desktop, follow: r.follow });
+    post({ action: 'addRule', pattern: r.pattern, regex: r.regex, exe: r.exe, computers: r.computers, desktop: r.desktop, follow: r.follow });
     return;
   }
   if (!r.pattern && !r.exe) return;   // a rule needs a text or a program
@@ -722,7 +740,7 @@ $('posBody').addEventListener('change', e => {
   post({ action: 'setRule', alias: tr.dataset.alias, ...r });
 });
 $('posBody').addEventListener('keydown', e => {
-  const isField = e.target.classList.contains('r-pattern') || e.target.classList.contains('r-exe');
+  const isField = ['r-pattern', 'r-exe', 'r-computers'].some(c => e.target.classList.contains(c));
   if (!isField) return;
   if (e.key === 'Enter') {
     e.target.blur();                       // commit: change fires on blur
@@ -734,7 +752,7 @@ $('posBody').addEventListener('keydown', e => {
   }
 });
 $('posBody').addEventListener('focusout', e => {
-  const isField = e.target.classList.contains('r-pattern') || e.target.classList.contains('r-exe');
+  const isField = ['r-pattern', 'r-exe', 'r-computers'].some(c => e.target.classList.contains(c));
   if (!isField) return;
   // re-sync the list once the field is left, unless an edit is on its way
   setTimeout(() => { if (!awaitingState && !editingRow()) renderPositions(); }, 0);

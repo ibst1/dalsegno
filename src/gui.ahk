@@ -207,6 +207,7 @@ PushState() {
     for r in titleRules
         rules.Push(Map("alias", r.alias, "pattern", r.pattern, "regex", r.regex ? 1 : 0
             , "exe", r.exe, "exeRegex", r.exeRegex ? 1 : 0, "cls", RuleClass(r)
+            , "computers", RuleComputers(r)
             , "desktop", r.desktop, "follow", r.follow ? 1 : 0
             , "enabled", r.enabled ? 1 : 0))
     dhk := Map()
@@ -226,6 +227,7 @@ PushState() {
             , "hotkeys", g_hk, "desktopHotkeys", dhk)
         , "desktops", Map("count", s ? s.count : 0, "index", s ? s.index : 0, "names", DesktopNames())
         , "currentSetup", SetupKey()
+        , "computer", A_ComputerName
         , "positions", ListPositions()
         , "rules", rules
         , "ignoreExe", ignoreExe
@@ -466,6 +468,8 @@ UiSetRule(msg) {
         r.exeRegex := SubStr(exe, 1, 3) = "re:"
         r.exe := r.exeRegex ? SubStr(exe, 4) : exe
     }
+    if msg.Has("computers")
+        r.computers := RegExReplace(Trim(msg["computers"]), "\s*,\s*", ",")
     if msg.Has("desktop")
         r.desktop := Integer(msg["desktop"])
     if msg.Has("follow")
@@ -485,9 +489,11 @@ UiAddRule(msg) {
     if (pattern = "" && exe = "")
         return
     exeRegex := SubStr(exe, 1, 3) = "re:"
+    ; a rule made here is for this computer unless the field says otherwise
+    computers := msg.Has("computers") ? RegExReplace(Trim(msg["computers"]), "\s*,\s*", ",") : A_ComputerName
     WriteRule({ alias: SuggestAlias(pattern, exe), pattern: pattern
         , regex: msg.Has("regex") && msg["regex"] ? true : false
-        , exe: exeRegex ? SubStr(exe, 4) : exe, exeRegex: exeRegex, cls: ""
+        , exe: exeRegex ? SubStr(exe, 4) : exe, exeRegex: exeRegex, cls: "", computers: computers
         , desktop: msg.Has("desktop") ? Integer(msg["desktop"]) : 0
         , follow: msg.Has("follow") && msg["follow"] ? true : false, enabled: true })
     LoadConfig()

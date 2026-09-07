@@ -159,12 +159,13 @@ Left-click the tray icon opens the desktop picker when Desktops is on;
 
 ```ini
 [Rules]
-; alias = [/exe:<program>] [/class:<window class>] [/desktop:<n>] [/follow] [/off] <text or re:regex>
+; alias = [/exe:<program>] [/class:<window class>] [/computer:<name,name>] [/desktop:<n>] [/follow] [/off] <text or re:regex>
 preview         = Preview
 history         = /exe:msedge.exe CustomerHistoryPopup
 expanto         = /desktop:5 re:^Expanto$
 spotify         = /exe:spotify.exe /desktop:2 /follow
 notepad         = /exe:Notepad.exe /class:Notepad /desktop:3
+office          = /exe:Viewer.exe /computer:DESK-01,DESK-02 Report
 old             = /desktop:2 /off re:^Something$
 ```
 
@@ -176,6 +177,12 @@ old             = /desktop:2 /off re:^Something$
   spaces). This is what a program row in the list becomes when it is given
   a desktop or switched off: a rule for exactly the windows the row stood
   for, with its positions.
+- `/computer:` limits the rule to those computers (names as Windows reports
+  them, comma-separated, case-insensitive). The config file is shared
+  between computers when the folder is synced, and positions are already
+  per computer; this keeps the rules apart too. A rule without it applies
+  everywhere. Rules created in the GUI or from the window menu are for the
+  computer they are made on; clear the field (or the tick) for all.
 - `/desktop:<n>` moves matching windows there when they appear or their
   title changes into matching; `/follow` switches along.
 - `/off` keeps the rule but switches it off.

@@ -128,6 +128,7 @@ Tr(id) {
         "dlgPost",        "in the title",
         "dlgRegex",       "The text is a regular expression",
         "dlgEnabled",     "Rule is active",
+        "dlgThisComputer", "Only on this computer ({1})",
         "dlgSavePos",     "Save this window's current position",
         "dlgDesktop",     "Desktop:",
         "dlgNoDesktop",   "(none)",
@@ -226,6 +227,7 @@ Tr(id) {
         "dlgPost",        "i titeln",
         "dlgRegex",       "Texten är ett reguljärt uttryck",
         "dlgEnabled",     "Regeln är aktiv",
+        "dlgThisComputer", "Bara på den här datorn ({1})",
         "dlgSavePos",     "Spara fönstrets nuvarande position",
         "dlgDesktop",     "Skrivbord:",
         "dlgNoDesktop",   "(inget)",
@@ -459,13 +461,14 @@ ConfigList(section) {
     return list
 }
 
-; alias = [/exe:<program>] [/class:<window class>] [/desktop:<n>] [/follow] [/off] <text or re:regex>
+; alias = [/exe:<program>] [/class:<window class>] [/computer:<name,name>] [/desktop:<n>] [/follow] [/off] <text or re:regex>
 ; "" when neither a text nor a program is given - a rule needs one of them.
 ; /class: takes a quoted value when the class has spaces ("GDI+ Hook Window
-; Class").
+; Class"). /computer: limits the rule to those computers (the config is
+; shared between machines through the synced folder); none = every computer.
 ParseRuleValue(alias, value) {
     r := { alias: alias, pattern: "", regex: false, exe: "", exeRegex: false
-        , cls: "", desktop: 0, follow: false, enabled: true }
+        , cls: "", computers: "", desktop: 0, follow: false, enabled: true }
     rest := Trim(value)
     loop {
         if RegExMatch(rest, "^/exe:(\S+)\s*(.*)$", &m) {
@@ -476,6 +479,8 @@ ParseRuleValue(alias, value) {
             rest := m[2]
         } else if RegExMatch(rest, '^/class:(?:"([^"]*)"|(\S+))\s*(.*)$', &m) {
             r.cls := m[1] != "" ? m[1] : m[2], rest := m[3]
+        } else if RegExMatch(rest, "^/computer:(\S+)\s*(.*)$", &m) {
+            r.computers := m[1], rest := m[2]
         } else if RegExMatch(rest, "^/desktop:(\d+)\s*(.*)$", &m) {
             r.desktop := Integer(m[1]), rest := m[2]
         } else if RegExMatch(rest, "^/follow(?:\s+(.*))?$", &m) {
@@ -499,6 +504,8 @@ RuleValue(r) {
         v .= "/exe:" (r.exeRegex ? "re:" : "") r.exe " "
     if (RuleClass(r) != "")
         v .= "/class:" (InStr(r.cls, " ") ? '"' r.cls '"' : r.cls) " "
+    if (RuleComputers(r) != "")
+        v .= "/computer:" RuleComputers(r) " "
     if r.desktop
         v .= "/desktop:" r.desktop " "
     if r.follow
@@ -513,6 +520,23 @@ RuleValue(r) {
 ; class condition existed have no cls property at all.
 RuleClass(r) {
     return r.HasProp("cls") ? r.cls : ""
+}
+
+; The computers a rule is limited to, "" for all; a comma-separated list as
+; written in the config. Rules built before the flag existed have no property.
+RuleComputers(r) {
+    return r.HasProp("computers") ? Trim(r.computers, " ,") : ""
+}
+
+; Does the rule apply on THIS computer? Names compare case-insensitively.
+RuleOnThisComputer(r) {
+    list := RuleComputers(r)
+    if (list = "")
+        return true
+    for name in StrSplit(list, ",")
+        if (StrLower(Trim(name)) = StrLower(A_ComputerName))
+            return true
+    return false
 }
 
 LoadConfig() {
@@ -610,7 +634,7 @@ PromoteProgram(key, desktop, follow, enabled) {
     exe := parts[1], cls := parts[2]
     alias := SuggestAlias("", exe)
     WriteRule({ alias: alias, pattern: "", regex: false, exe: exe, exeRegex: false, cls: cls
-        , desktop: desktop, follow: follow, enabled: enabled })
+        , computers: A_ComputerName, desktop: desktop, follow: follow, enabled: enabled })
     newKey := "rule:" alias
     for p in ListPositions() {
         if (p["key"] != key)
@@ -761,6 +785,10 @@ KeyForInfo(info) {
 ; match.
 RuleMatches(rule, info) {
     try {
+        ; a rule for other computers does not exist here: its windows fall
+        ; to the program identity, and its desktop is never applied
+        if !RuleOnThisComputer(rule)
+            return false
         if (rule.exe != "") {
             hit := rule.exeRegex ? (info.exe ~= rule.exe) : (StrLower(info.exe) = StrLower(rule.exe))
             if !hit
@@ -961,10 +989,98 @@ ScanWindowsBody() {
 ; the next real press and release of the key clears it.
 MOD_HOLD_MS := 10000
 g_modDownSince := 0   ; tick of the down our hook saw; 0 while up
+
+; The modifier by Raw Input - the second witness. The hook's physical state
+; is what phantoms: after another script reinstalled its hook ahead of ours
+; mid-hold, the hook believed CapsLock held for good, and with
+; AutoSaveModifierOnly every window dropped by hand was SAVED - which is how
+; a second computer, given three new screens, got rule positions nobody
+; asked for and kept moving the windows back to them (2026-09-07). The
+; ten-second cap above limits that; Raw Input removes it. Windows delivers
+; every keyboard event to a registered window straight from the input
+; thread, whether or not a hook later blocks it, so it sees the key-up the
+; hook missed. Injected input (hDevice 0 - SendInput, keybd_event) never
+; counts: the state must be the keyboard's alone. The cap stays as a net
+; for the one case Raw Input misses too, a key-up on the secure desktop.
+g_rawModDown := false   ; the modifier according to the keyboard
+g_rawModTick := 0       ; when Raw Input last reported it; 0 = never (then the hook decides)
+RegisterRawModifier()
+
+RegisterRawModifier() {
+    static RIDEV_INPUTSINK := 0x100      ; deliver even when we are not the focus
+    ; RAWINPUTDEVICE: usUsagePage, usUsage (generic desktop 1, keyboard 6), dwFlags, hwndTarget
+    rid := Buffer(A_PtrSize = 8 ? 16 : 12, 0)
+    NumPut("UShort", 1, "UShort", 6, "UInt", RIDEV_INPUTSINK, rid)
+    NumPut("Ptr", A_ScriptHwnd, rid, 8)
+    if !DllCall("RegisterRawInputDevices", "Ptr", rid, "UInt", 1, "UInt", rid.Size) {
+        TrayTip("Raw Input registration failed (error " A_LastError ") - the modifier is read from the hook", "DalSegno", "Iconx")
+        return
+    }
+    ; MaxThreads above 1: a handler still running when the next event lands
+    ; would otherwise drop it (the up half of a down/up pair); Critical
+    ; keeps the events in order instead.
+    OnMessage(0x00FF, OnRawInput, 8)     ; WM_INPUT
+}
+
+OnRawInput(wParam, lParam, msg, hwnd) {
+    Critical
+    global g_rawModDown, g_rawModTick, g_modifier
+    static RID_INPUT := 0x10000003, HDR := (A_PtrSize = 8 ? 24 : 16)   ; sizeof(RAWINPUTHEADER)
+    static buf := Buffer(64)             ; header + RAWKEYBOARD is 40 bytes on x64
+    size := buf.Size
+    if (DllCall("GetRawInputData", "Ptr", lParam, "UInt", RID_INPUT, "Ptr", buf, "UInt*", &size, "UInt", HDR) = -1)
+        return
+    if (NumGet(buf, 0, "UInt") != 1)     ; dwType: RIM_TYPEKEYBOARD
+        return
+    ; RAWKEYBOARD: MakeCode, Flags, Reserved, VKey (UShort each), Message, ExtraInformation
+    vk := NumGet(buf, HDR + 6, "UShort"), flags := NumGet(buf, HDR + 2, "UShort")
+    name := RawKeyName(vk, NumGet(buf, HDR, "UShort"), flags)
+    if (name != "") {
+        if (StrLower(name) != StrLower(g_modifier))
+            return
+    } else {
+        want := 0
+        try want := GetKeyVK(g_modifier)
+        if (!want || vk != want)
+            return
+    }
+    if !NumGet(buf, 8, "Ptr")            ; hDevice 0: injected, not the keyboard
+        return
+    g_rawModDown := !(flags & 1)         ; RI_KEY_BREAK
+    g_rawModTick := A_TickCount
+}
+
+; Raw Input reports the generic VK_SHIFT / VK_CONTROL / VK_MENU; the side
+; comes from the scan code (right Shift is 0x36) or the E0 prefix (right
+; Ctrl and Alt). The Win keys and CapsLock have codes of their own; any
+; other key is matched by virtual key in OnRawInput.
+RawKeyName(vk, make, flags) {
+    e0 := flags & 2                      ; RI_KEY_E0
+    switch vk {
+        case 0x14: return "CapsLock"
+        case 0x10, 0xA0, 0xA1: return (make = 0x36 || vk = 0xA1) ? "RShift" : "LShift"
+        case 0x11, 0xA2, 0xA3: return (e0 || vk = 0xA3) ? "RCtrl" : "LCtrl"
+        case 0x12, 0xA4, 0xA5: return (e0 || vk = 0xA5) ? "RAlt" : "LAlt"
+        case 0x5B: return "LWin"
+        case 0x5C: return "RWin"
+    }
+    return ""
+}
+
+; Is the modifier physically down? Raw Input once it has spoken, the hook
+; until then (and if registration failed).
+ModifierPhysical() {
+    global g_rawModDown, g_rawModTick
+    if g_rawModTick
+        return g_rawModDown
+    try return GetKeyState(g_modifier, "P")
+    return false
+}
+
 ModifierHeld(*) {
     global g_modDownSince
     try {
-        if !GetKeyState(g_modifier, "P")
+        if !ModifierPhysical()
             return false
         if !g_modDownSince
             g_modDownSince := A_TickCount   ; pressed since the last poll
@@ -979,7 +1095,7 @@ ModifierHeld(*) {
 ModifierWatchdog() {
     global g_modDownSince
     down := false
-    try down := GetKeyState(g_modifier, "P")
+    try down := ModifierPhysical()
     if !down
         g_modDownSince := 0
     else if !g_modDownSince
@@ -1330,6 +1446,11 @@ TmSaveOrRule(hwnd) {
             ctl["exeOnly"].OnEvent("Click", (*) => ctl["byTitle"].Value := 1)
         }
     }
+    ; the config is shared between computers through the synced folder, so a
+    ; rule says where it applies. New rules are for this computer unless
+    ; the tick is cleared; an existing rule shows what it has.
+    ctl["thisPc"] := g.AddCheckbox("xm y+6", Format(Tr("dlgThisComputer"), A_ComputerName))
+    ctl["thisPc"].Value := rule ? (RuleComputers(rule) != "" ? 1 : 0) : 1
     ; the desktop row: which desktop the rule's windows go to
     if g_modDesktops {
         names := DesktopNames()
@@ -1387,22 +1508,31 @@ RuleDialogOk(g, hwnd, alias, ctl, info) {
         }
     }
     g.Hide()
+    thisPc := ctl["thisPc"].Value ? true : false
     SetTimer(RuleDialogApply.Bind(hwnd, alias, pattern, regex, enabled, keepPos, useProg
-        , desktop, follow, info.exe, exeCond), -1)
+        , desktop, follow, info.exe, exeCond, thisPc), -1)
 }
 
-RuleDialogApply(hwnd, alias, pattern, regex, enabled, keepPos, useProg, desktop, follow, exe, exeCond) {
+RuleDialogApply(hwnd, alias, pattern, regex, enabled, keepPos, useProg, desktop, follow, exe, exeCond, thisPc) {
     global g_ruleDlg
     if g_ruleDlg {
         try g_ruleDlg.Destroy()
         g_ruleDlg := 0
     }
+    ; the computers a new rule is for; "" = all
+    computers := thisPc ? A_ComputerName : ""
     if (alias != "") {
         r := RuleByAlias(alias)
         if (r = "")
             return
         r.pattern := pattern, r.regex := regex, r.enabled := enabled
         r.desktop := desktop, r.follow := follow
+        ; ticked: keep a list that already names this computer, otherwise
+        ; this computer alone; cleared: every computer
+        if !thisPc
+            r.computers := ""
+        else if (RuleComputers(r) = "" || !RuleOnThisComputer(r))
+            r.computers := A_ComputerName
         if (exeCond = "-")
             r.exe := "", r.exeRegex := false
         else if (exeCond != "" && r.exe = "")
@@ -1431,7 +1561,7 @@ RuleDialogApply(hwnd, alias, pattern, regex, enabled, keepPos, useProg, desktop,
         if desktop {
             ; a desktop for all windows of the program: a program rule, so
             ; that the decision shows up as a row in the list
-            CreateRuleAndSave(hwnd, "", false, exe, desktop, follow, keepPos)
+            CreateRuleAndSave(hwnd, "", false, exe, desktop, follow, keepPos, computers)
             return
         }
         key := KeyFor(hwnd)
@@ -1441,7 +1571,7 @@ RuleDialogApply(hwnd, alias, pattern, regex, enabled, keepPos, useProg, desktop,
             SaveUnderKey(hwnd, key)
         return
     }
-    CreateRuleAndSave(hwnd, pattern, regex, exeCond = "-" ? "" : exeCond, desktop, follow, keepPos)
+    CreateRuleAndSave(hwnd, pattern, regex, exeCond = "-" ? "" : exeCond, desktop, follow, keepPos, computers)
 }
 
 ; Writes a rule for the pattern (or the program, when the pattern is empty) -
@@ -1451,7 +1581,7 @@ RuleDialogApply(hwnd, alias, pattern, regex, enabled, keepPos, useProg, desktop,
 ; NOTE: the parameter is keepPos, not savePos - AutoHotkey names are case
 ; insensitive, and a parameter called savePos shadows the function SavePos
 ; inside the body ("Integer has no method named Call").
-CreateRuleAndSave(hwnd, pattern, regex, exe, desktop, follow, keepPos) {
+CreateRuleAndSave(hwnd, pattern, regex, exe, desktop, follow, keepPos, computers := "") {
     global configIni, titleRules, winInfo
     alias := ""
     for r in titleRules
@@ -1459,13 +1589,19 @@ CreateRuleAndSave(hwnd, pattern, regex, exe, desktop, follow, keepPos) {
             && RuleClass(r) = "") {
             alias := r.alias
             r.enabled := true, r.desktop := desktop, r.follow := follow
+            ; an identical rule made on another computer gains this one
+            ; rather than getting a twin; "" widens it to every computer
+            if (computers = "")
+                r.computers := ""
+            else if !RuleOnThisComputer(r)
+                r.computers := RuleComputers(r) "," computers
             WriteRule(r)
             break
         }
     if (alias = "") {
         alias := SuggestAlias(pattern, exe)
         WriteRule({ alias: alias, pattern: pattern, regex: regex, exe: exe
-            , exeRegex: false, cls: "", desktop: desktop, follow: follow, enabled: true })
+            , exeRegex: false, cls: "", computers: computers, desktop: desktop, follow: follow, enabled: true })
     }
     LoadConfig()
     ; identity and position first, the desktop move last: a window sent to

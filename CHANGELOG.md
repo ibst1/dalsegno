@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.0.4 (2026-09-07)
+
+- Rules can be limited to computers: `/computer:<name,name>` in the config,
+  a *computer* field on every rule row in the GUI and an *Only on this
+  computer* tick in the window menu's rule dialog. The config is shared
+  between computers through the synced folder, and positions were already
+  kept per computer; the rules were not, so a rule made at one desk fired
+  at every other. New rules are for the computer they are made on; a rule
+  without the flag applies everywhere, as before. A rule for other
+  computers is listed dimmed in the setups of those computers and ignored
+  on this one.
+
+- Fix: the autosave modifier could read as held when it was not. The hook's
+  physical state phantoms after another script reinstalls its hook ahead
+  of DalSegno's mid-hold, and with *modifier only* on, every window then
+  dropped by hand was saved - which is how a computer given three new
+  screens acquired rule positions nobody asked for and kept moving the
+  windows back to them. The modifier is now read through Raw Input, which
+  gets every keyboard event straight from the input thread whether or not
+  a hook later blocks it, so it sees the release the hook missed; injected
+  keystrokes never count. The ten-second cap from 2.0.3 stays as a net for
+  a release on the secure desktop, which Raw Input misses too.
+
 ## 2.0.3 (2026-09-06)
 
 - Fix: a window moved by hand was placed again when its title left a rule
