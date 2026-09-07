@@ -1,5 +1,5 @@
 ;===============================================================================
-; DalSegno Window Manager — v2.0.2 (2026-09-04)
+; DalSegno Window Manager — v2.0.3 (2026-09-06)
 ;
 ; Dal segno (𝄋) — "from the sign": go back to the marked place. Windows return
 ; to their marked places: the saved position on the right monitor, and the
@@ -77,7 +77,7 @@ OnMessage(DllCall("RegisterWindowMessage", "str", "DESKPILOT_CMD", "uint"), IpcC
 OnMessage(DllCall("RegisterWindowMessage", "str", "DALSEGNO_CMD", "uint"), IpcCommand)
 OnMessage(0x404, OnTrayClick)   ; AHK_NOTIFYICON: left click on the tray icon
 SetTimer(ScanWindows, 800)
-SetTimer(ModifierWatchdog, 5000)   ; clears a logically stuck modifier
+SetTimer(ModifierWatchdog, 100)   ; tracks the modifier's down/up for ModifierHeld's hold limit
 
 if (A_Args.Length && A_Args[1] = "/show")
     ShowOsd()

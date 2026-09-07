@@ -12,7 +12,7 @@ autoSaveEnabled := true
 notifyEnabled   := true
 g_autoSaveModOnly := true      ; autosave only when the modifier is held ([Positions] AutoSaveModifierOnly)
 
-; Why the last SavePos failed: "" (it did not), "min", "gone" or "write" - the
+; Why the last SavePos failed: "" (it did not), "min", "gone", "size" or "write" - the
 ; callers turn it into a message with SaveErrorText().
 g_saveError := "", g_saveErrorText := ""
 
@@ -160,6 +160,12 @@ SavePos(key, hwnd) {
         }
         if (mm != 1 || !NormalRect(hwnd, &x, &y, &w, &h))
             WinGetPos(&x, &y, &w, &h, hwnd)
+        ; a window without a size is not a window anyone sees (a Java frame
+        ; before it is shown, a hidden helper): nothing worth remembering
+        if (w <= 0 || h <= 0) {
+            g_saveError := "size"
+            return false
+        }
         section := SectionFor(key)
         IniWrite(key, posIni, section, "Key")
         IniWrite(WinGetProcessName(hwnd) " | " SubStr(WinGetTitle(hwnd), 1, 60), posIni, section, "Info")
@@ -182,6 +188,7 @@ SaveErrorText() {
     switch g_saveError {
         case "min":   return Tr("cannotSaveMin")
         case "gone":  return Tr("cannotSaveGone")
+        case "size":  return Tr("cannotSaveSize")
         case "write": return Tr("cannotSaveWrite") "`n" g_saveErrorText
     }
     return Tr("cannotSaveWin")
@@ -532,13 +539,18 @@ ForgetActive() {
 }
 
 ; Saves the position of every open manageable window - a snapshot of the
-; current layout, the counterpart of ApplyAll.
+; current layout, the counterpart of ApplyAll. Only windows that are real
+; (have a size) and are on a virtual desktop: a titled top-level window on no
+; desktop is a hidden helper the user never sees, and the Windows tab skips
+; those the same way.
 SaveAll(*) {
-    global winInfo
+    global winInfo, g_modDesktops, g_dllLoaded
     n := 0
     for hwnd in WinGetList() {
         key := KeyFor(hwnd)
-        if (key = "")
+        if (key = "" || !WindowReady(hwnd))
+            continue
+        if (g_modDesktops && g_dllLoaded && DesktopOf(hwnd) = "")
             continue
         if SavePos(key, hwnd) {
             n++

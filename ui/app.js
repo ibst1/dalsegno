@@ -11,54 +11,71 @@ let lang = 'en';        // interface language, mirrors st.settings.lang
 let curSetup = null;    // monitor setup selected in the dropdown
 let armedForget = null; // section whose Forget button awaits confirmation
 let awaitingState = false; // a rule edit was posted; the next state carries it
+let addPending = false;    // a NEW rule was posted; the next state names it
+// Rules created from the list: shown in the setup they were created in even
+// while they have neither desktop nor position (until another setup is
+// picked) - otherwise a new rule would vanish before it could get either.
+const revealed = new Set();
 
 // ── interface strings ──────────────────────────────────────────────────
 const STR = {
   en: {
-    tabPositions: 'Positions', tabWindows: 'Windows', tabDesktops: 'Desktops', tabSettings: 'Settings',
+    tabWindows: 'Windows', tabDesktops: 'Desktops', tabSettings: 'Settings',
+    // the two sections
+    sectRules: 'Windows with rules', sectFree: 'Windows without rules',
+    sectRulesTip: 'What DalSegno acts on in the selected monitor setup: rules, and programs with a saved position. Click to fold.',
+    sectFreeTip: 'Open windows no row above covers. They are left where they are. Click to fold.',
+    openNow: n => `${n} open`, openNowTip: 'Open windows this row applies to right now:',
     // positions list
     setupLabel: 'Monitor setup:', thisSetup: ' (this)',
-    thWindow: 'Applies to', thIdentity: 'Identity', thActive: 'Active', thDesktop: 'Desktop',
+    thWindow: 'Applies to', thActive: 'Active', thDesktop: 'Desktop',
     thWidth: 'Width', thHeight: 'Height',
-    thWindowTip: 'Which windows the row applies to. A rule\'s text and program are edited right here and saved when you leave the field. Hover a row for the window the position was saved from.',
-    thIdentityTip: 'What the position is stored under - that is, which windows share it. A standard row shows the window class: every window of that program with that class shares the position, so several rows for one program are its different kinds of window (main window, dialogs, helper windows). A rule row shows the rule\'s name: every window the rule matches shares the position.',
-    thActiveTip: 'Untick to switch a rule off without deleting it: its windows are then treated like any other window of their program, and its saved position waits until it is ticked again.',
-    thDesktopTip: 'The virtual desktop the rule\'s windows are moved to when they appear or their title changes into matching. "follow" switches along.',
+    thWindowTip: 'Which windows the row applies to - that is, which windows share the position. A rule\'s text and program are edited right here and saved when you leave the field. A program with several rows has several kinds of window (main window, dialogs, helper windows); the window class after the text tells them apart. Hover a row for the window the position was saved from.',
+    thActiveTip: 'Untick to switch a row off without deleting it: its windows are then left alone, and its saved position waits until it is ticked again. Unticking a program row makes it a rule for the program (same window class), positions included.',
+    thDesktopTip: 'The virtual desktop the row\'s windows are moved to when they appear or their title changes into matching. "follow" switches along. Picking a desktop on a program row makes it a rule for the program (same window class), positions included.',
     thXTip: 'Distance from the left edge of the desktop, in pixels.',
     thYTip: 'Distance from the top edge of the desktop, in pixels.',
     thWidthTip: 'Window width in pixels.', thHeightTip: 'Window height in pixels.',
-    selColTip: 'Tick rows to forget their positions in one go.',
-    forgetSel: 'Forget selected', saveAll: 'Save all now', saveAllTip: "Save every open window's current position",
+    selColTip: 'Tick rows to remove them in one go.',
+    removeSel: 'Remove selected',
+    confirmRemoveSel: 'Remove {0} rows? A rule is deleted with its saved positions in every monitor setup; a program row loses its saved positions in every setup.',
+    saveAll: 'Save all now', saveAllTip: "Save every open window's current position",
     applyAll: 'Move all now', applyAllTip: 'Move every open window to its saved position ({mod} + Home)',
     addRule: '+ Add rule', addRuleTip: 'A new rule row - type the text and press Enter',
     filterPh: 'Filter…',
-    filterTip: 'Show only rows whose program, window class, rule name, rule text or saved-from title contains this text. Esc clears it.',
+    filterTip: 'Show only rows whose program, window class, rule text or saved-from title contains this text. Esc clears it.',
     posNoMatch: 'No rows match "{0}" in this monitor setup.',
     posEmpty: 'No rules and no saved positions for this monitor setup yet. Drag a window where you want it, save with {mod} + S, or hold {mod} and right-click a window.',
-    badgeRule: 'rule', badgeStd: 'standard', badgeMax: 'maximized', badgeNew: 'new',
-    moveNow: 'Move now', forget: 'Forget', sure: 'Sure?',
+    badgeMax: 'maximized',
+    moveNow: 'Move now', moveNowTip: 'Move the open windows this row applies to, to the saved position',
+    moveNowNoTip: 'Nothing to move to: no saved position in this monitor setup',
+    forget: 'Forget', forgetTip: 'Forget the position saved in this monitor setup - the row stays', sure: 'Sure?',
+    removeRow: 'Remove',
+    removeRuleTip: 'Delete the rule and its saved positions in every monitor setup',
+    removeProgTip: 'Remove the program row: its saved positions in every monitor setup',
+    confirmRemoveProg: 'Remove the row for {0}, and its saved positions in every monitor setup?',
+    orderProgTip: 'Program rows come after every rule and are sorted by program',
+    activeGoneTip: 'The rule no longer exists - this position can never apply again',
     appliesPre: 'windows with', appliesPost: 'in the title', programLbl: 'program',
     appliesRuleGone: 'rule "{0}" (no longer exists)', appliesStd: 'all {0} windows',
+    appliesRule: 'windows with "{0}" in the title', appliesRuleExe: '{1} windows with "{0}" in the title',
     savedFromTip: 'Saved from: {0}', noPosYet: 'no position yet',
+    inertTip: 'This rule has no desktop and no position in this monitor setup yet, so it does nothing here. Pick a desktop, or save a matching window with {mod} + S. Rules are shared by every setup; a rule is listed only in the setups where it has a desktop or a position.',
     patternPh: 'text in the title', exePh: '(any)', regexLbl: 'regex',
     noDesktop: '(none)', followLbl: 'follow',
-    deleteRule: 'Delete rule', deleteRuleTip: 'Remove the rule and its saved positions in every monitor setup',
-    confirmDeleteRule: 'Delete the rule "{0}" and its saved positions in every monitor setup?',
+    confirmDeleteRule: 'Delete the rule for {0}, and its saved positions in every monitor setup?',
     upTip: 'Move the rule up - earlier rules win', downTip: 'Move the rule down',
-    // windows
-    winsHint: 'Open windows DalSegno can act on right now.', refresh: 'Refresh',
-    thProgram: 'Program', thTitle: 'Title', thWinDesktop: 'Desktop', thSaved: 'Saved position',
+    // windows without rules
+    refresh: 'Refresh', refreshTip: 'Read the open windows again',
+    thProgram: 'Program', thTitle: 'Title', thWinDesktop: 'Desktop',
     thProgramTip: 'Executable name of the process owning the window.',
     thTitleTip: 'The window title right now. Rules match against this.',
-    thWinDesktopTip: 'The virtual desktop the window is on - pick another to move it there.',
-    thSavedTip: 'Whether a position is stored for this window\'s identity in the current monitor setup.',
-    savedYes: '✓ saved', saveBtn: 'Save position', saveTip: "Save the window's current position",
-    moveHere: 'Move there', moveTip: 'Move the window to its saved position',
-    newRuleBtn: 'Rule…', editRuleBtn: 'Edit rule…',
-    ruleRowTip: "The window menu's save dialog for this window: what the position applies to, the desktop, or the rule it matches",
-    unmanagedTip: 'Only managed through a rule - none matches yet',
-    ownWinTip: 'DalSegno\'s own window. Rules never apply to it and it needs no position; it always opens on the desktop you are on.',
-    winsEmpty: 'No windows found.',
+    thWinDesktopTip: 'The virtual desktop the window is on right now - pick another to move it there.',
+    thNowTip: 'Where the window is right now - what a rule made from it would save.',
+    makeRule: 'Make a rule…',
+    makeRuleTip: 'What the rule applies to (all windows of the program, or windows with a text in the title), its desktop, and whether to save the window\'s position',
+    freeEmpty: 'Every open window is covered by a row above.',
+    freeNoMatch: 'No open window matches "{0}".',
     // desktops tab
     dllNote: 'VirtualDesktopAccessor.dll is missing next to the script: windows cannot be moved between desktops, and rules with a desktop do nothing. See the README for the download.',
     dhkH: 'Desktop hotkeys',
@@ -107,52 +124,64 @@ const STR = {
     filesH: 'Files', openIni: 'Open the saved positions file…', openConfig: 'Open the config file…', reload: 'Reload settings',
     status: (n, total, s) => `${n} saved positions for this monitor setup · ${total} total · setup: ${s}`,
     statusFiltered: (shown, n) => ` · filter: ${shown} of ${n} rows shown`,
+    statusInert: n => ` · ${n} rule${n === 1 ? '' : 's'} with no effect in this setup`,
     statusDesktops: (n, i) => ` · ${n} desktops, on ${i}`,
     paused: '⏸ automatic moving is off'
   },
   sv: {
-    tabPositions: 'Lägen', tabWindows: 'Fönster', tabDesktops: 'Skrivbord', tabSettings: 'Inställningar',
+    tabWindows: 'Fönster', tabDesktops: 'Skrivbord', tabSettings: 'Inställningar',
+    sectRules: 'Fönster med regler', sectFree: 'Fönster utan regler',
+    sectRulesTip: 'Det DalSegno agerar på i vald skärmuppsättning: regler, och program med sparad position. Klicka för att fälla ihop.',
+    sectFreeTip: 'Öppna fönster som ingen rad ovan täcker. De lämnas där de är. Klicka för att fälla ihop.',
+    openNow: n => `${n} öppna`, openNowTip: 'Öppna fönster raden gäller just nu:',
     setupLabel: 'Skärmuppsättning:', thisSetup: ' (denna)',
-    thWindow: 'Gäller', thIdentity: 'Identitet', thActive: 'Aktiv', thDesktop: 'Skrivbord',
+    thWindow: 'Gäller', thActive: 'Aktiv', thDesktop: 'Skrivbord',
     thWidth: 'Bredd', thHeight: 'Höjd',
-    thWindowTip: 'Vilka fönster raden gäller. En regels text och program redigeras direkt här och sparas när du lämnar fältet. Håll muspekaren över raden för att se fönstret positionen sparades från.',
-    thIdentityTip: 'Vad positionen sparas under - alltså vilka fönster som delar den. En standardrad visar fönsterklassen: alla fönster i det programmet med den klassen delar positionen, så flera rader för samma program är dess olika sorters fönster (huvudfönster, dialoger, hjälpfönster). En regelrad visar regelns namn: alla fönster regeln matchar delar positionen.',
-    thActiveTip: 'Kryssa ur för att stänga av en regel utan att ta bort den: dess fönster behandlas då som vilka fönster som helst i sitt program, och den sparade positionen väntar tills regeln kryssas i igen.',
-    thDesktopTip: 'Det virtuella skrivbord regelns fönster flyttas till när de dyker upp eller deras titel ändras till att matcha. "följ efter" växlar också dit.',
+    thWindowTip: 'Vilka fönster raden gäller - alltså vilka fönster som delar positionen. En regels text och program redigeras direkt här och sparas när du lämnar fältet. Ett program med flera rader har flera sorters fönster (huvudfönster, dialoger, hjälpfönster); fönsterklassen efter texten skiljer dem åt. Håll muspekaren över raden för att se fönstret positionen sparades från.',
+    thActiveTip: 'Kryssa ur för att stänga av en rad utan att ta bort den: dess fönster lämnas då i fred, och den sparade positionen väntar tills raden kryssas i igen. Kryssar du ur en programrad blir den en regel för programmet (samma fönsterklass), med sina positioner.',
+    thDesktopTip: 'Det virtuella skrivbord radens fönster flyttas till när de dyker upp eller deras titel ändras till att matcha. "följ efter" växlar också dit. Väljer du skrivbord på en programrad blir den en regel för programmet (samma fönsterklass), med sina positioner.',
     thXTip: 'Avstånd från skrivbordets vänsterkant, i bildpunkter.',
     thYTip: 'Avstånd från skrivbordets överkant, i bildpunkter.',
     thWidthTip: 'Fönstrets bredd i bildpunkter.', thHeightTip: 'Fönstrets höjd i bildpunkter.',
-    selColTip: 'Kryssa i rader för att glömma deras positioner i ett svep.',
-    forgetSel: 'Glöm markerade', saveAll: 'Spara alla nu', saveAllTip: 'Spara alla öppna fönsters nuvarande positioner',
+    selColTip: 'Kryssa i rader för att ta bort dem i ett svep.',
+    removeSel: 'Ta bort markerade',
+    confirmRemoveSel: 'Ta bort {0} rader? En regel tas bort med sina sparade positioner i alla skärmuppsättningar; en programrad förlorar sina sparade positioner i alla uppsättningar.',
+    saveAll: 'Spara alla nu', saveAllTip: 'Spara alla öppna fönsters nuvarande positioner',
     applyAll: 'Flytta alla nu', applyAllTip: 'Flytta alla öppna fönster till sina sparade positioner ({mod} + Home)',
     addRule: '+ Lägg till regel', addRuleTip: 'En ny regelrad - skriv texten och tryck Enter',
     filterPh: 'Filtrera…',
-    filterTip: 'Visa bara rader vars program, fönsterklass, regelnamn, regeltext eller ursprungsfönster innehåller texten. Esc rensar.',
+    filterTip: 'Visa bara rader vars program, fönsterklass, regeltext eller ursprungsfönster innehåller texten. Esc rensar.',
     posNoMatch: 'Inga rader matchar "{0}" i den här skärmuppsättningen.',
     posEmpty: 'Inga regler och inga sparade positioner för den här skärmuppsättningen ännu. Dra ett fönster dit du vill ha det, spara med {mod} + S, eller håll {mod} och högerklicka på ett fönster.',
-    badgeRule: 'regel', badgeStd: 'standard', badgeMax: 'maximerat', badgeNew: 'ny',
-    moveNow: 'Flytta nu', forget: 'Glöm', sure: 'Säkert?',
+    badgeMax: 'maximerat',
+    moveNow: 'Flytta nu', moveNowTip: 'Flytta de öppna fönster raden gäller till den sparade positionen',
+    moveNowNoTip: 'Inget att flytta till: ingen sparad position i den här skärmuppsättningen',
+    forget: 'Glöm', forgetTip: 'Glöm positionen som sparats i den här skärmuppsättningen - raden är kvar', sure: 'Säkert?',
+    removeRow: 'Ta bort',
+    removeRuleTip: 'Ta bort regeln och dess sparade positioner i alla skärmuppsättningar',
+    removeProgTip: 'Ta bort programraden: dess sparade positioner i alla skärmuppsättningar',
+    confirmRemoveProg: 'Ta bort raden för {0}, och dess sparade positioner i alla skärmuppsättningar?',
+    orderProgTip: 'Programrader kommer efter alla regler och sorteras efter program',
+    activeGoneTip: 'Regeln finns inte längre - den här positionen kan aldrig gälla igen',
     appliesPre: 'fönster med', appliesPost: 'i titeln', programLbl: 'program',
     appliesRuleGone: 'regeln "{0}" (finns inte längre)', appliesStd: 'alla {0}-fönster',
+    appliesRule: 'fönster med "{0}" i titeln', appliesRuleExe: '{1}-fönster med "{0}" i titeln',
     savedFromTip: 'Sparat från: {0}', noPosYet: 'ingen position ännu',
+    inertTip: 'Regeln har varken skrivbord eller position i den här skärmuppsättningen ännu och gör därför ingenting här. Välj ett skrivbord, eller spara ett matchande fönster med {mod} + S. Reglerna är gemensamma för alla uppsättningar; en regel visas bara i de uppsättningar där den har skrivbord eller position.',
     patternPh: 'text i titeln', exePh: '(alla)', regexLbl: 'regex',
     noDesktop: '(inget)', followLbl: 'följ efter',
-    deleteRule: 'Ta bort regel', deleteRuleTip: 'Ta bort regeln och dess sparade positioner i alla skärmuppsättningar',
-    confirmDeleteRule: 'Ta bort regeln "{0}" och dess sparade positioner i alla skärmuppsättningar?',
+    confirmDeleteRule: 'Ta bort regeln för {0}, och dess sparade positioner i alla skärmuppsättningar?',
     upTip: 'Flytta regeln uppåt - tidigare regler vinner', downTip: 'Flytta regeln nedåt',
-    winsHint: 'Öppna fönster som DalSegno kan agera på just nu.', refresh: 'Uppdatera',
-    thProgram: 'Program', thTitle: 'Titel', thWinDesktop: 'Skrivbord', thSaved: 'Sparad position',
+    refresh: 'Uppdatera', refreshTip: 'Läs in de öppna fönstren igen',
+    thProgram: 'Program', thTitle: 'Titel', thWinDesktop: 'Skrivbord',
     thProgramTip: 'Namnet på programfilen som äger fönstret.',
     thTitleTip: 'Fönstrets titel just nu. Regler matchas mot den.',
-    thWinDesktopTip: 'Det virtuella skrivbord fönstret ligger på - välj ett annat för att flytta det dit.',
-    thSavedTip: 'Om det finns en sparad position för fönstrets identitet i den aktuella skärmuppsättningen.',
-    savedYes: '✓ finns', saveBtn: 'Spara position', saveTip: 'Spara fönstrets nuvarande position',
-    moveHere: 'Flytta hit', moveTip: 'Flytta fönstret till den sparade positionen',
-    newRuleBtn: 'Regel…', editRuleBtn: 'Ändra regel…',
-    ruleRowTip: 'Fönstermenyns spardialog för det här fönstret: vad positionen ska gälla, skrivbord, eller regeln som matchar',
-    unmanagedTip: 'Hanteras bara via regel - ingen matchar ännu',
-    ownWinTip: 'DalSegnos eget fönster. Regler gäller aldrig det och det behöver ingen position; det öppnas alltid på skrivbordet du är på.',
-    winsEmpty: 'Inga fönster hittades.',
+    thWinDesktopTip: 'Det virtuella skrivbord fönstret ligger på just nu - välj ett annat för att flytta det dit.',
+    thNowTip: 'Var fönstret ligger just nu - det en regel gjord av fönstret skulle spara.',
+    makeRule: 'Gör regel…',
+    makeRuleTip: 'Vad regeln ska gälla (alla programmets fönster, eller fönster med en text i titeln), dess skrivbord, och om fönstrets position ska sparas',
+    freeEmpty: 'Alla öppna fönster täcks av en rad ovan.',
+    freeNoMatch: 'Inget öppet fönster matchar "{0}".',
     dllNote: 'VirtualDesktopAccessor.dll saknas bredvid skriptet: fönster kan inte flyttas mellan skrivbord, och regler med skrivbord gör ingenting. Se README för nedladdning.',
     dhkH: 'Skrivbordens kortkommandon',
     dhkHelp: 'AutoHotkey-syntax: + Skift, ^ Ctrl, # Win, ! Alt. Tomt stänger av kortkommandot. Ctrl = växla, Alt = flytta fönstret, Ctrl+Alt = flytta och följ efter.',
@@ -199,6 +228,7 @@ const STR = {
     filesH: 'Filer', openIni: 'Öppna filen med sparade positioner…', openConfig: 'Öppna konfigfilen…', reload: 'Läs om inställningar',
     status: (n, total, s) => `${n} sparade positioner för denna skärmuppsättning · ${total} totalt · uppsättning: ${s}`,
     statusFiltered: (shown, n) => ` · filter: ${shown} av ${n} rader visas`,
+    statusInert: n => ` · ${n} ${n === 1 ? 'regel' : 'regler'} utan verkan i denna uppsättning`,
     statusDesktops: (n, i) => ` · ${n} skrivbord, du är på ${i}`,
     paused: '⏸ automatisk flyttning är avstängd'
   }
@@ -219,6 +249,14 @@ const positionsOn = () => !!(st && st.modules && st.modules.positions);
 
 // ── state from AHK ─────────────────────────────────────────────────────
 window.receiveState = function (s) {
+  // a rule created from the list has neither desktop nor position yet: it
+  // would fold away the moment it appears, so it is kept in view
+  if (addPending && st) {
+    const prev = new Set(st.rules.map(r => r.alias));
+    const added = s.rules.find(r => !prev.has(r.alias));
+    if (added) revealed.add(added.alias);
+  }
+  addPending = false;
   st = s;
   awaitingState = false;
   lang = st.settings.lang === 'sv' ? 'sv' : 'en';
@@ -230,7 +268,6 @@ window.receiveState = function (s) {
   renderSettings();
   renderHotkeys();
   renderPositions();
-  renderWindows();
   renderManaged();
   renderStatus();
 };
@@ -246,12 +283,13 @@ function localizeStatic() {
   document.documentElement.lang = lang;
   const set = (id, key) => { const e = $(id); if (e) e.textContent = t(key); };
   const tip = (id, key) => { const e = $(id); if (e) e.title = t(key); };
-  ['tabBtnPositions|tabPositions', 'tabBtnWindows|tabWindows', 'tabBtnDesktops|tabDesktops', 'tabBtnSettings|tabSettings',
+  ['tabBtnWindows|tabWindows', 'tabBtnDesktops|tabDesktops', 'tabBtnSettings|tabSettings',
    'lblSetup|setupLabel', 'btnAddRule|addRule', 'btnSaveAll|saveAll', 'btnApplyAll|applyAll',
-   'thWindow|thWindow', 'thIdentity|thIdentity', 'thActive|thActive', 'thDesktop|thDesktop',
+   'sectRulesLbl|sectRules', 'sectFreeLbl|sectFree',
+   'thWindow|thWindow', 'thActive|thActive', 'thDesktop|thDesktop',
    'thWidth|thWidth', 'thHeight|thHeight',
-   'winsHint|winsHint', 'btnRefresh|refresh', 'thProgram|thProgram', 'thTitle|thTitle',
-   'thWinDesktop|thWinDesktop', 'thIdentity2|thIdentity', 'thSaved|thSaved',
+   'btnRefresh|refresh', 'thProgram|thProgram', 'thTitle|thTitle',
+   'thWinDesktop|thWinDesktop', 'thWidth2|thWidth', 'thHeight2|thHeight',
    'dllNote|dllNote', 'dhkH|dhkH', 'dhkHelp|dhkHelp', 'prefixH|prefixH', 'prefixHelp|prefixHelp',
    'taskbarH|taskbarH', 'lblNameInTray|tglNameInTray', 'lblWheel|tglWheel', 'wheelHelp|wheelHelp',
    'lblArrows|tglArrows', 'arrowsHelp|arrowsHelp',
@@ -272,13 +310,16 @@ function localizeStatic() {
   $('posFilter').title = t('filterTip');
   $('btnSaveAll').title = t('saveAllTip');
   $('btnApplyAll').title = t('applyAllTip');
-  [['thWindow', 'thWindowTip'], ['thIdentity', 'thIdentityTip'], ['thActive', 'thActiveTip'],
+  $('btnRefresh').title = t('refreshTip');
+  [['thWindow', 'thWindowTip'], ['thActive', 'thActiveTip'],
    ['thDesktop', 'thDesktopTip'], ['thX', 'thXTip'], ['thY', 'thYTip'],
    ['thWidth', 'thWidthTip'], ['thHeight', 'thHeightTip'],
    ['thProgram', 'thProgramTip'], ['thTitle', 'thTitleTip'], ['thWinDesktop', 'thWinDesktopTip'],
-   ['thIdentity2', 'thIdentityTip'], ['thSaved', 'thSavedTip']
+   ['thX2', 'thNowTip'], ['thY2', 'thNowTip'], ['thWidth2', 'thNowTip'], ['thHeight2', 'thNowTip'],
+   ['sectRules', 'sectRulesTip'], ['sectFree', 'sectFreeTip']
   ].forEach(([id, key]) => tip(id, key));
   document.querySelectorAll('th.selcol').forEach(el => { el.title = t('selColTip'); });
+  $('btnAddRule').textContent = t('addRule');
   updateForgetSel();
   document.querySelectorAll('input[name=lang]').forEach(r => { r.checked = r.value === lang; });
 }
@@ -395,11 +436,24 @@ document.querySelectorAll('#tabs .tab').forEach(btn => {
 const selPos = new Set();   // sections ticked for bulk forget
 let posFilter = '';         // the toolbar filter, lower-cased
 
+// A rule in words, the way the save dialog and the notifications put it:
+// "windows with X in the title", "Viewer.exe windows with X in the title" or
+// "all Viewer.exe windows". The rule's alias is its key in the config and
+// positions files, generated from the text when the rule is created; it is
+// never shown - the text is what the user knows the rule by.
+function ruleText(r) {
+  if (!r) return '';
+  if (!r.pattern) return t('appliesStd').replace('{0}', r.exe);
+  if (r.exe) return t('appliesRuleExe').replace('{0}', r.pattern).replace('{1}', r.exe);
+  return t('appliesRule').replace('{0}', r.pattern);
+}
+const ruleByAlias = alias => (st && st.rules.find(r => r.alias === alias)) || null;
+
 // The text a row can be found by: program, window class and saved-from
-// title for a position; name, text and program for a rule.
+// title for a position; text and program for a rule.
 function rowText(row) {
   const parts = [];
-  if (row.rule) parts.push(row.rule.alias, row.rule.pattern, row.rule.exe);
+  if (row.rule) parts.push(row.rule.pattern, row.rule.exe, row.rule.cls);
   if (row.pos) parts.push(row.pos.key, row.pos.info);
   if (!row.pos && !row.rule) parts.push(row.kind);
   return parts.filter(Boolean).join(' ').toLowerCase();
@@ -409,18 +463,30 @@ const rowMatches = row => !posFilter || rowText(row).includes(posFilter);
 function updateForgetSel() {
   const b = $('btnForgetSel');
   b.disabled = !selPos.size;
-  b.textContent = t('forgetSel') + (selPos.size ? ` (${selPos.size})` : '');
+  b.textContent = t('removeSel') + (selPos.size ? ` (${selPos.size})` : '');
 }
+// a row's identity key: what the selection, Move now and Remove act on
+const rowKey = row => row.pos ? row.pos.key : 'rule:' + row.rule.alias;
 
-function rowsForSetup() {
-  const pos = st.positions.filter(p => p.setup === curSetup);
+function rowsForSetup(setup = curSetup) {
+  const pos = st.positions.filter(p => p.setup === setup);
   const byKey = new Map(pos.map(p => [p.key, p]));
-  const rows = st.rules.map(r => ({ kind: 'rule', rule: r, pos: byKey.get('rule:' + r.alias) || null }));
+  // inert: a rule with no desktop and no position in this setup - it does
+  // nothing here (the rule table is shared by every setup)
+  const rows = st.rules.map(r => {
+    const pos = byKey.get('rule:' + r.alias) || null;
+    return { kind: 'rule', rule: r, pos, inert: !pos && !(Number(r.desktop) > 0) };
+  });
   const known = new Set(st.rules.map(r => 'rule:' + r.alias));
-  for (const p of pos)
-    if (!known.has(p.key))
-      rows.push({ kind: p.key.startsWith('rule:') ? 'gone' : 'std', rule: null, pos: p });
-  return rows;
+  // the rules in their own order (it decides which wins), then positions of
+  // rules that no longer exist, then the program rows sorted by program and
+  // class so that one program's rows sit together
+  const rest = pos.filter(p => !known.has(p.key))
+    .map(p => ({ kind: p.key.startsWith('rule:') ? 'gone' : 'std', rule: null, pos: p }));
+  const cmp = (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' });
+  rest.sort((a, b) => (a.kind === 'gone') !== (b.kind === 'gone') ? (a.kind === 'gone' ? -1 : 1)
+                    : cmp(a.pos.key.split('|')[0], b.pos.key.split('|')[0]) || cmp(a.pos.key, b.pos.key));
+  return rows.concat(rest);
 }
 
 function desktopOptions(sel) {
@@ -443,58 +509,93 @@ function patternCell(r, isNew) {
     `<input type="text" class="r-exe" data-alias="${a}" value="${esc(exe)}" placeholder="${esc(t('exePh'))}">`;
 }
 
-function desktopCell(r) {
+function desktopCell(r, disabled = false) {
   if (!desktopsOn()) return '<td class="deskcell"></td>';
-  if (!r) return '<td class="deskcell dim">–</td>';
-  return `<td class="deskcell"><select class="r-desktop">${desktopOptions(Number(r.desktop) || 0)}</select>` +
-    `<label><input type="checkbox" class="r-follow"${r.follow ? ' checked' : ''}> ${esc(t('followLbl'))}</label></td>`;
+  const dis = disabled ? ' disabled' : '';
+  return `<td class="deskcell"><select class="r-desktop"${dis}>${desktopOptions(Number(r.desktop) || 0)}</select>` +
+    `<label><input type="checkbox" class="r-follow"${r.follow ? ' checked' : ''}${dis}> ${esc(t('followLbl'))}</label></td>`;
 }
 
+// programs with more than one row in the list being rendered: their rows
+// carry the window class, which is what tells them apart
+let multiExe = new Set();
+
+// The open windows by identity key, so a row can say how many it applies
+// to right now (the Windows-without-rules section shows the rest).
+function openByKey() {
+  const m = new Map();
+  for (const w of st.windows) {
+    if (w.own || !w.key) continue;
+    if (!m.has(w.key)) m.set(w.key, []);
+    m.get(w.key).push(w);
+  }
+  return m;
+}
+let openNow = new Map();
+function openBadge(key) {
+  const wins = openNow.get(key);
+  if (!wins) return '';
+  const n = wins.reduce((s, w) => s + (Number(w.n) || 1), 0);
+  const titles = wins.map(w => w.title + (Number(w.n) > 1 ? ` ×${w.n}` : '')).join('\n');
+  return `<span class="open" title="${esc(t('openNowTip') + '\n' + titles)}">· ${esc(t('openNow')(n))}</span>`;
+}
+
+// Every row has the same controls - tick box, Active, Desktop, Move now,
+// Forget, Remove, ▲▼ - disabled where they cannot apply, so the eye reads
+// one kind of row. idx/count: the rule's place among the rules ON SCREEN;
+// the ▲▼ buttons step over the ones this setup does not list.
 function posRow(row, idx, count) {
   const p = row.pos, r = row.rule;
-  const key = p ? p.key : 'rule:' + r.alias;
+  const key = rowKey(row);
   const section = p ? p.section : '';
   const isCur = curSetup === st.currentSetup;
-  let applies, ident, active;
+  let applies, active, desk;
   if (row.kind === 'rule') {
-    applies = patternCell(r, false);
-    ident = `<span class="badge rule">${esc(t('badgeRule'))}: ${esc(r.alias)}</span>`;
+    // a rule narrowed to one window class (a promoted program row) shows it
+    applies = patternCell(r, false) + (r.cls ? `<span class="cls">${esc(r.cls)}</span>` : '');
     active = `<input type="checkbox" class="r-enabled" data-alias="${esc(r.alias)}"${r.enabled ? ' checked' : ''} title="${esc(t('thActiveTip'))}">`;
+    desk = desktopCell(r);
   } else if (row.kind === 'gone') {
+    // only the alias is left of a deleted rule - it is what the row is named by
     applies = esc(t('appliesRuleGone').replace('{0}', key.slice(5)));
-    ident = `<span class="badge rule">${esc(t('badgeRule'))}: ${esc(key.slice(5))}</span>`;
-    active = '<span class="dim">–</span>';
+    active = `<input type="checkbox" disabled title="${esc(t('activeGoneTip'))}">`;
+    desk = desktopCell({ desktop: 0, follow: 0 }, true);
   } else {
-    // exe|class: the program is already in "applies to", the class is what
-    // tells this row from the program's other rows
-    const cls = key.split('|').slice(1).join('|');
-    applies = esc(t('appliesStd').replace('{0}', key.split('|')[0]));
-    ident = `<span class="badge">${esc(t('badgeStd'))}</span><span class="cls" title="${esc(key)}">${esc(cls)}</span>`;
-    active = '<span class="dim">–</span>';
+    // exe|class: "all X windows", plus the class when the program has other
+    // rows too (its dialogs and helper windows have classes of their own).
+    // Active and Desktop are live: touching either turns the row into a rule
+    // for the program and class (promoteProgram), positions included.
+    const exe = key.split('|')[0], cls = key.split('|').slice(1).join('|');
+    applies = esc(t('appliesStd').replace('{0}', exe)) +
+      (multiExe.has(exe.toLowerCase()) ? `<span class="cls">${esc(cls)}</span>` : '');
+    active = `<input type="checkbox" class="p-enabled" checked title="${esc(t('thActiveTip'))}">`;
+    desk = desktopCell({ desktop: 0, follow: 0 });
   }
+  // a position saved from a maximized window: the numbers are the rectangle
+  // it restores to (which decides the monitor), and the window is maximized
+  // there - the badge sits with the size it qualifies
   const maxBadge = p && String(p.max) === '1' ? ` <span class="badge">${esc(t('badgeMax'))}</span>` : '';
-  const tip = p ? t('savedFromTip').replace('{0}', p.info || key) + '\n' + key : key;
+  const tip = row.inert ? t('inertTip') : p ? t('savedFromTip').replace('{0}', p.info || key) + '\n' + key : key;
   const nums = p
-    ? `<td class="num">${esc(p.x)}</td><td class="num">${esc(p.y)}</td><td class="num">${esc(p.w)}</td><td class="num">${esc(p.h)}</td>`
+    ? `<td class="num">${esc(p.x)}</td><td class="num">${esc(p.y)}</td><td class="num">${esc(p.w)}</td><td class="num">${esc(p.h)}${maxBadge}</td>`
     : `<td class="num dim nopos" colspan="4">${esc(t('noPosYet'))}</td>`;
   const canMove = p && isCur && positionsOn() && (row.kind !== 'rule' || r.enabled);
   const off = r && !r.enabled ? ' off' : '';
-  const order = row.kind === 'rule'
-    ? `<button class="tiny act-up" title="${esc(t('upTip'))}"${idx === 0 ? ' disabled' : ''}>▲</button>` +
-      `<button class="tiny act-down" title="${esc(t('downTip'))}"${idx === count - 1 ? ' disabled' : ''}>▼</button>`
-    : '';
-  return `<tr class="${row.kind}${off}" data-section="${esc(section)}" data-key="${esc(key)}"${r ? ` data-alias="${esc(r.alias)}"` : ''}>
-    <td class="selcol">${p ? `<input type="checkbox" class="rowsel"${selPos.has(section) ? ' checked' : ''}>` : ''}</td>
-    <td class="applies" title="${esc(tip)}">${applies}${maxBadge}</td>
-    <td class="ident">${ident}</td>
+  const isRule = row.kind === 'rule';
+  const btn = (cls, label, tipKey, enabled) =>
+    `<button class="small ${cls}" title="${esc(t(tipKey))}"${enabled ? '' : ' disabled'}>${esc(t(label))}</button>`;
+  return `<tr class="${row.kind}${off}${row.inert ? ' inert' : ''}" data-section="${esc(section)}" data-key="${esc(key)}"${r ? ` data-alias="${esc(r.alias)}"` : ''}>
+    <td class="selcol"><input type="checkbox" class="rowsel"${selPos.has(key) ? ' checked' : ''}></td>
+    <td class="applies" title="${esc(tip)}">${applies}${openBadge(key)}</td>
     <td class="active">${active}</td>
-    ${desktopCell(r)}
+    ${desk}
     ${nums}
     <td class="actions">
-      ${canMove ? `<button class="small act-move">${esc(t('moveNow'))}</button>` : ''}
-      ${p ? `<button class="small act-forget">${esc(t('forget'))}</button>` : ''}
-      ${row.kind === 'rule' ? `<button class="small act-delrule" title="${esc(t('deleteRuleTip'))}">${esc(t('deleteRule'))}</button>` : ''}
-      ${order}
+      ${btn('act-move', 'moveNow', canMove ? 'moveNowTip' : 'moveNowNoTip', canMove)}
+      ${btn('act-forget', 'forget', 'forgetTip', !!p)}
+      ${btn('act-delrule', 'removeRow', isRule ? 'removeRuleTip' : 'removeProgTip', true)}
+      <button class="tiny act-up" title="${esc(t(isRule ? 'upTip' : 'orderProgTip'))}"${!isRule || idx === 0 ? ' disabled' : ''}>▲</button>
+      <button class="tiny act-down" title="${esc(t(isRule ? 'downTip' : 'orderProgTip'))}"${!isRule || idx === count - 1 ? ' disabled' : ''}>▼</button>
     </td></tr>`;
 }
 
@@ -502,12 +603,16 @@ function newRuleRow() {
   return `<tr class="rule new">
     <td class="selcol"></td>
     <td class="applies">${patternCell({ alias: '', pattern: '', regex: 0, exe: '' }, true)}</td>
-    <td><span class="badge rule">${esc(t('badgeRule'))}: ${esc(t('badgeNew'))}</span></td>
     <td class="active"><input type="checkbox" class="r-enabled" checked disabled></td>
     ${desktopCell({ desktop: 0, follow: 0 })}
     <td class="num dim nopos" colspan="4">${esc(t('noPosYet'))}</td>
     <td class="actions"></td></tr>`;
 }
+
+// The rows this setup lists: a rule only where it has a desktop or a
+// position (the rule table is shared by every setup), plus the rules just
+// created here.
+const listed = row => !row.inert || revealed.has(row.rule.alias);
 
 function editingRow() {
   const ae = document.activeElement;
@@ -520,26 +625,30 @@ function renderPositions() {
     `<option value="${esc(s)}"${s === curSetup ? ' selected' : ''}>` +
     `${esc(s)}${s === st.currentSetup ? esc(t('thisSetup')) : ''}</option>`).join('');
   if (editingRow()) return;   // never rebuild under the user's fingers
-  const all = rowsForSetup();
+  openNow = openByKey();
+  renderFree();
+  const all = rowsForSetup().filter(listed);
   const rows = all.filter(rowMatches);
   const body = $('posBody');
+  $('sectRulesCount').textContent = posFilter && rows.length !== all.length ? `${rows.length} / ${all.length}` : `${all.length}`;
   if (!rows.length) {
     const msg = all.length ? t('posNoMatch').replace('{0}', $('posFilter').value.trim()) : t('posEmpty');
-    body.innerHTML = `<tr class="empty-row"><td colspan="10">${esc(msg)}</td></tr>`;
+    body.innerHTML = `<tr class="empty-row"><td colspan="9">${esc(msg)}</td></tr>`;
     selPos.clear();
     updateForgetSel();
     return;
   }
-  // the up/down buttons order the rules among ALL rules, filtered or not
-  const rulesAll = all.filter(r => r.kind === 'rule');
-  body.innerHTML = rows.map(row => posRow(row, rulesAll.indexOf(row), rulesAll.length)).join('');
-  const withPos = rows.filter(r => r.pos);
-  const shown = new Set(withPos.map(r => r.pos.section));
-  for (const s of [...selPos]) if (!shown.has(s)) selPos.delete(s);
-  $('selAllPos').checked = withPos.length > 0 && withPos.every(r => selPos.has(r.pos.section));
+  // the up/down buttons order the rules among the listed rules, filtered or not
+  const rulesListed = all.filter(r => r.kind === 'rule');
+  const exes = rows.filter(r => r.kind === 'std').map(r => r.pos.key.split('|')[0].toLowerCase());
+  multiExe = new Set(exes.filter((e, i) => exes.indexOf(e) !== i));
+  body.innerHTML = rows.map(row => posRow(row, rulesListed.indexOf(row), rulesListed.length)).join('');
+  const shown = new Set(rows.map(rowKey));
+  for (const k of [...selPos]) if (!shown.has(k)) selPos.delete(k);
+  $('selAllPos').checked = rows.length > 0 && rows.every(r => selPos.has(rowKey(r)));
   updateForgetSel();
 }
-$('setupSel').addEventListener('change', e => { curSetup = e.target.value; renderPositions(); renderStatus(); });
+$('setupSel').addEventListener('change', e => { curSetup = e.target.value; revealed.clear(); renderPositions(); renderStatus(); });
 
 // the filter lives in the toolbar, not the table, so a rebuild never steals
 // its focus; the selection follows the visible rows (Forget selected only
@@ -581,20 +690,30 @@ function ruleFromRow(tr) {
 $('posBody').addEventListener('change', e => {
   const el = e.target;
   if (el.classList.contains('rowsel')) {
-    const sec = el.closest('tr').dataset.section;
-    if (el.checked) selPos.add(sec); else selPos.delete(sec);
+    const key = el.closest('tr').dataset.key;
+    if (el.checked) selPos.add(key); else selPos.delete(key);
     $('selAllPos').checked = [...$('posBody').querySelectorAll('.rowsel')].every(c => c.checked);
     updateForgetSel();
     return;
   }
   const tr = el.closest('tr');
   if (!tr) return;
+  if (tr.classList.contains('std')) {
+    // a program row: Active or Desktop touched - it becomes a rule
+    const desk = tr.querySelector('.r-desktop'), follow = tr.querySelector('.r-follow');
+    awaitingState = true;
+    post({ action: 'promoteProgram', key: tr.dataset.key,
+           desktop: desk ? Number(desk.value) : 0, follow: follow && follow.checked ? 1 : 0,
+           enabled: tr.querySelector('.p-enabled').checked ? 1 : 0 });
+    return;
+  }
   const editable = ['r-pattern', 'r-regex', 'r-exe', 'r-enabled', 'r-desktop', 'r-follow'].some(c => el.classList.contains(c));
   if (!editable) return;
   const r = ruleFromRow(tr);
   if (tr.classList.contains('new')) {
     if (!r.pattern && !r.exe) return;
     awaitingState = true;
+    addPending = true;
     post({ action: 'addRule', pattern: r.pattern, regex: r.regex, exe: r.exe, desktop: r.desktop, follow: r.follow });
     return;
   }
@@ -621,15 +740,22 @@ $('posBody').addEventListener('focusout', e => {
   setTimeout(() => { if (!awaitingState && !editingRow()) renderPositions(); }, 0);
 });
 $('selAllPos').addEventListener('change', e => {
-  $('posBody').querySelectorAll('tr[data-section]').forEach(tr => {
-    if (!tr.dataset.section) return;
-    if (e.target.checked) selPos.add(tr.dataset.section); else selPos.delete(tr.dataset.section);
+  $('posBody').querySelectorAll('tr[data-key]').forEach(tr => {
+    if (e.target.checked) selPos.add(tr.dataset.key); else selPos.delete(tr.dataset.key);
   });
   renderPositions();
 });
+// Remove selected: a rule goes with its positions everywhere (deleteRule),
+// a program row or a dead rule's position with its positions everywhere
+// (forgetKey)
 $('btnForgetSel').addEventListener('click', () => {
   if (!selPos.size) return;
-  post({ action: 'forgetMany', sections: [...selPos] });
+  if (!window.confirm(t('confirmRemoveSel').replace('{0}', selPos.size))) return;
+  for (const key of selPos) {
+    const alias = key.startsWith('rule:') ? key.slice(5) : '';
+    if (alias && ruleByAlias(alias)) post({ action: 'deleteRule', alias });
+    else post({ action: 'forgetKey', key });
+  }
   selPos.clear();
 });
 $('posBody').addEventListener('click', e => {
@@ -655,18 +781,44 @@ $('posBody').addEventListener('click', e => {
     }
   } else if (cl.contains('act-delrule')) {
     const alias = tr.dataset.alias;
-    if (window.confirm(t('confirmDeleteRule').replace('{0}', alias)))
-      post({ action: 'deleteRule', alias });
+    const r = alias ? ruleByAlias(alias) : null;
+    if (r) {
+      if (window.confirm(t('confirmDeleteRule').replace('{0}', ruleText(r))))
+        post({ action: 'deleteRule', alias });
+    } else {
+      const key = tr.dataset.key;
+      const what = key.startsWith('rule:') ? t('appliesRuleGone').replace('{0}', key.slice(5))
+                                           : t('appliesStd').replace('{0}', key.split('|')[0]);
+      if (window.confirm(t('confirmRemoveProg').replace('{0}', what)))
+        post({ action: 'forgetKey', key });
+    }
   } else if (cl.contains('act-up') || cl.contains('act-down')) {
-    post({ action: 'moveRule', alias: tr.dataset.alias, dir: cl.contains('act-up') ? -1 : 1 });
+    // one step in the list may be several in the rule table, when rules
+    // this setup does not list lie in between: move past them all
+    const dir = cl.contains('act-up') ? -1 : 1;
+    const aliases = st.rules.map(r => r.alias);
+    const shown = new Set(rowsForSetup().filter(r => r.kind === 'rule' && listed(r)).map(r => r.rule.alias));
+    let i = aliases.indexOf(tr.dataset.alias), steps = 0;
+    do { i += dir; steps++; } while (i >= 0 && i < aliases.length && !shown.has(aliases[i]));
+    if (i < 0 || i >= aliases.length) return;
+    for (let n = 0; n < steps; n++) post({ action: 'moveRule', alias: tr.dataset.alias, dir });
   }
 });
 
-// ── open windows ───────────────────────────────────────────────────────
-function renderWindows() {
+// ── windows without rules ──────────────────────────────────────────────
+// The open windows no row of the first section covers - in the CURRENT
+// setup, whatever setup the dropdown shows: this section is the here and
+// now. DalSegno's own window is never listed; it needs no rule.
+function renderFree() {
   const body = $('winBody');
-  if (!st.windows.length) {
-    body.innerHTML = `<tr class="empty-row"><td colspan="6">${esc(t('winsEmpty'))}</td></tr>`;
+  const covered = new Set(rowsForSetup(st.currentSetup).filter(listed)
+    .map(r => r.pos ? r.pos.key : 'rule:' + r.rule.alias));
+  const all = st.windows.filter(w => !w.own && !covered.has(w.key));
+  const rows = all.filter(w => !posFilter || (w.exe + ' ' + w.title).toLowerCase().includes(posFilter));
+  $('sectFreeCount').textContent = posFilter && rows.length !== all.length ? `${rows.length} / ${all.length}` : `${all.length}`;
+  if (!rows.length) {
+    const msg = all.length ? t('freeNoMatch').replace('{0}', $('posFilter').value.trim()) : t('freeEmpty');
+    body.innerHTML = `<tr class="empty-row"><td colspan="8">${esc(msg)}</td></tr>`;
     return;
   }
   const deskCell = w => {
@@ -678,41 +830,39 @@ function renderWindows() {
       o += `<option value="${i}"${i === cur ? ' selected' : ''}>${esc(names[i - 1] || i)}</option>`;
     return `<td class="deskcell">${cur ? `<select class="w-desktop">${o}</select>` : '<span class="dim">–</span>'}</td>`;
   };
-  body.innerHTML = st.windows.map(w => w.own ? `
-    <tr data-hwnd="${w.hwnd}" class="own" title="${esc(t('ownWinTip'))}">
-      <td>${esc(w.exe)}</td>
-      <td class="ellip">${esc(w.title)}</td>
-      ${desktopsOn() ? `<td class="deskcell dim">${esc(w.desktop || '–')}</td>` : '<td class="deskcell"></td>'}
-      <td><span class="dim">–</span></td>
-      <td><span class="dim">–</span></td>
-      <td class="actions">
-        <button class="small" disabled>${esc(t('saveBtn'))}</button>
-        <button class="small" disabled>${esc(t('moveHere'))}</button>
-        <button class="small" disabled>${esc(t('newRuleBtn'))}</button>
-      </td></tr>` : `
+  const num = v => `<td class="num">${v === '' || v === undefined ? '<span class="dim">–</span>' : esc(v)}</td>`;
+  body.innerHTML = rows.map(w => `
     <tr data-hwnd="${w.hwnd}">
       <td>${esc(w.exe)}</td>
-      <td class="ellip" title="${esc(w.title)}">${esc(w.title)}${Number(w.n) > 1 ? ` <span class="dim">×${esc(w.n)}</span>` : ''}</td>
+      <td class="title" title="${esc(w.title)}">${esc(w.title)}${Number(w.n) > 1 ? ` <span class="dim">×${esc(w.n)}</span>` : ''}</td>
       ${deskCell(w)}
-      <td>${w.rule ? `<span class="badge rule">${esc(t('badgeRule'))}: ${esc(w.rule)}</span>`
-                   : w.managed ? `<span class="badge">${esc(t('badgeStd'))}</span>`
-                   : `<span class="dim" title="${esc(t('unmanagedTip'))}">–</span>`}</td>
-      <td>${w.saved ? `<span class="ok">${esc(t('savedYes'))}</span>` : '<span class="dim">–</span>'}</td>
+      ${num(w.x)}${num(w.y)}${num(w.w)}${num(w.h)}
       <td class="actions">
-        <button class="small act-save" ${w.managed && positionsOn() ? '' : 'disabled'} title="${esc(t('saveTip'))}">${esc(t('saveBtn'))}</button>
-        <button class="small act-movewin" ${w.saved ? '' : 'disabled'} title="${esc(t('moveTip'))}">${esc(t('moveHere'))}</button>
-        <button class="small act-rule" title="${esc(t('ruleRowTip'))}">${esc(t(w.rule ? 'editRuleBtn' : 'newRuleBtn'))}</button>
+        <button class="small act-rule" title="${esc(t('makeRuleTip'))}">${esc(t('makeRule'))}</button>
       </td></tr>`).join('');
 }
 $('btnRefresh').addEventListener('click', () => post({ action: 'refresh' }));
 $('winBody').addEventListener('click', e => {
   const tr = e.target.closest('tr');
   if (!tr || !tr.dataset.hwnd) return;
-  const hwnd = Number(tr.dataset.hwnd);
-  if (e.target.classList.contains('act-save')) post({ action: 'saveWin', hwnd });
-  else if (e.target.classList.contains('act-movewin')) post({ action: 'moveWin', hwnd });
-  else if (e.target.classList.contains('act-rule')) post({ action: 'ruleFromWin', hwnd });
+  if (e.target.classList.contains('act-rule')) post({ action: 'ruleFromWin', hwnd: Number(tr.dataset.hwnd) });
 });
+
+// the section headers fold their table; the choice is remembered per browser
+const folded = (() => { try { return JSON.parse(localStorage.getItem('folded') || '{}'); } catch { return {}; } })();
+function applyFolds() {
+  document.querySelectorAll('.sect').forEach(h => {
+    const on = !!folded[h.dataset.sect];
+    h.classList.toggle('collapsed', on);
+    h.nextElementSibling.hidden = on;
+  });
+}
+document.querySelectorAll('.sect').forEach(h => h.addEventListener('click', () => {
+  folded[h.dataset.sect] = !folded[h.dataset.sect];
+  try { localStorage.setItem('folded', JSON.stringify(folded)); } catch {}
+  applyFolds();
+}));
+applyFolds();
 $('winBody').addEventListener('change', e => {
   if (!e.target.classList.contains('w-desktop')) return;
   const hwnd = Number(e.target.closest('tr').dataset.hwnd);
@@ -723,10 +873,13 @@ $('winBody').addEventListener('change', e => {
 function renderStatus() {
   const nCur = st.positions.filter(p => p.setup === st.currentSetup).length;
   let text = t('status')(nCur, st.positions.length, st.currentSetup);
+  const all = rowsForSetup();
   if (posFilter) {
-    const all = rowsForSetup();
-    text += t('statusFiltered')(all.filter(rowMatches).length, all.length);
+    const shown = all.filter(listed);
+    text += t('statusFiltered')(shown.filter(rowMatches).length, shown.length);
   }
+  const inert = all.filter(r => !listed(r)).length;
+  if (inert) text += t('statusInert')(inert);
   if (desktopsOn() && st.desktops.count) text += t('statusDesktops')(st.desktops.count, st.desktops.index);
   $('status').textContent = text;
   $('statusPause').innerHTML = positionsOn() && !st.settings.move

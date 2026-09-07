@@ -159,11 +159,38 @@ body.no-desktops .deskcol, body.no-desktops td.deskcell { display: none; }
 }
 #posBody td.applies label.rx input { accent-color: var(--accent); vertical-align: middle; }
 #posBody td.ident { white-space: nowrap; }
-#posBody td.ident .cls { font-family: Consolas, monospace; font-size: 12px; color: var(--text-dim); margin-left: 6px; }
+#posBody td.applies .cls { font-family: Consolas, monospace; font-size: 12px; color: var(--text-dim); margin-left: 8px; }
+#posBody td.num .badge { margin-left: 6px; }
+#posBody tr.inert td { opacity: .6; }   /* a rule just created here, no desktop or position yet */
+#posBody td.applies .open { font-size: 11px; color: var(--text-dim); margin-left: 8px; cursor: default; }
+
+/* ── the two sections of the Windows tab ────────────────────────────── */
+.sect {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--accent2);
+  cursor: pointer;
+  user-select: none;
+  background: var(--bg);
+}
+.sect:hover { color: var(--accent); }
+.sect .tri { width: 12px; display: inline-block; color: var(--text-dim); }
+.sect .count { color: var(--text-dim); text-transform: none; letter-spacing: 0; }
+.sect.collapsed .tri { transform: rotate(-90deg); }
+.sect + table[hidden] { display: none; }
+#winTable { margin-bottom: 12px; }
+#winBody td.title { max-width: 520px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #posBody td.active { text-align: center; }
 #posBody td.active input { accent-color: var(--accent); cursor: pointer; }
 #posBody td.deskcell { white-space: nowrap; }
 #posBody td.deskcell select { padding: 2px 4px; }
+#posBody td.deskcell select:disabled, #posBody td.deskcell label input:disabled { opacity: .4; }
+#posBody td.active input:disabled { opacity: .4; cursor: default; }
 #posBody td.deskcell label { color: var(--text-dim); font-size: 11px; margin-left: 6px; cursor: pointer; }
 #posBody td.deskcell label input { accent-color: var(--accent); vertical-align: middle; }
 #posBody tr.off td { opacity: .55; }
@@ -171,7 +198,6 @@ body.no-desktops .deskcol, body.no-desktops td.deskcell { display: none; }
 #posBody td.nopos { text-align: center; font-style: italic; }
 #posBody tr.new { background: var(--bg3); }
 #winBody td.deskcell select { padding: 2px 4px; }
-#winBody tr.own td { opacity: .45; }
 
 /* ── settings-like panes ─────────────────────────────────────────────── */
 #tab-settings, #tab-desktops { overflow-y: auto; display: none; }

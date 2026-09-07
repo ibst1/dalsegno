@@ -8,29 +8,34 @@
 <body>
 
 <div id="tabs">
-  <button class="tab active" data-tab="positions" id="tabBtnPositions"></button>
-  <button class="tab" data-tab="windows" id="tabBtnWindows"></button>
+  <button class="tab active" data-tab="windows" id="tabBtnWindows"></button>
   <button class="tab" data-tab="desktops" id="tabBtnDesktops"></button>
   <button class="tab" data-tab="settings" id="tabBtnSettings"></button>
 </div>
 
 <div id="main">
 
-  <section id="tab-positions" class="tabpane active">
+  <section id="tab-windows" class="tabpane active">
     <div class="pane-head">
       <label><span id="lblSetup"></span>&nbsp;<select id="setupSel"></select></label>
       <button id="btnAddRule" class="small"></button>
       <input type="search" id="posFilter" class="filter" spellcheck="false" autocomplete="off">
       <span class="spacer"></span>
+      <button id="btnRefresh" class="small"></button>
       <button id="btnForgetSel" class="small" disabled></button>
       <button id="btnSaveAll" class="small"></button>
       <button id="btnApplyAll" class="small primary"></button>
     </div>
     <div class="tablewrap">
+
+      <!-- section 1: the rows DalSegno acts on - rules and program positions -->
+      <div class="sect" id="sectRules" data-sect="rules">
+        <span class="tri">▾</span><span class="lbl" id="sectRulesLbl"></span><span class="count" id="sectRulesCount"></span>
+      </div>
       <table id="posTable">
         <thead><tr>
           <th class="selcol"><input type="checkbox" id="selAllPos"></th>
-          <th id="thWindow"></th><th id="thIdentity"></th>
+          <th id="thWindow"></th>
           <th style="text-align:center" id="thActive"></th>
           <th id="thDesktop" class="deskcol"></th>
           <th style="text-align:right" id="thX">X</th>
@@ -41,24 +46,24 @@
         </tr></thead>
         <tbody id="posBody"></tbody>
       </table>
-    </div>
-  </section>
 
-  <section id="tab-windows" class="tabpane">
-    <div class="pane-head">
-      <span class="hint" id="winsHint"></span>
-      <span class="spacer"></span>
-      <button id="btnRefresh" class="small"></button>
-    </div>
-    <div class="tablewrap">
-      <table>
+      <!-- section 2: open windows no row above covers -->
+      <div class="sect" id="sectFree" data-sect="free">
+        <span class="tri">▾</span><span class="lbl" id="sectFreeLbl"></span><span class="count" id="sectFreeCount"></span>
+      </div>
+      <table id="winTable">
         <thead><tr>
           <th id="thProgram"></th><th id="thTitle"></th>
           <th id="thWinDesktop" class="deskcol"></th>
-          <th id="thIdentity2"></th><th id="thSaved"></th><th></th>
+          <th style="text-align:right" id="thX2">X</th>
+          <th style="text-align:right" id="thY2">Y</th>
+          <th style="text-align:right" id="thWidth2"></th>
+          <th style="text-align:right" id="thHeight2"></th>
+          <th></th>
         </tr></thead>
         <tbody id="winBody"></tbody>
       </table>
+
     </div>
   </section>
 

@@ -107,12 +107,28 @@ DesktopsLanguageChanged() {
     if !g_modDesktops
         return
     g_lastState := ""      ; force tray tooltip/label refresh on next poll
-    DetectHiddenWindows true
-    SetTitleMatchMode 3
     for r in ["va", "ho"]
-        if hwnd := WinExist("DalSegnoArrow " r)
+        if hwnd := FindArrowWindow(r)
             try WinClose(hwnd)
     SetTimer(UpdateArrowIcons, -600)   ; restart them once they have exited
+}
+
+; The hidden window of one arrow helper, or 0. Hidden-window detection is
+; switched on for this lookup ONLY and restored afterwards: UpdateArrowIcons
+; runs from the auto-execute section at startup, and a setting changed there
+; becomes the default of every later timer and hotkey thread - the window
+; scan, Save all and the Windows tab then saw every hidden helper window a
+; program keeps around (DDE server, GDI+ hook, power manager, …) and gave
+; each of them a saved position.
+FindArrowWindow(r) {
+    prevHidden := A_DetectHiddenWindows, prevMode := A_TitleMatchMode
+    DetectHiddenWindows true
+    SetTitleMatchMode 3
+    try return WinExist("DalSegnoArrow " r)
+    finally {
+        DetectHiddenWindows prevHidden
+        SetTitleMatchMode prevMode
+    }
 }
 
 ; --- detection -----------------------------------------------------------------
@@ -334,11 +350,9 @@ MouseOverTaskbar(*) {
 ; the config. The helpers tag their hidden windows "DalSegnoArrow va/ho".
 UpdateArrowIcons() {
     global g_arrowIcons, g_modDesktops
-    DetectHiddenWindows true
-    SetTitleMatchMode 3
     want := g_arrowIcons && g_modDesktops
     for r in ["va", "ho"] {
-        hwnd := WinExist("DalSegnoArrow " r)
+        hwnd := FindArrowWindow(r)
         if (want && !hwnd) {
             if A_IsCompiled {
                 try Run('"' A_ScriptDir '\DalSegnoArrow.exe" ' r)

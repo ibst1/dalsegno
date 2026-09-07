@@ -1,5 +1,88 @@
 # Changelog
 
+## 2.0.3 (2026-09-06)
+
+- Fix: a window moved by hand was placed again when its title left a rule
+  and came back. A second window with a rule's title is placed by the rule;
+  move it by hand and it should stay - but when its title changed to
+  something else and then back to the original, the return counted as a
+  new identity and the rule placed it once more. A hand-moved window now
+  keeps its place through any title change.
+
+- Fix: the modifier could get stuck in DalSegno's own keyboard hook. When
+  another script reinstalls its hook ahead of DalSegno's while CapsLock is
+  held (a modifier-layer script curing a stuck key of its own does exactly
+  that), the key-up can pass DalSegno by, and its hook then believes
+  CapsLock is held for good: every plain "a" was *Save all*, "d" opened the
+  window, Backspace forgot a position, F5 restarted the script - until the
+  old watchdog sent a synthetic key-up after 30 seconds. The modifier now
+  counts for ten seconds from the moment DalSegno's hook saw it go down
+  (the position hotkeys are single presses, never long holds); a stale
+  "down" is harmless once the time is up, and the next real press and
+  release clears it. No synthetic key events and no hook reinstalls: the
+  OS's own state of the key cannot be used either, since a modifier-layer
+  script that keeps CapsLock's toggle off hides the key from the OS for the
+  whole hold.
+
+- Fix: hidden helper windows got saved positions. The arrow-icon helper
+  lookup switched hidden-window detection on from the auto-execute section
+  at startup, which in AutoHotkey makes it the default for every later timer
+  and hotkey thread - so the window scan, *Save all* and the Windows tab saw
+  every titled top-level window a program keeps hidden (DDE server, GDI+
+  hook, Office power manager, .NET broadcast windows, …). *Save all* then
+  wrote a row per helper, most of them 0×0, and the positions list showed
+  the same program several times over. The detection is now confined to
+  that one lookup, *Save all* skips windows without a size or on no virtual
+  desktop (the Windows tab's own filter), and a window with no size is never
+  saved at all. Rows already written for such windows must be forgotten by
+  hand (tick them, *Forget selected*).
+- The Positions and Windows tabs are one tab, *Windows*, in two foldable
+  sections. *Windows with rules* is what DalSegno acts on in the selected
+  monitor setup - the rules and program rows of the old Positions tab, each
+  now saying how many open windows it applies to right now. *Windows
+  without rules* is every open window no row above covers, with its
+  desktop and where it is right now, and a *Make a rule…* button that opens
+  the window menu's dialog. The old Windows tab's identity and saved-
+  position columns and its Save/Move buttons are gone: a window either has
+  a row above, or it is listed below.
+- Every row in *Windows with rules* has the same controls: tick box,
+  Active, Desktop, *Move now*, *Forget*, *Remove* and ▲▼ - disabled where
+  they cannot apply (Move now without a position, ▲▼ on program rows, which
+  come after every rule and are sorted by program). *Forget* drops the
+  position saved in the selected setup and keeps the row; *Remove* drops the
+  row everywhere - a rule with its positions in every setup, a program row
+  with its positions in every setup. The tick boxes feed *Remove selected*.
+- The positions list lost its Identity column. It showed a rule's alias
+  (`rule: reportview`) - the rule's key in the config and positions files,
+  generated from the text when the rule is created and never typed by
+  anyone - or a *standard* badge with the window class. Neither said
+  anything the *Applies to* column does not: a rule is known by its text
+  and program, a program row by its program. The window class, the one
+  thing that tells a program's rows apart, now follows the text on those
+  rows, and only when the program has more than one row. The Windows tab
+  describes the matching rule in words ("windows with … in the title"),
+  and so does the delete confirmation. The filter box no longer matches
+  aliases.
+- Program rows in the positions list are sorted by program, then window
+  class, so one program's rows sit together; rules keep their own order.
+- A rule is listed only in the monitor setups where it moves windows - where
+  it has a desktop or a position. The rule table is shared by every setup
+  and computer, so a rule with positions on another machine used to sit in
+  the list here as a row saying *no position yet*. The status bar counts
+  the rules left out ("3 rules with no effect in this setup"); a rule just
+  created from the list stays in view until another setup is picked, so it
+  can be given a desktop or a position; the ▲▼ buttons step over the rules
+  the setup does not list.
+- The *maximized* badge moved from the Applies to column to the Height
+  cell: it qualifies the saved size, not the rule.
+- Program rows ("all Notepad.exe windows") have the Active tick and the
+  Desktop choice too. Using either turns the row into a rule for the
+  program and its window class - the new `/class:` condition, so the rule
+  catches exactly the windows the row stood for - and its saved positions in
+  every setup move under the rule. Previously those rows showed dashes in
+  both columns, and a desktop for a whole program could only be set from
+  the window menu's dialog (which creates a `/exe:` rule).
+
 ## 2.0.2 (2026-09-04)
 
 - Keep windows on screen: a window that opens entirely off every monitor -

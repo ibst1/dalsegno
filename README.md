@@ -117,22 +117,37 @@ the label for the GUI; two optional tray arrow icons switch one step.
 ## GUI
 
 Left-click the tray icon opens the desktop picker when Desktops is on;
-*Open DalSegno…* in the tray menu or CapsLock + D opens the GUI. Four tabs:
+*Open DalSegno…* in the tray menu or CapsLock + D opens the GUI. Three tabs:
 
-- **Positions** — one row per rule for the selected monitor setup (with its
-  position, or *no position yet*), plus program identities that have a
-  position. **Identity** shows what the position is stored under: the
-  rule's name, or for a standard row the window class, which is what tells
-  one program's rows apart (main window, dialogs, helper windows). Text,
-  regex flag, program and desktop are edited right in the row and saved
-  when you leave the field; **Active** switches a rule off without deleting
-  it; ▲▼ reorder rules (the first match wins). *Move now*, *Forget* and
-  *Delete rule* per row; *+ Add rule* for a new row. The filter box in the
-  toolbar narrows the list to rows whose program, class, rule name, rule
-  text or saved-from title contains what you type (Esc clears).
-- **Windows** — the open windows: program, title, desktop (pick another to
-  move it), identity, saved position; *Save position*, *Move there*, and
-  *Rule…* / *Edit rule…* for the dialog.
+- **Windows** — two sections, each foldable by its header.
+  *Windows with rules* is what DalSegno acts on in the selected monitor
+  setup: one row per rule (with its position, or *no position yet*) plus
+  program rows - *all X windows* - that have a saved position; every row
+  says how many open windows it applies to right now. Rules are shared by
+  every setup, so a rule is listed only in the setups where it moves
+  windows, where it has a desktop or a position; elsewhere it does nothing
+  and stays out of the list (the status bar counts them: "3 rules with no
+  effect in this setup"). A rule just created from the list stays in view
+  until another setup is picked, so it can be given a desktop or a position.
+  A position saved from a maximized window carries a *maximized* badge next
+  to its height: the numbers are the rectangle it restores to, which decides
+  the monitor, and a new window is maximized there. When a program has
+  several rows (main window, dialogs, helper windows) each carries its
+  window class, which is what tells them apart. A program row has the same
+  Active tick and Desktop choice as a rule: using either turns it into a
+  rule for the program and window class (`/exe:… /class:…`), positions
+  included. Text, regex flag, program and desktop are edited right in the
+  row and saved when you leave the field; **Active** switches a row off
+  without deleting it; ▲▼ reorder rules (the first match wins; program rows
+  come after every rule). Every row has *Move now*, *Forget* (the position
+  in the selected setup; the row stays) and *Remove* (the row everywhere:
+  a rule with its positions in every setup, a program row with its
+  positions in every setup), disabled where they cannot apply; the tick
+  boxes feed *Remove selected*. *+ Add rule* adds a row.
+  *Windows without rules* is the here and now: every open window no row
+  above covers, with its program, title, desktop (pick another to move it)
+  and where it is right now; *Make a rule…* opens the window menu's dialog
+  for it. The filter box in the toolbar narrows both sections (Esc clears).
 - **Desktops** — the desktop hotkeys and digit prefixes, taskbar label, wheel,
   arrow icons. Hidden when the module is off.
 - **Settings** — modules on/off; the window menu (modifier, button, whole
@@ -144,11 +159,12 @@ Left-click the tray icon opens the desktop picker when Desktops is on;
 
 ```ini
 [Rules]
-; alias = [/exe:<program>] [/desktop:<n>] [/follow] [/off] <text or re:regex>
+; alias = [/exe:<program>] [/class:<window class>] [/desktop:<n>] [/follow] [/off] <text or re:regex>
 preview         = Preview
 history         = /exe:msedge.exe CustomerHistoryPopup
 expanto         = /desktop:5 re:^Expanto$
 spotify         = /exe:spotify.exe /desktop:2 /follow
+notepad         = /exe:Notepad.exe /class:Notepad /desktop:3
 old             = /desktop:2 /off re:^Something$
 ```
 
@@ -156,11 +172,20 @@ old             = /desktop:2 /off re:^Something$
   expression (PCRE, case-sensitive — prefix `(?i)` for case-insensitive;
   AutoHotkey's `\w` is ASCII-only). It may be empty when `/exe:` is given.
 - `/exe:` matches the program name, case-insensitive; `re:` for a regex.
+- `/class:` narrows the rule to one window class (quote it when it has
+  spaces). This is what a program row in the list becomes when it is given
+  a desktop or switched off: a rule for exactly the windows the row stood
+  for, with its positions.
 - `/desktop:<n>` moves matching windows there when they appear or their
   title changes into matching; `/follow` switches along.
 - `/off` keeps the rule but switches it off.
-- The alias names the rule and its saved positions (`rule:<alias>` in the
-  positions file). **Order matters** — the first matching rule wins.
+- The alias is the rule's key: its saved positions are stored under
+  `rule:<alias>` in the positions file. It is generated from the text when a
+  rule is created (`Report View` → `reportview`) and never shown in the
+  GUI — a rule is known by its text and program. Only when editing the
+  config by hand does it matter; keep it when you change a rule's text, or
+  the rule loses its positions. **Order matters** — the first matching rule
+  wins.
 
 ## Files
 

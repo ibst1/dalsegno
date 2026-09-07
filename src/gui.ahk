@@ -150,6 +150,8 @@ UiMessage(sender, args) {
             UiForget(msg["section"])
         case "forgetMany":
             UiForgetMany(msg["sections"])
+        case "forgetKey":
+            UiForgetKey(msg["key"])
         case "moveKey":
             UiMoveKey(msg["key"])
         case "saveWin":
@@ -165,6 +167,8 @@ UiMessage(sender, args) {
             UiSetRule(msg)
         case "addRule":
             UiAddRule(msg)
+        case "promoteProgram":
+            UiPromoteProgram(msg)
         case "deleteRule":
             UiDeleteRule(msg["alias"])
         case "moveRule":
@@ -202,7 +206,7 @@ PushState() {
     rules := []
     for r in titleRules
         rules.Push(Map("alias", r.alias, "pattern", r.pattern, "regex", r.regex ? 1 : 0
-            , "exe", r.exe, "exeRegex", r.exeRegex ? 1 : 0
+            , "exe", r.exe, "exeRegex", r.exeRegex ? 1 : 0, "cls", RuleClass(r)
             , "desktop", r.desktop, "follow", r.follow ? 1 : 0
             , "enabled", r.enabled ? 1 : 0))
     dhk := Map()
@@ -270,10 +274,16 @@ ListWindows() {
             continue
         }
         key := KeyForInfo(info)
+        ; the window's rectangle as it is now: the list shows it for windows
+        ; no row covers, so the user sees what a rule would save
+        x := "", y := "", w := "", h := ""
+        try WinGetPos(&x, &y, &w, &h, hwnd)
         row := Map("hwnd", hwnd + 0, "exe", info.exe, "title", SubStr(info.title, 1, 80)
+            , "key", key
             , "rule", SubStr(key, 1, 5) = "rule:" ? SubStr(key, 6) : ""
             , "managed", key != "" ? 1 : 0
             , "desktop", desktop, "n", 1
+            , "x", x, "y", y, "w", w, "h", h
             , "saved", key != "" && LoadPos(key) != "" ? 1 : 0)
         seen[dup] := row
         list.Push(row)
@@ -378,6 +388,19 @@ UiForget(section) {
     PushState()
 }
 
+; Every position saved under the key, in every monitor setup - what
+; "Remove" does to a program row (a rule row's Remove is DeleteRule).
+UiForgetKey(key) {
+    global posIni
+    key := Trim(key)
+    if (key = "" || SubStr(key, 1, 5) = "rule:" && RuleByAlias(SubStr(key, 6)) != "")
+        return   ; a live rule is removed through deleteRule, positions included
+    for p in ListPositions()
+        if (p["key"] = key)
+            try IniDelete(posIni, p["section"])
+    PushState()
+}
+
 UiForgetMany(sections) {
     global posIni
     for sec in sections {
@@ -464,9 +487,22 @@ UiAddRule(msg) {
     exeRegex := SubStr(exe, 1, 3) = "re:"
     WriteRule({ alias: SuggestAlias(pattern, exe), pattern: pattern
         , regex: msg.Has("regex") && msg["regex"] ? true : false
-        , exe: exeRegex ? SubStr(exe, 4) : exe, exeRegex: exeRegex
+        , exe: exeRegex ? SubStr(exe, 4) : exe, exeRegex: exeRegex, cls: ""
         , desktop: msg.Has("desktop") ? Integer(msg["desktop"]) : 0
         , follow: msg.Has("follow") && msg["follow"] ? true : false, enabled: true })
+    LoadConfig()
+    PushState()
+}
+
+; A program row given a desktop or switched off in the list: it becomes a
+; rule for the program and window class, positions included (PromoteProgram).
+UiPromoteProgram(msg) {
+    key := Trim(msg["key"])
+    if (key = "" || SubStr(key, 1, 5) = "rule:")
+        return
+    PromoteProgram(key, msg.Has("desktop") ? Integer(msg["desktop"]) : 0
+        , msg.Has("follow") && msg["follow"] ? true : false
+        , msg.Has("enabled") && !msg["enabled"] ? false : true)
     LoadConfig()
     PushState()
 }

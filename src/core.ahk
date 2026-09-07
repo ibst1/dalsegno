@@ -95,6 +95,7 @@ Tr(id) {
         "cannotHandleWin", "The window cannot be managed (no title, ignored, or matches no rule).",
         "cannotSaveMin",  "Could not save - the window is minimized.",
         "cannotSaveGone", "Could not save - the window no longer exists.",
+        "cannotSaveSize", "Could not save - the window has no size yet (it is not shown).",
         "cannotSaveWrite", "Could not save - writing to the positions file failed (locked by OneDrive?):",
         "cannotSaveWin",  "Could not save the position.",
         "maximized",      "maximized",
@@ -192,6 +193,7 @@ Tr(id) {
         "cannotHandleWin", "Fönstret hanteras inte (saknar titel, är ignorerat, eller matchar ingen regel).",
         "cannotSaveMin",  "Kunde inte spara - fönstret är minimerat.",
         "cannotSaveGone", "Kunde inte spara - fönstret finns inte längre.",
+        "cannotSaveSize", "Kunde inte spara - fönstret har ingen storlek ännu (det visas inte).",
         "cannotSaveWrite", "Kunde inte spara - skrivningen till positionsfilen misslyckades (låst av OneDrive?):",
         "cannotSaveWin",  "Kunde inte spara positionen.",
         "maximized",      "maximerat",
@@ -381,11 +383,13 @@ ShowName=
 
 [Rules]
 ; One rule per line:
-;   alias = [/exe:<program>] [/desktop:<n>] [/follow] [/off] <text or re:regex>
+;   alias = [/exe:<program>] [/class:<window class>] [/desktop:<n>] [/follow] [/off] <text or re:regex>
 ; The text is matched anywhere in the title (re: for a regular expression);
-; it may be empty when /exe: is given. /desktop:<n> moves matching windows
-; to that desktop when they appear (or their title changes into matching);
-; /follow switches along. /off keeps the rule but switches it off.
+; it may be empty when /exe: is given. /class: narrows a rule to one window
+; class (quote it if it contains spaces) - what a program row in the list
+; becomes when it is given a desktop or switched off. /desktop:<n> moves
+; matching windows to that desktop when they appear (or their title changes
+; into matching); /follow switches along. /off keeps the rule but switches it off.
 ; The alias names the rule and its saved positions. Order matters: the first
 ; matching rule wins. Easiest to create from the window menu.
 ; Examples:
@@ -455,11 +459,13 @@ ConfigList(section) {
     return list
 }
 
-; alias = [/exe:<program>] [/desktop:<n>] [/follow] [/off] <text or re:regex>
+; alias = [/exe:<program>] [/class:<window class>] [/desktop:<n>] [/follow] [/off] <text or re:regex>
 ; "" when neither a text nor a program is given - a rule needs one of them.
+; /class: takes a quoted value when the class has spaces ("GDI+ Hook Window
+; Class").
 ParseRuleValue(alias, value) {
     r := { alias: alias, pattern: "", regex: false, exe: "", exeRegex: false
-        , desktop: 0, follow: false, enabled: true }
+        , cls: "", desktop: 0, follow: false, enabled: true }
     rest := Trim(value)
     loop {
         if RegExMatch(rest, "^/exe:(\S+)\s*(.*)$", &m) {
@@ -468,6 +474,8 @@ ParseRuleValue(alias, value) {
             else
                 r.exe := m[1]
             rest := m[2]
+        } else if RegExMatch(rest, '^/class:(?:"([^"]*)"|(\S+))\s*(.*)$', &m) {
+            r.cls := m[1] != "" ? m[1] : m[2], rest := m[3]
         } else if RegExMatch(rest, "^/desktop:(\d+)\s*(.*)$", &m) {
             r.desktop := Integer(m[1]), rest := m[2]
         } else if RegExMatch(rest, "^/follow(?:\s+(.*))?$", &m) {
@@ -489,6 +497,8 @@ RuleValue(r) {
     v := ""
     if (r.exe != "")
         v .= "/exe:" (r.exeRegex ? "re:" : "") r.exe " "
+    if (RuleClass(r) != "")
+        v .= "/class:" (InStr(r.cls, " ") ? '"' r.cls '"' : r.cls) " "
     if r.desktop
         v .= "/desktop:" r.desktop " "
     if r.follow
@@ -497,6 +507,12 @@ RuleValue(r) {
         v .= "/off "
     v .= (r.regex ? "re:" : "") r.pattern
     return Trim(v)
+}
+
+; The rule's window class condition, "" for none. Rules built before the
+; class condition existed have no cls property at all.
+RuleClass(r) {
+    return r.HasProp("cls") ? r.cls : ""
 }
 
 LoadConfig() {
@@ -580,6 +596,38 @@ WriteRulesInOrder(rules) {
     try IniDelete(configIni, "Rules")
     for r in rules
         IniWrite(RuleValue(r), configIni, "Rules", r.alias)
+}
+
+; A program row in the list ("all Notepad.exe windows" - the identity
+; exe|class) given a desktop or switched off becomes a rule for exactly those
+; windows: /exe:<exe> /class:<class>, no title text. Its saved positions, in
+; every monitor setup, move under the rule's key so nothing is lost.
+PromoteProgram(key, desktop, follow, enabled) {
+    global posIni
+    parts := StrSplit(key, "|", , 2)
+    if (parts.Length < 2 || parts[1] = "" || parts[2] = "")
+        return ""
+    exe := parts[1], cls := parts[2]
+    alias := SuggestAlias("", exe)
+    WriteRule({ alias: alias, pattern: "", regex: false, exe: exe, exeRegex: false, cls: cls
+        , desktop: desktop, follow: follow, enabled: enabled })
+    newKey := "rule:" alias
+    for p in ListPositions() {
+        if (p["key"] != key)
+            continue
+        sec := "K" Hash32(newKey) "_" p["setup"]
+        try {
+            IniWrite(newKey, posIni, sec, "Key")
+            IniWrite(p["info"], posIni, sec, "Info")
+            IniWrite(p["x"], posIni, sec, "X")
+            IniWrite(p["y"], posIni, sec, "Y")
+            IniWrite(p["w"], posIni, sec, "W")
+            IniWrite(p["h"], posIni, sec, "H")
+            IniWrite(p["max"], posIni, sec, "Max")
+            IniDelete(posIni, p["section"])
+        }
+    }
+    return alias
 }
 
 ; Deletes the rule and every position saved under it, in all monitor setups -
@@ -718,6 +766,8 @@ RuleMatches(rule, info) {
             if !hit
                 return false
         }
+        if (RuleClass(rule) != "" && StrLower(info.cls) != StrLower(rule.cls))
+            return false
         if (rule.pattern = "")
             return true
         return rule.regex ? RegExMatch(info.title, rule.pattern) : InStr(info.title, rule.pattern)
@@ -825,8 +875,12 @@ ScanWindowsBody() {
             Trace("title " hwnd " [" SubStr(info.title, 1, 40) "] -> [" SubStr(title, 1, 40) "]")
             ; a title that changes the window's IDENTITY (untitled -> titled,
             ; or into a rule) makes it a new placement: a Java app can sit
-            ; untitled for a minute of loading before the real title comes
-            if (g_modPositions && info.done && info.key != "*") {
+            ; untitled for a minute of loading before the real title comes.
+            ; Never for a window the user has moved by hand: its title can
+            ; leave the rule and come back (a document window flipping to a
+            ; dialog title and back) and each return re-placed it where the
+            ; rule says, undoing the move. Once moved by hand, it stays.
+            if (g_modPositions && info.done && info.key != "*" && !info.HasProp("hand")) {
                 k := KeyFor(hwnd)
                 if (k != "" && k != info.key) {
                     info.done := false, info.seen := A_TickCount
@@ -889,31 +943,47 @@ ScanWindowsBody() {
 ; True while the configured modifier is physically down. Reading the physical
 ; state is what lets the modifier be a key another script already hooks: we
 ; never ask to receive its events, we just look at it.
+;
+; "Physically down" is our own keyboard hook's bookkeeping, and that table
+; can go stale: when another script reinstalls its hook ahead of ours (a
+; modifier-layer script curing a stuck key of its own does exactly that)
+; while the modifier is held, its key-UP can pass us by. The hook then
+; believes the key is held for good - every plain "a" became Save all, "d"
+; opened the window, Backspace forgot a position, F5 restarted the script,
+; until the next real tap of the key refreshed the table.
+;
+; The OS's own state of the key is no help: a modifier-layer script that
+; keeps CapsLock's toggle off hides the key from the OS entirely (it reads
+; as up throughout a real hold). So the hold is bounded instead: the
+; modifier counts for MOD_HOLD_MS from the moment our hook saw it go down.
+; The position hotkeys are single presses, never long holds, so a real
+; user never notices; a stale "down" is harmless once the time is up, and
+; the next real press and release of the key clears it.
+MOD_HOLD_MS := 10000
+g_modDownSince := 0   ; tick of the down our hook saw; 0 while up
 ModifierHeld(*) {
-    try
-        return GetKeyState(g_modifier, "P")
-    catch
+    global g_modDownSince
+    try {
+        if !GetKeyState(g_modifier, "P")
+            return false
+        if !g_modDownSince
+            g_modDownSince := A_TickCount   ; pressed since the last poll
+        return A_TickCount - g_modDownSince < MOD_HOLD_MS
+    } catch
         return false
 }
 
-; The modifier can get logically stuck (a keyboard hook swallowing the key-UP
-; leaves the system convinced it is held). A real hold is seconds long, so
-; after half a minute of continuous "down" the missing up-event is sent.
+; Tracks the modifier's transitions for ModifierHeld: cleared when the key
+; is up, stamped when it is seen down. No synthetic key events and no hook
+; reinstalls - both would interfere with the script that owns the key.
 ModifierWatchdog() {
-    static since := 0
-    down := ModifierHeld()
-    if !down {
-        since := 0
-        return
-    }
-    if !since {
-        since := A_TickCount
-        return
-    }
-    if (A_TickCount - since > 30000) {
-        try Send("{" g_modifier " up}")
-        since := 0
-    }
+    global g_modDownSince
+    down := false
+    try down := GetKeyState(g_modifier, "P")
+    if !down
+        g_modDownSince := 0
+    else if !g_modDownSince
+        g_modDownSince := A_TickCount
 }
 
 ; The position actions, on the modifier. The keys come from [Hotkeys] and can
@@ -938,7 +1008,7 @@ ApplyActionHotkeys() {
         if (key = "" || (positionsOnly.Has(namn) && !g_modPositions))
             continue
         ; * is not optional, for the same reason as the menu button: a hotkey
-        ; without it fires only when NO modifier is held, and CapsModifier
+        ; without it fires only when NO modifier is held, and Sostenuto
         ; expresses a held CapsLock as RCtrl - so CapsLock+D arrives as
         ; Ctrl+D and a bare "d" never matches. The criterion (the modifier
         ; physically down) is what gates it; Ctrl+D on its own passes through.
@@ -952,7 +1022,7 @@ ApplyActionHotkeys() {
 
 ; (Re)registers the menu BUTTON. * is not optional: a hotkey without it fires
 ; only when NO modifier is held, and the menu modifier may well be one
-; (CapsModifier expresses CapsLock as RCtrl). Gating belongs to
+; (Sostenuto expresses CapsLock as RCtrl). Gating belongs to
 ; MouseOverWindow, which reads the physical state.
 ApplyMenuHotkey() {
     global g_menuKeys, g_menuButton, g_menuOn
@@ -1385,7 +1455,8 @@ CreateRuleAndSave(hwnd, pattern, regex, exe, desktop, follow, keepPos) {
     global configIni, titleRules, winInfo
     alias := ""
     for r in titleRules
-        if (r.regex = regex && r.pattern == pattern && !r.exeRegex && StrLower(r.exe) = StrLower(exe)) {
+        if (r.regex = regex && r.pattern == pattern && !r.exeRegex && StrLower(r.exe) = StrLower(exe)
+            && RuleClass(r) = "") {
             alias := r.alias
             r.enabled := true, r.desktop := desktop, r.follow := follow
             WriteRule(r)
@@ -1394,7 +1465,7 @@ CreateRuleAndSave(hwnd, pattern, regex, exe, desktop, follow, keepPos) {
     if (alias = "") {
         alias := SuggestAlias(pattern, exe)
         WriteRule({ alias: alias, pattern: pattern, regex: regex, exe: exe
-            , exeRegex: false, desktop: desktop, follow: follow, enabled: true })
+            , exeRegex: false, cls: "", desktop: desktop, follow: follow, enabled: true })
     }
     LoadConfig()
     ; identity and position first, the desktop move last: a window sent to
