@@ -60,8 +60,6 @@ const STR = {
     appliesRuleGone: 'rule "{0}" (no longer exists)', appliesStd: 'all {0} windows',
     appliesRule: 'windows with "{0}" in the title', appliesRuleExe: '{1} windows with "{0}" in the title',
     savedFromTip: 'Saved from: {0}', noPosYet: 'no position yet',
-    posElsewhere: 'saved on another setup',
-    posElsewhereTip: 'The rule has a saved position on another monitor setup or computer, but none on this one yet. It is kept for that setup; move a matching window here to save one here too.',
     inertTip: 'This rule has no desktop and no position in this monitor setup yet, so it moves nothing here - but its windows are still its own: saving one puts the position under the rule. Pick a desktop, or save a matching window with {mod} + S.',
     patternPh: 'text in the title', exePh: '(any)', regexLbl: 'regex',
     computerLbl: 'computer', computersPh: '(all)',
@@ -172,8 +170,6 @@ const STR = {
     appliesRuleGone: 'regeln "{0}" (finns inte längre)', appliesStd: 'alla {0}-fönster',
     appliesRule: 'fönster med "{0}" i titeln', appliesRuleExe: '{1}-fönster med "{0}" i titeln',
     savedFromTip: 'Sparat från: {0}', noPosYet: 'ingen position ännu',
-    posElsewhere: 'sparad på annan uppsättning',
-    posElsewhereTip: 'Regeln har en sparad position på en annan skärmuppsättning eller dator, men ingen på den här ännu. Den behålls för den uppsättningen; flytta ett matchande fönster hit för att spara en även här.',
     inertTip: 'Regeln har varken skrivbord eller position i den här skärmuppsättningen ännu och flyttar därför inget här - men dess fönster är fortfarande dess egna: sparar du ett hamnar positionen under regeln. Välj ett skrivbord, eller spara ett matchande fönster med {mod} + S.',
     patternPh: 'text i titeln', exePh: '(alla)', regexLbl: 'regex',
     computerLbl: 'dator', computersPh: '(alla)',
@@ -492,7 +488,6 @@ function rowsForSetup(setup = curSetup) {
     const pos = byKey.get('rule:' + r.alias) || null;
     const posAnywhere = anyRulePos.has(r.alias);
     return { kind: 'rule', rule: r, pos, foreign: !ruleOnComputer(r, pc),
-             elsewhere: !pos && posAnywhere,
              inert: !posAnywhere && !(Number(r.desktop) > 0) };
   });
   const known = new Set(st.rules.map(r => 'rule:' + r.alias));
@@ -602,11 +597,10 @@ function posRow(row, idx, count) {
   // there - the badge sits with the size it qualifies
   const maxBadge = p && String(p.max) === '1' ? ` <span class="badge">${esc(t('badgeMax'))}</span>` : '';
   const tip = row.foreign ? t('foreignTip').replace('{0}', r.computers).replace('{1}', setupComputer(curSetup))
-    : row.inert ? t('inertTip') : row.elsewhere ? t('posElsewhereTip')
-    : p ? t('savedFromTip').replace('{0}', p.info || key) + '\n' + key : key;
+    : row.inert ? t('inertTip') : p ? t('savedFromTip').replace('{0}', p.info || key) + '\n' + key : key;
   const nums = p
     ? `<td class="num">${esc(p.x)}</td><td class="num">${esc(p.y)}</td><td class="num">${esc(p.w)}</td><td class="num">${esc(p.h)}${maxBadge}</td>`
-    : `<td class="num dim nopos" colspan="4">${esc(row.elsewhere ? t('posElsewhere') : t('noPosYet'))}</td>`;
+    : `<td class="num dim nopos" colspan="4">${esc(t('noPosYet'))}</td>`;
   const canMove = p && isCur && positionsOn() && (row.kind !== 'rule' || r.enabled);
   const off = r && !r.enabled ? ' off' : '';
   const isRule = row.kind === 'rule';
@@ -644,6 +638,14 @@ function newRuleRow() {
 // looks deleted while it still claims windows. Rules for other computers are
 // the ones left out (shown once if they were just created here).
 const listed = row => !row.foreign || revealed.has(row.rule.alias);
+// A rule is shown in the Rules section only when it applies on the SELECTED
+// setup: a saved position for that setup, or a desktop (desktops act on any
+// setup). A rule whose only position is on another setup, or one for another
+// computer, is not shown here - it appears when that setup is selected. A
+// just-created rule stays visible until it gets a position or desktop.
+const shownInRules = row => row.kind !== 'rule'
+  || revealed.has(row.rule.alias)
+  || (!row.foreign && (!!row.pos || Number(row.rule.desktop) > 0));
 
 function editingRow() {
   const ae = document.activeElement;
@@ -658,7 +660,7 @@ function renderPositions() {
   if (editingRow()) return;   // never rebuild under the user's fingers
   openNow = openByKey();
   renderFree();
-  const all = rowsForSetup().filter(listed);
+  const all = rowsForSetup().filter(shownInRules);
   const rows = all.filter(rowMatches);
   const body = $('posBody');
   $('sectRulesCount').textContent = posFilter && rows.length !== all.length ? `${rows.length} / ${all.length}` : `${all.length}`;
@@ -814,7 +816,7 @@ $('posBody').addEventListener('click', e => {
     // this setup does not list lie in between: move past them all
     const dir = cl.contains('act-up') ? -1 : 1;
     const aliases = st.rules.map(r => r.alias);
-    const shown = new Set(rowsForSetup().filter(r => r.kind === 'rule' && listed(r)).map(r => r.rule.alias));
+    const shown = new Set(rowsForSetup().filter(r => r.kind === 'rule' && shownInRules(r)).map(r => r.rule.alias));
     let i = aliases.indexOf(tr.dataset.alias), steps = 0;
     do { i += dir; steps++; } while (i >= 0 && i < aliases.length && !shown.has(aliases[i]));
     if (i < 0 || i >= aliases.length) return;
@@ -892,7 +894,7 @@ function renderStatus() {
   let text = t('status')(nCur, st.positions.length, st.currentSetup);
   const all = rowsForSetup();
   if (posFilter) {
-    const shown = all.filter(listed);
+    const shown = all.filter(shownInRules);
     text += t('statusFiltered')(shown.filter(rowMatches).length, shown.length);
   }
   const inert = all.filter(r => !listed(r)).length;
