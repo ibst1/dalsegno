@@ -539,6 +539,18 @@ RuleOnThisComputer(r) {
     return false
 }
 
+; The menu modifier is a KEY NAME (GetKeyState reads it), but it is natural to
+; type the hotkey-prefix form (>^ for right Ctrl, the way the rest of the suite
+; writes CapsModifier combos). Translate those to the key name so the field
+; tolerates both; anything else is passed through and validated by the caller.
+NormalizeModifier(m) {
+    static map := Map(">^", "RCtrl", "<^", "LCtrl", "^", "Control"
+        , ">!", "RAlt", "<!", "LAlt", "!", "Alt"
+        , ">+", "RShift", "<+", "LShift", "+", "Shift"
+        , ">#", "RWin", "<#", "LWin", "#", "LWin")
+    return map.Has(m) ? map[m] : m
+}
+
 LoadConfig() {
     global configIni, titleRules, ignoreExe, ignoreTitles, rulesOnlyExe, rulesOnly
     global g_modPositions, g_modDesktops, g_lang
@@ -549,7 +561,7 @@ LoadConfig() {
     g_lang := IniRead(configIni, "General", "Language", "sv") = "en" ? "en" : "sv"
     global g_trace
     g_trace := IniRead(configIni, "General", "Trace", 0) = 1
-    g_modifier := Trim(IniRead(configIni, "Menu", "Modifier", "CapsLock"))
+    g_modifier := NormalizeModifier(Trim(IniRead(configIni, "Menu", "Modifier", "CapsLock")))
     g_menuButton := Trim(IniRead(configIni, "Menu", "Button", "RButton"))
     g_menuOn := IniRead(configIni, "Menu", "Enabled", 1) != "0"
     g_menuWhole := IniRead(configIni, "Menu", "WholeWindow", 1) != "0"
