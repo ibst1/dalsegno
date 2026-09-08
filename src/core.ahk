@@ -1127,6 +1127,21 @@ ModifierHeld(*) {
         return false
 }
 
+; The menu accepts the modifier held PHYSICALLY or LOGICALLY. CapsModifier
+; expresses a held CapsLock as an INJECTED RCtrl: it never shows as physically
+; down (GetKeyState ,"P" = 0, and Raw Input skips injected input) but it IS a
+; logical modifier - so `>^` hotkeys fire on it, and the menu must too. The
+; menu uses this; auto-save keeps the strict physical ModifierHeld, so a
+; logical-only match never triggers a silent save. The logical read is live,
+; so there is no 10 s cap on it.
+ModifierActive() {
+    global g_modifier
+    if ModifierHeld()
+        return true
+    try return GetKeyState(g_modifier)
+    return false
+}
+
 ; Tracks the modifier's transitions for ModifierHeld: cleared when the key
 ; is up, stamped when it is seen down. No synthetic key events and no hook
 ; reinstalls - both would interfere with the script that owns the key.
@@ -1210,7 +1225,7 @@ MouseOverWindow(*) {
     static ownPid := DllCall("GetCurrentProcessId")
     if g_menuOpen
         return true            ; while our menu is up, eat every press
-    if !ModifierHeld()
+    if !ModifierActive()
         return false           ; cheapest exit - this runs on every right-click
     try {
         MouseGetPos , , &win
@@ -1484,11 +1499,6 @@ TmSaveOrRule(hwnd) {
             ctl["exeOnly"].OnEvent("Click", (*) => ctl["byTitle"].Value := 1)
         }
     }
-    ; the config is shared between computers through the synced folder, so a
-    ; rule says where it applies. New rules are for this computer unless
-    ; the tick is cleared; an existing rule shows what it has.
-    ctl["thisPc"] := g.AddCheckbox("xm y+6", Format(Tr("dlgThisComputer"), A_ComputerName))
-    ctl["thisPc"].Value := rule ? (RuleComputers(rule) != "" ? 1 : 0) : 1
     ; the desktop row: which desktop the rule's windows go to
     if g_modDesktops {
         names := DesktopNames()
@@ -1546,7 +1556,7 @@ RuleDialogOk(g, hwnd, alias, ctl, info) {
         }
     }
     g.Hide()
-    thisPc := ctl["thisPc"].Value ? true : false
+    thisPc := true
     SetTimer(RuleDialogApply.Bind(hwnd, alias, pattern, regex, enabled, keepPos, useProg
         , desktop, follow, info.exe, exeCond, thisPc), -1)
 }
