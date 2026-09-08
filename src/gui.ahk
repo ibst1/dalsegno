@@ -480,6 +480,7 @@ UiSetRule(msg) {
         return   ; a rule needs a text or a program - keep the old line
     WriteRule(r)
     LoadConfig()
+    PruneEmptyRules()
     PushState()
 }
 

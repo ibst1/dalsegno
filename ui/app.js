@@ -22,8 +22,8 @@ const STR = {
   en: {
     tabWindows: 'Windows', tabDesktops: 'Desktops', tabSettings: 'Settings',
     // the two sections
-    sectRules: 'Windows with rules', sectFree: 'Windows without rules',
-    sectRulesTip: 'What DalSegno acts on in the selected monitor setup: rules, and programs with a saved position. Click to fold.',
+    sectRules: 'Rules', sectFree: 'Open windows without a rule',
+    sectRulesTip: 'The rules DalSegno applies - they hold whether or not a matching window is open right now. Positions shown are for the selected monitor setup. Click to fold.',
     sectFreeTip: 'Open windows no row above covers. They are left where they are. Click to fold.',
     openNow: n => `${n} open`, openNowTip: 'Open windows this row applies to right now:',
     // positions list
@@ -60,6 +60,8 @@ const STR = {
     appliesRuleGone: 'rule "{0}" (no longer exists)', appliesStd: 'all {0} windows',
     appliesRule: 'windows with "{0}" in the title', appliesRuleExe: '{1} windows with "{0}" in the title',
     savedFromTip: 'Saved from: {0}', noPosYet: 'no position yet',
+    posElsewhere: 'saved on another setup',
+    posElsewhereTip: 'The rule has a saved position on another monitor setup or computer, but none on this one yet. It is kept for that setup; move a matching window here to save one here too.',
     inertTip: 'This rule has no desktop and no position in this monitor setup yet, so it moves nothing here - but its windows are still its own: saving one puts the position under the rule. Pick a desktop, or save a matching window with {mod} + S.',
     patternPh: 'text in the title', exePh: '(any)', regexLbl: 'regex',
     computerLbl: 'computer', computersPh: '(all)',
@@ -133,8 +135,8 @@ const STR = {
   },
   sv: {
     tabWindows: 'Fönster', tabDesktops: 'Skrivbord', tabSettings: 'Inställningar',
-    sectRules: 'Fönster med regler', sectFree: 'Fönster utan regler',
-    sectRulesTip: 'Det DalSegno agerar på i vald skärmuppsättning: regler, och program med sparad position. Klicka för att fälla ihop.',
+    sectRules: 'Regler', sectFree: 'Öppna fönster utan regler',
+    sectRulesTip: 'Reglerna DalSegno tillämpar - de gäller oavsett om ett matchande fönster är öppet just nu. Positionerna gäller vald skärmuppsättning. Klicka för att fälla ihop.',
     sectFreeTip: 'Öppna fönster som ingen rad ovan täcker. De lämnas där de är. Klicka för att fälla ihop.',
     openNow: n => `${n} öppna`, openNowTip: 'Öppna fönster raden gäller just nu:',
     setupLabel: 'Skärmuppsättning:', thisSetup: ' (denna)',
@@ -170,6 +172,8 @@ const STR = {
     appliesRuleGone: 'regeln "{0}" (finns inte längre)', appliesStd: 'alla {0}-fönster',
     appliesRule: 'fönster med "{0}" i titeln', appliesRuleExe: '{1}-fönster med "{0}" i titeln',
     savedFromTip: 'Sparat från: {0}', noPosYet: 'ingen position ännu',
+    posElsewhere: 'sparad på annan uppsättning',
+    posElsewhereTip: 'Regeln har en sparad position på en annan skärmuppsättning eller dator, men ingen på den här ännu. Den behålls för den uppsättningen; flytta ett matchande fönster hit för att spara en även här.',
     inertTip: 'Regeln har varken skrivbord eller position i den här skärmuppsättningen ännu och flyttar därför inget här - men dess fönster är fortfarande dess egna: sparar du ett hamnar positionen under regeln. Välj ett skrivbord, eller spara ett matchande fönster med {mod} + S.',
     patternPh: 'text i titeln', exePh: '(alla)', regexLbl: 'regex',
     computerLbl: 'dator', computersPh: '(alla)',
@@ -480,10 +484,16 @@ function rowsForSetup(setup = curSetup) {
   // inert: a rule with no desktop and no position in this setup - it does
   // nothing here (the rule table is shared by every setup)
   const pc = setupComputer(setup);
+  // a rule with a position in ANY setup is alive even where this setup has
+  // none - it is kept for that other setup; only a rule dead everywhere is
+  // inert (and the app prunes those)
+  const anyRulePos = new Set(st.positions.filter(p => p.key.startsWith('rule:')).map(p => p.key.slice(5)));
   const rows = st.rules.map(r => {
     const pos = byKey.get('rule:' + r.alias) || null;
+    const posAnywhere = anyRulePos.has(r.alias);
     return { kind: 'rule', rule: r, pos, foreign: !ruleOnComputer(r, pc),
-             inert: !pos && !(Number(r.desktop) > 0) };
+             elsewhere: !pos && posAnywhere,
+             inert: !posAnywhere && !(Number(r.desktop) > 0) };
   });
   const known = new Set(st.rules.map(r => 'rule:' + r.alias));
   // the rules in their own order (it decides which wins), then positions of
@@ -592,10 +602,11 @@ function posRow(row, idx, count) {
   // there - the badge sits with the size it qualifies
   const maxBadge = p && String(p.max) === '1' ? ` <span class="badge">${esc(t('badgeMax'))}</span>` : '';
   const tip = row.foreign ? t('foreignTip').replace('{0}', r.computers).replace('{1}', setupComputer(curSetup))
-    : row.inert ? t('inertTip') : p ? t('savedFromTip').replace('{0}', p.info || key) + '\n' + key : key;
+    : row.inert ? t('inertTip') : row.elsewhere ? t('posElsewhereTip')
+    : p ? t('savedFromTip').replace('{0}', p.info || key) + '\n' + key : key;
   const nums = p
     ? `<td class="num">${esc(p.x)}</td><td class="num">${esc(p.y)}</td><td class="num">${esc(p.w)}</td><td class="num">${esc(p.h)}${maxBadge}</td>`
-    : `<td class="num dim nopos" colspan="4">${esc(t('noPosYet'))}</td>`;
+    : `<td class="num dim nopos" colspan="4">${esc(row.elsewhere ? t('posElsewhere') : t('noPosYet'))}</td>`;
   const canMove = p && isCur && positionsOn() && (row.kind !== 'rule' || r.enabled);
   const off = r && !r.enabled ? ' off' : '';
   const isRule = row.kind === 'rule';
@@ -609,7 +620,6 @@ function posRow(row, idx, count) {
     ${nums}
     <td class="actions">
       ${btn('act-move', 'moveNow', canMove ? 'moveNowTip' : 'moveNowNoTip', canMove)}
-      ${btn('act-forget', 'forget', 'forgetTip', !!p)}
       ${btn('act-delrule', 'removeRow', isRule ? 'removeRuleTip' : 'removeProgTip', true)}
       <button class="tiny act-up" title="${esc(t(isRule ? 'upTip' : 'orderProgTip'))}"${!isRule || idx === 0 ? ' disabled' : ''}>▲</button>
       <button class="tiny act-down" title="${esc(t(isRule ? 'downTip' : 'orderProgTip'))}"${!isRule || idx === count - 1 ? ' disabled' : ''}>▼</button>
@@ -786,21 +796,6 @@ $('posBody').addEventListener('click', e => {
   const cl = e.target.classList;
   if (cl.contains('act-move')) {
     post({ action: 'moveKey', key: tr.dataset.key });
-  } else if (cl.contains('act-forget')) {
-    // two clicks: arm first, delete second - no dialog needed
-    if (armedForget === tr.dataset.section) {
-      armedForget = null;
-      post({ action: 'forget', section: tr.dataset.section });
-    } else {
-      armedForget = tr.dataset.section;
-      e.target.textContent = t('sure');
-      e.target.classList.add('danger-armed');
-      setTimeout(() => {
-        if (armedForget === tr.dataset.section) armedForget = null;
-        e.target.textContent = t('forget');
-        e.target.classList.remove('danger-armed');
-      }, 2500);
-    }
   } else if (cl.contains('act-delrule')) {
     const alias = tr.dataset.alias;
     const r = alias ? ruleByAlias(alias) : null;

@@ -67,6 +67,8 @@ try {
 }
 
 LoadConfig()
+PrunePositions()
+PruneEmptyRules()
 BuildTrayMenu()
 if g_modPositions
     PositionsInit()

@@ -582,6 +582,8 @@ LoadConfig() {
 ReloadConfig(*) {
     global titleRules, ignoreExe, ignoreTitles
     LoadConfig()
+    PrunePositions()
+    PruneEmptyRules()
     BuildTrayMenu()
     DesktopsLanguageChanged()
     Notify(Format(Tr("configReloaded"), titleRules.Length, ignoreExe.Length, ignoreTitles.Length)
@@ -664,6 +666,42 @@ DeleteRule(alias) {
             try IniDelete(posIni, p["section"])
 }
 
+; A rule with no desktop and no saved position in ANY monitor setup does
+; nothing - remove it. A rule that still has a position on another computer's
+; setup is kept; that is why a rule can show no position here and stay listed.
+PruneEmptyRules() {
+    global titleRules
+    havePos := Map()
+    for p in ListPositions()
+        if (SubStr(p["key"], 1, 5) = "rule:")
+            havePos[SubStr(p["key"], 6)] := true
+    removed := 0
+    for r in titleRules.Clone()
+        if (!havePos.Has(r.alias) && !(r.HasProp("desktop") ? r.desktop : 0))
+            (DeleteRule(r.alias), removed += 1)
+    if removed
+        LoadConfig()
+    return removed
+}
+
+; Invisible helper / message-only window classes that an old "Save all" swept
+; into the positions file before the window filter caught them. They never
+; show as real windows, so a saved position for them is dead weight - both
+; BaseInfo (no new saves) and PrunePositions (clean the old ones) use this.
+IsHelperClass(cls) {
+    static exact := Map("SunAwtToolkit", 1, "OleMainThreadWndClass", 1
+        , "OleDdeWndClass", 1, "MsoWorkPane", 1, "OfficePowerManagerWindow", 1
+        , "UevAppMonitorWindowClass", 1, "UevAppWindowClass", 1
+        , "MsoPeopleSearchMessages", 1, "MsoStdCompMgr", 1, "ThunderMain", 1
+        , "OfficeChicletCreatorWndClass", 1)
+    if exact.Has(cls)
+        return true
+    for prefix in ["NET-BroadcastEventWindow", "WMS Notif Engine", "ARC Event Window", "WMS Idle"]
+        if (SubStr(cls, 1, StrLen(prefix)) = prefix)
+            return true
+    return false
+}
+
 ; Alias for a new rule: the pattern folded to a-z0-9 and cut to 24 characters
 ; ("Report View" -> "reportview"), made unique among the existing
 ; rules. The exe name is the fallback for a pattern without letters.
@@ -736,7 +774,7 @@ BaseInfo(hwnd, allowCloaked := false) {
         if (title = "" || WinGetPID(hwnd) = ownPid)
             return ""
         cls := WinGetClass(hwnd)
-        if systemClasses.Has(cls)
+        if (systemClasses.Has(cls) || IsHelperClass(cls))
             return ""
         if WinGetExStyle(hwnd) & 0x80   ; WS_EX_TOOLWINDOW
             return ""

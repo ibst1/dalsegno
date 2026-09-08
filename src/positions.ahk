@@ -625,3 +625,23 @@ ListPositions() {
     }
     return list
 }
+
+; Saved positions that can never apply again - an empty key, or a helper /
+; message-only window class - dropped so the list is not padded with rows that
+; match no real window. Run at startup and on reload.
+PrunePositions() {
+    global posIni
+    removed := 0
+    for p in ListPositions() {
+        key := p["key"]
+        junk := (key = "")
+        if (!junk && SubStr(key, 1, 5) != "rule:" && InStr(key, "|")) {
+            cls := SubStr(key, InStr(key, "|") + 1)
+            if IsHelperClass(cls)
+                junk := true
+        }
+        if junk
+            (IniDelete(posIni, p["section"]), removed += 1)
+    }
+    return removed
+}
