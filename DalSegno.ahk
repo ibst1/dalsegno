@@ -30,6 +30,7 @@ Persistent
 #Include src\gui.ahk
 
 if (A_Args.Length && A_Args[1] = "/selftest") {
+    MigrateConfig()
     LoadConfig()
     g_desktopsStarted := true   ; so the desktop hotkeys register and can be listed
     ApplyDesktopHotkeys()
@@ -66,6 +67,7 @@ try {
     DllCall(DllCall("GetProcAddress", "ptr", hUx, "ptr", 136, "ptr"))             ; FlushMenuThemes
 }
 
+MigrateConfig()
 LoadConfig()
 PrunePositions()
 PruneEmptyRules()

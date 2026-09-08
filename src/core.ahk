@@ -9,10 +9,16 @@
 ; =============================================================================
 
 ; --- Files -------------------------------------------------------------------
-; Both live next to the script. The UTF-16 BOM is required for the Windows ini
-; functions to handle non-ASCII titles - without it they are read as garbage.
-configIni := A_ScriptDir "\DalSegno config.ini"
-posIni    := A_ScriptDir "\DalSegno positions.ini"
+; Per machine, in %AppData%\DalSegno - NOT the script folder. The script folder
+; is synced (OneDrive) between the two computers, but rules and positions are
+; machine-specific (and per monitor setup) and must not overwrite each other.
+; MigrateConfig() brings an existing config over from the old location once.
+; Roaming AppData is not MSIX-virtualised the way %LocalAppData% is, so the
+; files stay findable. The UTF-16 BOM is required for the Windows ini functions
+; to handle non-ASCII titles - without it they are read as garbage.
+g_configDir := A_AppData "\DalSegno"
+configIni := g_configDir "\DalSegno config.ini"
+posIni    := g_configDir "\DalSegno positions.ini"
 
 ; --- Modules ----------------------------------------------------------------
 g_modPositions := true
@@ -302,6 +308,19 @@ SetLanguage(lang) {
 ;  Config file
 ; =============================================================================
 
+; One-time move of an existing config to the per-machine location: copy each
+; file only when the new one is missing and the old (script-folder) one exists.
+; The old files are left in place - the other machine migrates its own copy the
+; first time it runs this build.
+MigrateConfig() {
+    global configIni, posIni, g_configDir
+    try DirCreate(g_configDir)
+    for pair in [[configIni, A_ScriptDir "\DalSegno config.ini"]
+               , [posIni, A_ScriptDir "\DalSegno positions.ini"]]
+        if (!FileExist(pair[1]) && FileExist(pair[2]))
+            try FileCopy(pair[2], pair[1])
+}
+
 CreateConfigTemplate() {
     global configIni
     if FileExist(configIni)
@@ -544,11 +563,11 @@ RuleOnThisComputer(r) {
 ; writes CapsModifier combos). Translate those to the key name so the field
 ; tolerates both; anything else is passed through and validated by the caller.
 NormalizeModifier(m) {
-    static map := Map(">^", "RCtrl", "<^", "LCtrl", "^", "Control"
-        , ">!", "RAlt", "<!", "LAlt", "!", "Alt"
-        , ">+", "RShift", "<+", "LShift", "+", "Shift"
-        , ">#", "RWin", "<#", "LWin", "#", "LWin")
-    return map.Has(m) ? map[m] : m
+    ; the variable must NOT be named "map" - that is the built-in Map class
+    ; (names are case-insensitive), and assigning to it fails. Built fresh each
+    ; call; the function runs rarely (config load).
+    pfx := Map(">^","RCtrl", "<^","LCtrl", "^","Control", ">!","RAlt", "<!","LAlt", "!","Alt", ">+","RShift", "<+","LShift", "+","Shift", ">#","RWin", "<#","LWin", "#","LWin")
+    return pfx.Has(m) ? pfx[m] : m
 }
 
 LoadConfig() {

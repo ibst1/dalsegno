@@ -178,11 +178,10 @@ old             = /desktop:2 /off re:^Something$
   a desktop or switched off: a rule for exactly the windows the row stood
   for, with its positions.
 - `/computer:` limits the rule to those computers (names as Windows reports
-  them, comma-separated, case-insensitive). The config file is shared
-  between computers when the folder is synced, and positions are already
-  per computer; this keeps the rules apart too. A rule without it applies
-  everywhere. Rules created in the GUI or from the window menu are for the
-  computer they are made on; clear the field (or the tick) for all.
+  them, comma-separated, case-insensitive). The config lives per machine now
+  (in `%AppData%DalSegno`), so this is rarely needed; a rule without it
+  applies to every window on the machine whose config holds it. It stays for
+  a config you still keep in a synced folder by hand.
 - `/desktop:<n>` moves matching windows there when they appear or their
   title changes into matching; `/follow` switches along.
 - `/off` keeps the rule but switches it off.
@@ -200,8 +199,8 @@ old             = /desktop:2 /off re:^Something$
 | --- | --- |
 | `DalSegno.ahk` | the entry script (AutoHotkey v2) |
 | `src/core.ahk`, `src/positions.ahk`, `src/desktops.ahk`, `src/gui.ahk` | the core and the modules |
-| `DalSegno config.ini` | settings and rules (UTF-16, created with defaults on first run) |
-| `DalSegno positions.ini` | saved positions (UTF-16) |
+| `%AppData%\DalSegno\DalSegno config.ini` | settings and rules, per machine (UTF-16, created with defaults on first run; moved here from the script folder on first run of 2.1) |
+| `%AppData%\DalSegno\DalSegno positions.ini` | saved positions, per machine (UTF-16) |
 | `DalSegnoArrow.ahk` | the tray arrow helper |
 | `ui/` | the WebView2 GUI |
 | `lib/`, `ComVar.ahk`, `Promise.ahk` | WebView2 + JSON libraries |
