@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.5 (2026-09-24)
+
+- A rule that moves a window to another desktop without following now says
+  so in the small overlay: "Flyttat av regel: Patienthistorik → 1 · LIMS".
+  Until now the window simply vanished from the desktop the user was
+  looking at, which reads as "the window closed itself" - and was chased
+  as a bug in the script that had opened the window.
+
 ## 2.0.4 (2026-09-07)
 
 - Rules can be limited to computers: `/computer:<name,name>` in the config,

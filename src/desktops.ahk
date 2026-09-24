@@ -478,8 +478,25 @@ DesktopApplyToWindow(hwnd, desktop, follow) {
     if follow {
         SwitchTo(desktop)
         SetTimer(ActivateWindow.Bind(hwnd), -400)
+    } else {
+        ; The window has just vanished from the desktop the user is looking
+        ; at; without a word it looks as if it closed itself.
+        RuleMoveNotice(hwnd, desktop)
     }
     return true
+}
+
+; Small overlay after a rule moved a window away without following: which
+; window went to which desktop. Browser titles run long ("Patienthistorik -
+; Arbete – Microsoft Edge"), so the title is cut at its first " - ".
+RuleMoveNotice(hwnd, desktop) {
+    title := ""
+    try title := WinGetTitle(hwnd)
+    if (p := InStr(title, " - "))
+        title := SubStr(title, 1, p - 1)
+    if (StrLen(title) > 45)
+        title := SubStr(title, 1, 44) "…"
+    ShowOsdText(Format(Tr("ruleMoved"), title, NameForIndex(desktop)), true)
 }
 
 ; Called from the window scan for a window that is new (old title "") or
