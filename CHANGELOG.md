@@ -28,6 +28,11 @@
   stuck in that box; the scan lets messages through every ten windows, so
   an exit request or a hotkey no longer waits for the end of it.
 
+- The DalSegno window's WebView2 is let go ten minutes after the window was
+  closed: its half-dozen browser processes held some 250 MB for as long as
+  the script ran, which on a full machine is paging. The next open creates
+  the window again (a second or so instead of instantly).
+
 ## 2.0.4 (2026-09-07)
 
 - Rules can be limited to computers: `/computer:<name,name>` in the config,
