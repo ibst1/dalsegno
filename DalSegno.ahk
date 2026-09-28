@@ -20,7 +20,10 @@
 ;             /show      - show the desktop name OSD at startup
 ;===============================================================================
 #Requires AutoHotkey v2.0
-#SingleInstance Force
+; Off: the previous instance is closed by CloseOtherInstances below, with a
+; long silent wait, instead of AutoHotkey's two seconds and a "Could not
+; close the previous instance. Keep waiting?" box.
+#SingleInstance Off
 Persistent
 #Include lib\WebView2.ahk
 #Include lib\JSON.ahk
@@ -69,6 +72,7 @@ try {
 
 MigrateConfig()
 LoadConfig()
+CloseOtherInstances()   ; after LoadConfig so the trace can report it; before any hook or timer
 PrunePositions()
 PruneEmptyRules()
 BuildTrayMenu()

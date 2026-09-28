@@ -47,9 +47,17 @@ PositionsInit() {
         "uint", 0, "uint", 0,
         "uint", 0x2,                       ; OUTOFCONTEXT | SKIPOWNPROCESS
         "ptr")
-    ; the callback must return 0/empty - a nonzero return value tells AHK to
-    ; CANCEL the exit
-    OnExit((*) => (DllCall("UnhookWinEvent", "ptr", g_winEventHook), 0))
+    OnExit(PositionsExit)
+}
+
+; The exit hook. Returns 0: a nonzero return value tells AHK to CANCEL the
+; exit. Traced, so a slow exit can be told from a slow exit REQUEST.
+PositionsExit(reason, code) {
+    global g_winEventHook
+    Trace("exit: reason " reason ", unhooking")
+    DllCall("UnhookWinEvent", "ptr", g_winEventHook)
+    Trace("exit: cleanup done")
+    return 0
 }
 
 ; The Windows ini functions write ANSI into new files - non-ASCII titles then
@@ -126,6 +134,17 @@ RectOnScreen(x, y, w, h) {
             return true
     }
     return false
+}
+
+; The refusal above was visible in the trace only, so a position saved in the
+; gap between two monitors looked like "DalSegno does nothing". Once per key
+; and five minutes the overlay says so.
+OffScreenNotice(hwnd, key) {
+    static told := Map()
+    if (told.Has(key) && A_TickCount - told[key] < 300000)
+        return
+    told[key] := A_TickCount
+    Notify(Format(Tr("posOffScreen"), ShortTitle(hwnd)))
 }
 
 ; Ini section name: hash of the key + setup. The hash turns arbitrary titles
@@ -267,6 +286,7 @@ MoveToSaved(hwnd, key) {
     ; app put it, and the next deliberate save replaces the position)
     if !RectOnScreen(p.x, p.y, p.w, p.h) {
         Trace(Format("move {} saved {},{} {}x{} max={} is OFF SCREEN - not applied", hwnd, p.x, p.y, p.w, p.h, p.max))
+        OffScreenNotice(hwnd, key)
         return true
     }
     try {

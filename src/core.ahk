@@ -124,6 +124,7 @@ Tr(id) {
         "dllMissing",     "VirtualDesktopAccessor.dll missing – cannot move windows",
         "moveFailed",     "Could not move the window",
         "ruleMoved",      "Moved by rule: {1} → {2}",
+        "posOffScreen",   "Saved position for {1} is off the screens - not applied. Save it again.",
         "renameTitle",    "DalSegno - rename desktop",
         "renamePrompt",   "New name for desktop {1} (empty = Windows' default):",
         "renameFailed",   "Could not rename the desktop",
@@ -224,6 +225,7 @@ Tr(id) {
         "dllMissing",     "VirtualDesktopAccessor.dll saknas – kan inte flytta fönster",
         "moveFailed",     "Kunde inte flytta fönstret",
         "ruleMoved",      "Flyttat av regel: {1} → {2}",
+        "posOffScreen",   "Sparad position för {1} ligger utanför skärmarna och används inte. Spara om den.",
         "renameTitle",    "DalSegno - byt namn på skrivbord",
         "renamePrompt",   "Nytt namn för skrivbord {1} (tomt = Windows standardnamn):",
         "renameFailed",   "Kunde inte byta namn på skrivbordet",
@@ -290,6 +292,16 @@ Notify(text, title := "") {
     if (title != "" && title != Tr("appTitle"))
         text := title "`n" text
     ShowOsdText(text, true)
+}
+
+; A window's title for a notice: cut at its first " - " (browser titles run
+; long: "Patienthistorik - Arbete – Microsoft Edge"), at most 45 characters.
+ShortTitle(hwnd) {
+    title := ""
+    try title := WinGetTitle(hwnd)
+    if (p := InStr(title, " - "))
+        title := SubStr(title, 1, p - 1)
+    return StrLen(title) > 45 ? SubStr(title, 1, 44) "…" : title
 }
 
 SetLanguage(lang) {
@@ -1024,6 +1036,11 @@ ScanWindowsBody() {
                 info.DeleteProp("deskOld"), info.DeleteProp("deskSince")
         }
         info.title := title
+        ; let messages through now and then: the first scan after a start
+        ; walks every window and takes seconds, and an exit request (a
+        ; restart) or a hotkey should not have to wait for the end of it
+        if (Mod(A_Index, 10) = 0)
+            Sleep 0
     }
     ; Prune closed windows so the map does not grow all day.
     stale := []
@@ -1199,7 +1216,7 @@ ApplyActionHotkeys() {
     static handlers := Map("OpenUi", (*) => OpenUi(), "SaveActive", (*) => SaveActive()
         , "SaveAll", (*) => SaveAll(), "ApplyAll", (*) => ApplyAll()
         , "ForgetActive", (*) => ForgetActive()
-        , "ToggleMove", (*) => ToggleMove(), "Reload", (*) => Reload())
+        , "ToggleMove", (*) => ToggleMove(), "Reload", (*) => RestartScript())
     static positionsOnly := Map("SaveActive", 1, "SaveAll", 1, "ApplyAll", 1, "ForgetActive", 1, "ToggleMove", 1)
     HotIf(ModifierHeld)
     for k in g_actionKeys
@@ -1763,7 +1780,7 @@ BuildTrayMenu() {
     if FileExist(AutostartShortcut())
         tray.Check(Tr("trayAutostart"))
     tray.Add()
-    tray.Add(Tr("trayRestart"), (*) => Reload())
+    tray.Add(Tr("trayRestart"), (*) => RestartScript())
     tray.Add(Tr("trayExit"), (*) => ExitApp())
     tray.ClickCount := 1
     A_IconTip := Tr("appTitle")
@@ -1815,6 +1832,67 @@ ToggleAutostart(*) {
 ; NOTE: under the Microsoft Store edition of AutoHotkey the write is
 ; virtualized - the file actually lands in
 ; %LOCALAPPDATA%\Packages\53721Descolada.AutoHotkeyv2StoreEdition_*\LocalCache\Local\DalSegno\.
+; =============================================================================
+;  One instance: closing the previous one, restarting
+; =============================================================================
+
+; Every other running instance of this script is asked to exit and waited
+; for. This replaces #SingleInstance Force, whose wait is two seconds and
+; then a "Could not close the previous instance of this script. Keep
+; waiting?" box. Two seconds is not enough while the previous instance is
+; deep in its window scan - the first scan after a start takes seconds, a
+; display change has it re-placing every window - so the box came up on
+; restarts; and a box left unanswered leaves an instance that never ran the
+; script, which the NEXT restart waits on in turn (2026-09-28: a chain of
+; them). The wait here is long and silent; an instance that still will not
+; go is ended, and so is an instance stuck in that box (a dialog, no script
+; window - it never ran, nothing is lost).
+g_startTick := A_TickCount   ; when this instance's script began loading
+CloseOtherInstances() {
+    prevHidden := A_DetectHiddenWindows, prevMode := A_TitleMatchMode
+    DetectHiddenWindows true
+    SetTitleMatchMode 1   ; the main window's title starts with the script path
+    try {
+        me := ProcessExist()
+        others := []
+        for hwnd in WinGetList(A_ScriptFullPath " ahk_class AutoHotkey")
+            if (WinGetPID(hwnd) != me)
+                others.Push(hwnd)
+        ; WM_CLOSE to the main window is ExitApp (OnExit reason "Close") -
+        ; the same request #SingleInstance makes
+        t0 := A_TickCount
+        Trace("startup: " others.Length " other instance(s) asked to exit, " (A_TickCount - g_startTick) " ms after our start")
+        for hwnd in others
+            try PostMessage(0x10, 0, 0, , hwnd)
+        for hwnd in others {
+            pid := 0
+            try pid := WinGetPID(hwnd)
+            gone := WinWaitClose(hwnd, , 15)
+            Trace("startup: instance pid " pid (gone ? " gone after " (A_TickCount - t0) " ms" : " still there after 15 s - ended"))
+            if (!gone && pid)
+                try ProcessClose(pid)
+        }
+        ; the leftovers of the old mechanism: AutoHotkey processes showing the
+        ; "Keep waiting?" box for this script, never having run it
+        for hwnd in WinGetList(A_ScriptName " ahk_class #32770") {
+            pid := 0
+            try pid := WinGetPID(hwnd)
+            if (pid && pid != me && WinGetProcessName(hwnd) ~= "i)^AutoHotkey")
+                try ProcessClose(pid)
+        }
+    } finally {
+        DetectHiddenWindows prevHidden
+        SetTitleMatchMode prevMode
+    }
+}
+
+; Restart: a new instance is started and closes this one (CloseOtherInstances
+; above). Reload() would do the same through AutoHotkey's own mechanism, box
+; included.
+RestartScript(*) {
+    try Run('"' A_AhkPath '" "' A_ScriptFullPath '"')
+}
+
 ErrorLogPath() {
     static path := ""
     if (path != "")

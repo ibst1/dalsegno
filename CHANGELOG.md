@@ -8,6 +8,26 @@
   looking at, which reads as "the window closed itself" - and was chased
   as a bug in the script that had opened the window.
 
+- A saved position that is refused because it lies off every screen (less
+  than 100 px of its title band on a monitor) is reported in the overlay
+  too, once per rule and five minutes: "Sparad position för Bildfönster
+  ligger utanför skärmarna och används inte. Spara om den." The refusal was
+  visible in the trace only, and a position saved in the gap between two
+  monitors - the window had been parked there by another script - looked
+  like DalSegno ignoring its rule.
+
+- Fix: restarting (CapsLock + F5, the tray, a display change) could bring
+  up AutoHotkey's "Could not close the previous instance of this script.
+  Keep waiting?" box, and a box left unanswered left an instance that had
+  never run the script - which the next restart waited on in turn, so the
+  box kept coming back. AutoHotkey gives the previous instance two seconds,
+  and DalSegno's window scan can hold the script longer than that (the
+  first scan after a start walks every window; a display change re-places
+  them all). DalSegno now closes the previous instance itself, with a long
+  silent wait, ends one that still will not go, and clears any instance
+  stuck in that box; the scan lets messages through every ten windows, so
+  an exit request or a hotkey no longer waits for the end of it.
+
 ## 2.0.4 (2026-09-07)
 
 - Rules can be limited to computers: `/computer:<name,name>` in the config,
