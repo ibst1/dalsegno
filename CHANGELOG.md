@@ -18,7 +18,7 @@
   in a helper process. Slow timers and #HotIf callbacks are now noted as
   "SLOW" in the trace file even with tracing off (for the Store edition of
   AutoHotkey the file is in %LOCALAPPDATA%\Packages\...AutoHotkeyv2StoreEdition...
-  \LocalCache\Local\DalSegno	race.log).
+  \LocalCache\Local\DalSegno\trace.log).
 
 ## 2.0.5 (2026-09-24)
 
