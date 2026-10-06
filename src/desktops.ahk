@@ -863,19 +863,10 @@ UiaButtonAt(x, y) {
     ; #HotIf conditions - so every key and click on the PC waited up to the
     ; hooks' 1 s timeout, several times a minute. The probe must move off this
     ; thread (a helper process, like the arrows) before it comes back. Until
-    ; then the label keeps its full form even when the buttons reach it.
+    ; then the label keeps its full form even when the buttons reach it. The
+    ; probe that was here (UiaTypeAt(x, y) = 50000, a button, cached for 1 s)
+    ; is in the history, commit 92d1eed.
     return false
-    static last := 0, lastKey := "", lastAnswer := false
-    key := x "," y
-    if (key = lastKey && A_TickCount - last < 1000)
-        return lastAnswer
-    answer := false
-    try {
-        typ := UiaTypeAt(x, y)
-        answer := (typ = 50000)
-    }
-    last := A_TickCount, lastKey := key, lastAnswer := answer
-    return answer
 }
 
 UiaTypeAt(x, y) {
