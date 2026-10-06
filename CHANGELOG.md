@@ -10,6 +10,16 @@
   the scan, and with it the hooks, until Windows gave up on them (1 s). Titles
   are now read with InternalGetWindowText, which never waits on the window.
 
+- Fix, the larger part of the same lag: the desktop label asked UI Automation
+  what sits on the taskbar left of it (to shrink the label when the app
+  buttons reach it), and on LU every such call took 9 s, several times a
+  minute, on the thread the hooks wait for to judge their #HotIf conditions.
+  The probe is off for now - the label keeps its full form - until it runs
+  in a helper process. Slow timers and #HotIf callbacks are now noted as
+  "SLOW" in the trace file even with tracing off (for the Store edition of
+  AutoHotkey the file is in %LOCALAPPDATA%\Packages\...AutoHotkeyv2StoreEdition...
+  \LocalCache\Local\DalSegno	race.log).
+
 ## 2.0.5 (2026-09-24)
 
 - A rule that moves a window to another desktop without following now says

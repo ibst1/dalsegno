@@ -208,6 +208,7 @@ DesktopNames() {
 }
 
 PollDesktops() {
+    _sg := SlowGuard("PollDesktops", 100)
     global g_lastGuid, g_lastState, g_lastStatus, g_modDesktops
     if !g_modDesktops
         return
@@ -340,6 +341,7 @@ WheelNext(*) {
 }
 
 MouseOverTaskbar(*) {
+    _sg := SlowGuard("MouseOverTaskbar", 30)
     MouseGetPos , , &over
     try return WinGetClass(over) ~= "^(Shell_TrayWnd|Shell_SecondaryTrayWnd)$"
     catch
@@ -652,6 +654,7 @@ SetDesktopName(n, name) {
 ; True when the cursor is inside the (visible) name label's rectangle - the
 ; label itself is click-through, so hit-testing never reports it.
 MouseOverLabel(*) {
+    _sg := SlowGuard("MouseOverLabel", 30)
     global g_label
     try {
         if (!IsObject(g_label) || !DllCall("IsWindowVisible", "ptr", g_label.Hwnd))
@@ -734,6 +737,7 @@ TogglePin(win, *) {
 ; --- taskbar name label ----------------------------------------------------------
 
 LabelGuard() {
+    _sg := SlowGuard("LabelGuard", 100)
     UpdateLabel()
 }
 
@@ -853,6 +857,14 @@ UpdateLabelInner() {
 ; is 50000. Answers false on any failure: a missing answer must not be what
 ; makes the label disappear. Cached briefly.
 UiaButtonAt(x, y) {
+    ; OFF for now: answers "no button" without asking. On LU every UI Automation
+    ; ElementFromPoint on the taskbar took 9 s (2026-10-06), on this script's
+    ; thread - the one the keyboard and mouse hooks wait for to judge their
+    ; #HotIf conditions - so every key and click on the PC waited up to the
+    ; hooks' 1 s timeout, several times a minute. The probe must move off this
+    ; thread (a helper process, like the arrows) before it comes back. Until
+    ; then the label keeps its full form even when the buttons reach it.
+    return false
     static last := 0, lastKey := "", lastAnswer := false
     key := x "," y
     if (key = lastKey && A_TickCount - last < 1000)
@@ -867,6 +879,7 @@ UiaButtonAt(x, y) {
 }
 
 UiaTypeAt(x, y) {
+    _sg := SlowGuard("UiaTypeAt(" x "," y ")", 100)
     static uia := 0
     if !uia {
         DllCall("ole32\CoCreateInstance"

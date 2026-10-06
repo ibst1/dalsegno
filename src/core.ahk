@@ -973,11 +973,46 @@ ScanWindows() {
     }
 }
 
+; Milliseconds from the performance counter, for timing the scan.
+QpcMs() {
+    static f := 0
+    if !f
+        DllCall("QueryPerformanceFrequency", "int64*", &f)
+    DllCall("QueryPerformanceCounter", "int64*", &c := 0)
+    return c * 1000 / f
+}
+
+; A slow scan step, noted in the trace file whether tracing is on or not: the
+; scan shares its thread with the keyboard and mouse hooks, so a step that waits
+; on another program holds up every key and mouse event on the PC (2026-10-06).
+SlowNote(msg) {
+    try FileAppend(FormatTime(, "HH:mm:ss") "." Mod(A_TickCount, 1000) "  SLOW " msg "`n", TracePath(), "UTF-8")
+}
+
+; Times the function it is created in (a local released when the function returns)
+; and notes it when it took longer than `limit` ms - for the timers and the
+; #HotIf callbacks, which run on the thread the keyboard and mouse hooks wait for.
+class SlowGuard {
+    __New(name, limit := 100) {
+        this.name := name, this.limit := limit, this.t := QpcMs()
+    }
+    __Delete() {
+        d := QpcMs() - this.t
+        if (d > this.limit)
+            SlowNote(this.name " " Round(d) "ms")
+    }
+}
+
 ScanWindowsBody() {
     global winInfo, firstScan, g_modPositions, g_modDesktops
+    tScan := QpcMs()
     setup := SetupKey()
     alive := Map()
-    for hwnd in WinGetList() {
+    tList := QpcMs()
+    list := WinGetList()
+    tList := QpcMs() - tList
+    for hwnd in list {
+        t0 := QpcMs(), tReady := 0, tPlace := 0, tGuard := 0, tSweep := 0
         alive[hwnd] := true
         title := ""
         title := FastTitle(hwnd)
@@ -994,7 +1029,9 @@ ScanWindowsBody() {
                 Trace("new window " TraceWin(hwnd))
         }
         info := winInfo[hwnd]
+        t := QpcMs()
         ready := WindowReady(hwnd)
+        tReady := QpcMs() - t
         if (title != "" && title != info.title) {
             Trace("title " hwnd " [" SubStr(info.title, 1, 40) "] -> [" SubStr(title, 1, 40) "]")
             ; a title that changes the window's IDENTITY (untitled -> titled,
@@ -1024,9 +1061,13 @@ ScanWindowsBody() {
         ; is cloaked and has no identity until the desktop is shown, and a
         ; slow app (Java) gets its place while it is still settling
         if g_modPositions {
+            t := QpcMs()
             PositionsPlace(hwnd, info, setup)
+            tPlace := QpcMs() - t
+            t := QpcMs()
             if ready
                 KeepOnScreenGuard(hwnd)
+            tGuard := QpcMs() - t
         }
         if (g_modDesktops && title != "" && title != info.title) {
             if firstScan {
@@ -1043,12 +1084,21 @@ ScanWindowsBody() {
             }
         }
         if (info.HasProp("deskOld") && ready) {
+            t := QpcMs()
             swept := DesktopRuleSweep(hwnd, title, info.deskOld)
+            tSweep := QpcMs() - t
             Trace("desktop sweep " hwnd " -> " (swept ? "settled" : "retry"))
             if (swept || A_TickCount - info.deskSince > PLACEMENT_GRACE_MS)
                 info.DeleteProp("deskOld"), info.DeleteProp("deskSince")
         }
         info.title := title
+        tWin := QpcMs() - t0
+        if (tWin > 100) {
+            exe := ""
+            try exe := WinGetProcessName(hwnd)
+            SlowNote(Format("scan {1}ms on {2} {3} [{4}]: ready {5}, place {6}, guard {7}, sweep {8}"
+                , Round(tWin), hwnd, exe, SubStr(title, 1, 40), Round(tReady), Round(tPlace), Round(tGuard), Round(tSweep)))
+        }
         ; let messages through now and then: the first scan after a start
         ; walks every window and takes seconds, and an exit request (a
         ; restart) or a hotkey should not have to wait for the end of it
@@ -1062,6 +1112,9 @@ ScanWindowsBody() {
             stale.Push(hwnd)
     for hwnd in stale
         winInfo.Delete(hwnd)
+    tScan := QpcMs() - tScan
+    if (tScan > 150 && !firstScan)
+        SlowNote(Format("whole scan {1}ms ({2} windows, WinGetList {3}ms)", Round(tScan), list.Length, Round(tList)))
     firstScan := false
 }
 
@@ -1179,6 +1232,7 @@ ModifierPhysical() {
 }
 
 ModifierHeld(*) {
+    _sg := SlowGuard("ModifierHeld", 30)
     global g_modDownSince
     try {
         if !ModifierPhysical()
@@ -1209,6 +1263,7 @@ ModifierActive() {
 ; is up, stamped when it is seen down. No synthetic key events and no hook
 ; reinstalls - both would interfere with the script that owns the key.
 ModifierWatchdog() {
+    _sg := SlowGuard("ModifierWatchdog", 100)
     global g_modDownSince
     down := false
     try down := ModifierPhysical()
@@ -1285,6 +1340,7 @@ ApplyMenuHotkey() {
 ; be quick - no cross-process messages except the short-deadline hit test in
 ; title-bar mode.
 MouseOverWindow(*) {
+    _sg := SlowGuard("MouseOverWindow", 30)
     static ownPid := DllCall("GetCurrentProcessId")
     if g_menuOpen
         return true            ; while our menu is up, eat every press
