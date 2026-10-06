@@ -14,8 +14,10 @@
   what sits on the taskbar left of it (to shrink the label when the app
   buttons reach it), and on LU every such call took 9 s, several times a
   minute, on the thread the hooks wait for to judge their #HotIf conditions.
-  The probe is off for now - the label keeps its full form - until it runs
-  in a helper process. Slow timers and #HotIf callbacks are now noted as
+  The probe now runs in a helper process, DalSegnoProbe.ahk (started when
+  needed, gone when DalSegno is), and the label uses its last answer instead
+  of waiting; it asks again only when the number of windows changes, at
+  most every 5 minutes, since every question keeps Explorer busy too. Slow timers and #HotIf callbacks are now noted as
   "SLOW" in the trace file even with tracing off (for the Store edition of
   AutoHotkey the file is in %LOCALAPPDATA%\Packages\...AutoHotkeyv2StoreEdition...
   \LocalCache\Local\DalSegno\trace.log).

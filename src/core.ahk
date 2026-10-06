@@ -1004,13 +1004,14 @@ class SlowGuard {
 }
 
 ScanWindowsBody() {
-    global winInfo, firstScan, g_modPositions, g_modDesktops
+    global winInfo, firstScan, g_modPositions, g_modDesktops, g_windowCount
     tScan := QpcMs()
     setup := SetupKey()
     alive := Map()
     tList := QpcMs()
     list := WinGetList()
     tList := QpcMs() - tList
+    g_windowCount := list.Length   ; the taskbar probe asks again when this changes
     for hwnd in list {
         t0 := QpcMs(), tReady := 0, tPlace := 0, tGuard := 0, tSweep := 0
         alive[hwnd] := true

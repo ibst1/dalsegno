@@ -47,6 +47,9 @@ g_labelText := ""        ; last rendered label content (avoids needless redraws)
 g_nameInTray := true
 g_wheel := true          ; mouse wheel over the taskbar switches desktop
 g_arrowIcons := false    ; two tray icons (DalSegnoArrow.ahk) that switch desktop
+g_probeAnswers := Map()   ; "x,y" -> {button, at}: DalSegnoProbe's last replies
+g_probePending := Map()   ; request id -> {key, at}: questions not yet answered
+g_windowCount := 0        ; windows in the last scan (core.ahk), to know when to ask again
 g_screenSnapshot := ""   ; monitor layout at startup (spurious-event filter)
 g_desktopsStarted := false
 
@@ -857,36 +860,87 @@ UpdateLabelInner() {
 ; is 50000. Answers false on any failure: a missing answer must not be what
 ; makes the label disappear. Cached briefly.
 UiaButtonAt(x, y) {
-    ; OFF for now: answers "no button" without asking. On LU every UI Automation
-    ; ElementFromPoint on the taskbar took 9 s (2026-10-06), on this script's
-    ; thread - the one the keyboard and mouse hooks wait for to judge their
-    ; #HotIf conditions - so every key and click on the PC waited up to the
-    ; hooks' 1 s timeout, several times a minute. The probe must move off this
-    ; thread (a helper process, like the arrows) before it comes back. Until
-    ; then the label keeps its full form even when the buttons reach it. The
-    ; probe that was here (UiaTypeAt(x, y) = 50000, a button, cached for 1 s)
-    ; is in the history, commit 92d1eed.
-    return false
+    ; Never asked here: UI Automation calls into Explorer, and on LU every
+    ; ElementFromPoint took 9 s (2026-10-06). On this thread - the one the
+    ; keyboard and mouse hooks wait for to judge their #HotIf conditions - that
+    ; held up every key and click on the PC. The helper process DalSegnoProbe
+    ; asks instead; this answers from its last reply (a button is control type
+    ; 50000) and "no button" until the first one. Every question keeps Explorer
+    ; busy - 9 s each on LU - which slowed Explorer and every call into it while
+    ; the probe asked each second. The buttons only move when windows open and
+    ; close, so an answer holds while the window count is unchanged (5 min at
+    ; most). The label catches up on the next guard tick.
+    global g_probeAnswers, g_windowCount
+    key := x "," y
+    known := g_probeAnswers.Has(key)
+    if !known || g_probeAnswers[key].windows != g_windowCount
+        || A_TickCount - g_probeAnswers[key].at > 300000
+        ProbeRequest(x, y, key)
+    return known ? g_probeAnswers[key].button : false
 }
 
-UiaTypeAt(x, y) {
-    _sg := SlowGuard("UiaTypeAt(" x "," y ")", 100)
-    static uia := 0
-    if !uia {
-        DllCall("ole32\CoCreateInstance"
-            , "ptr", GuidBuffer("{FF48DBA4-60EF-4201-AA87-54103EEF594E}")   ; CUIAutomation
-            , "ptr", 0, "uint", 0x17
-            , "ptr", GuidBuffer("{30CBE57D-D9D0-452A-AB13-7AC5AC4825EE}")
-            , "ptr*", &p := 0, "hresult")
-        uia := ComValue(13, p)
+; Posts one question to the probe helper, at most one outstanding per point
+; (a lost or very slow answer is asked again after 15 s), starting the helper
+; if it is not running.
+ProbeRequest(x, y, key) {
+    global g_probePending
+    static nextId := 0, reqMsg := 0
+    if !reqMsg {
+        reqMsg := DllCall("RegisterWindowMessage", "str", "DALSEGNO_PROBE_REQ", "uint")
+        OnMessage(DllCall("RegisterWindowMessage", "str", "DALSEGNO_PROBE_ANS", "uint"), ProbeAnswer)
     }
-    ComCall(7, uia, "int64", (x & 0xFFFFFFFF) | (y << 32), "ptr*", &pEl := 0)
-    if !pEl
-        return 0
-    el := ComValue(13, pEl)
-    ComCall(21, el, "int*", &typ := 0)     ; get_CurrentControlType
-    return typ
+    for id, q in g_probePending
+        if (q.key = key && A_TickCount - q.at < 15000)
+            return
+    hwnd := FindProbeWindow()
+    if !hwnd {
+        StartProbe()
+        return
+    }
+    nextId := Mod(nextId + 1, 0x7FFFFFFF)
+    g_probePending[nextId] := { key: key, at: A_TickCount }
+    try PostMessage(reqMsg, nextId, ((x + 32768) & 0xFFFF) | (((y + 32768) & 0xFFFF) << 16), , hwnd)
 }
+
+ProbeAnswer(wParam, lParam, *) {
+    global g_probePending, g_probeAnswers, g_windowCount
+    if !g_probePending.Has(wParam)
+        return
+    key := g_probePending[wParam].key
+    g_probePending.Delete(wParam)
+    button := (lParam = 50000)
+    static first := true
+    if first {   ; once per run, in the trace file: the helper is up and answering
+        first := false
+        try FileAppend(FormatTime(, "HH:mm:ss") "  probe: first answer, " key " -> control type " lParam "`n", TracePath(), "UTF-8")
+    }
+    changed := !g_probeAnswers.Has(key) || g_probeAnswers[key].button != button
+    g_probeAnswers[key] := { button: button, at: A_TickCount, windows: g_windowCount }
+    if changed
+        SetTimer(UpdateLabel, -1)   ; the label's form may change now
+}
+
+; The probe helper's hidden window, or 0 (see FindArrowWindow for the care
+; taken with hidden-window detection).
+FindProbeWindow() {
+    prevHidden := A_DetectHiddenWindows, prevMode := A_TitleMatchMode
+    DetectHiddenWindows true
+    SetTitleMatchMode 3
+    try return WinExist("DalSegnoProbe")
+    finally {
+        DetectHiddenWindows prevHidden
+        SetTitleMatchMode prevMode
+    }
+}
+
+StartProbe() {
+    static lastStart := -60000
+    if (A_TickCount - lastStart < 10000)   ; starting: give it time to show up
+        return
+    lastStart := A_TickCount
+    try Run('"' A_AhkPath '" "' A_ScriptDir '\DalSegnoProbe.ahk"')
+}
+
 
 GuidBuffer(s) {
     buf := Buffer(16, 0)

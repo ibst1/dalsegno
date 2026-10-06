@@ -70,6 +70,7 @@ foreach ($sub in 'icons', 'src', 'ui', 'lib', '23H2') {
 Copy-Item $base (Join-Path $dist 'DalSegno.exe')
 Copy-Item (Join-Path $root 'DalSegno.ahk') $dist
 Copy-Item (Join-Path $root 'DalSegnoArrow.ahk') $dist
+Copy-Item (Join-Path $root 'DalSegnoProbe.ahk') $dist
 Copy-Item (Join-Path $root 'app.ico') $dist
 Copy-Item (Join-Path $root 'src\*.ahk') (Join-Path $dist 'src')
 Copy-Item (Join-Path $root 'ui\*') (Join-Path $dist 'ui')
@@ -82,7 +83,7 @@ Copy-Item $dll23 (Join-Path $dist '23H2\VirtualDesktopAccessor.dll')
 Copy-Item (Join-Path $root 'THIRD-PARTY.txt') $dist
 
 $zip = Join-Path $dist "DalSegno-$version.zip"
-$content = @('DalSegno.exe', 'DalSegno.ahk', 'DalSegnoArrow.ahk', 'app.ico', 'src', 'ui', 'lib'
+$content = @('DalSegno.exe', 'DalSegno.ahk', 'DalSegnoArrow.ahk', 'DalSegnoProbe.ahk', 'app.ico', 'src', 'ui', 'lib'
     , 'ComVar.ahk', 'Promise.ahk', 'icons', 'VirtualDesktopAccessor.dll', '23H2'
     , 'THIRD-PARTY.txt') | ForEach-Object { Join-Path $dist $_ }
 Compress-Archive -Path $content -DestinationPath $zip -Force
