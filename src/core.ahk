@@ -294,11 +294,24 @@ Notify(text, title := "") {
     ShowOsdText(text, true)
 }
 
+; A window's title WITHOUT asking the window. WinGetTitle (GetWindowText) sends
+; a window of another process WM_GETTEXT and waits for the answer. ScanWindows
+; runs every 800 ms on the thread that also serves this script's keyboard and
+; mouse hooks, and while it waited on one busy program every key and mouse event
+; on the PC waited too, up to the hooks' 1 s timeout (typing driven from another
+; PC through Glissando crawled, 2026-10-06). InternalGetWindowText reads the
+; title Windows keeps and never waits on the window's thread.
+FastTitle(hwnd) {
+    buf := Buffer(1024)   ; 512 UTF-16 characters
+    n := DllCall("InternalGetWindowText", "ptr", hwnd, "ptr", buf, "int", 512, "int")
+    return n > 0 ? StrGet(buf, n, "UTF-16") : ""
+}
+
 ; A window's title for a notice: cut at its first " - " (browser titles run
 ; long: "Patienthistorik - Arbete – Microsoft Edge"), at most 45 characters.
 ShortTitle(hwnd) {
     title := ""
-    try title := WinGetTitle(hwnd)
+    title := FastTitle(hwnd)
     if (p := InStr(title, " - "))
         title := SubStr(title, 1, p - 1)
     return StrLen(title) > 45 ? SubStr(title, 1, 44) "…" : title
@@ -815,7 +828,7 @@ BaseInfo(hwnd, allowCloaked := false) {
         "IME", 1, "MSCTFIME UI", 1)
     title := "", cls := "", exe := ""
     try {
-        title := WinGetTitle(hwnd)
+        title := FastTitle(hwnd)
         if (title = "" || WinGetPID(hwnd) = ownPid)
             return ""
         cls := WinGetClass(hwnd)
@@ -967,7 +980,7 @@ ScanWindowsBody() {
     for hwnd in WinGetList() {
         alive[hwnd] := true
         title := ""
-        try title := WinGetTitle(hwnd)
+        title := FastTitle(hwnd)
         if !winInfo.Has(hwnd) {
             ; Windows that existed before the script started are not placed -
             ; otherwise the whole desktop would get rearranged on every start.
@@ -1330,7 +1343,7 @@ IsRealWindow(hwnd) {
     try {
         if (WinGetExStyle(hwnd) & 0x8000000)       ; WS_EX_NOACTIVATE - menus, OSDs
             return false
-        if (WinGetTitle(hwnd) != "")
+        if (FastTitle(hwnd) != "")
             return true
         return DllCall("GetSystemMenu", "ptr", hwnd, "int", 0, "ptr") != 0
     } catch
@@ -1938,7 +1951,7 @@ WindowReady(hwnd) {
 ; Short description of a window for the trace: hwnd, program, class, title.
 TraceWin(hwnd) {
     s := hwnd
-    try s .= " " WinGetProcessName(hwnd) "|" WinGetClass(hwnd) " [" SubStr(WinGetTitle(hwnd), 1, 40) "]"
+    try s .= " " WinGetProcessName(hwnd) "|" WinGetClass(hwnd) " [" SubStr(FastTitle(hwnd), 1, 40) "]"
     return s
 }
 

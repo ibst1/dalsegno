@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Fix: with DalSegno running, every key and mouse event on the PC could wait
+  up to a second - typing driven from another PC through Glissando crawled.
+  DalSegno's keyboard and mouse hooks run on the same thread as the window
+  scan, every 800 ms, and the scan read window titles with WinGetTitle, which
+  asks the window's program and waits for the answer; one busy program held
+  the scan, and with it the hooks, until Windows gave up on them (1 s). Titles
+  are now read with InternalGetWindowText, which never waits on the window.
+
 ## 2.0.5 (2026-09-24)
 
 - A rule that moves a window to another desktop without following now says

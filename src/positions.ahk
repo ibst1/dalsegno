@@ -187,7 +187,7 @@ SavePos(key, hwnd) {
         }
         section := SectionFor(key)
         IniWrite(key, posIni, section, "Key")
-        IniWrite(WinGetProcessName(hwnd) " | " SubStr(WinGetTitle(hwnd), 1, 60), posIni, section, "Info")
+        IniWrite(WinGetProcessName(hwnd) " | " SubStr(FastTitle(hwnd), 1, 60), posIni, section, "Info")
         IniWrite(x, posIni, section, "X")
         IniWrite(y, posIni, section, "Y")
         IniWrite(w, posIni, section, "W")
