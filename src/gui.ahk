@@ -438,15 +438,20 @@ UiForgetMany(sections) {
     PushState()
 }
 
+; Every open window the row applies to is moved - a rule such as
+; "Bildfönster.*" can match several at once, not just the topmost one.
 UiMoveKey(key) {
+    moved := 0
     for hwnd in WinGetList() {
         if (KeyFor(hwnd) = key) {
             MoveToSaved(hwnd, key)
-            PushState()
-            return
+            moved++
         }
     }
-    Notify(Tr("noMatch"), Tr("appTitle"))
+    if moved
+        PushState()
+    else
+        Notify(Tr("noMatch"), Tr("appTitle"))
 }
 
 UiSaveWin(hwnd) {
