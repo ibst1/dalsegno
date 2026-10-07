@@ -394,15 +394,13 @@ AutoSaveModifierOnly=1
 Notify=1
 ; RulesOnly=1 means ONLY windows matching a rule are managed (positions).
 RulesOnly=0
-; KeepOnScreen: catch a window that opens ENTIRELY off every monitor (Office
-; restores documents to coordinates a screen no longer covers) and slide it
-; onto the nearest screen. office = Office apps only; all = every managed
-; window; off = never.
-KeepOnScreen=office
-; RescueOnDisplayChange=1: 5 seconds after a screen is turned off or unplugged,
-; every window left where it cannot be reached (on any virtual desktop,
-; maximized and minimized ones too) moves onto a remaining screen. 0 = off.
-RescueOnDisplayChange=1
+; KeepOnScreen=1: keep windows on screens that are on. A new window that opens
+; where its title bar cannot be reached (Office reopens documents where a
+; screen used to be) goes onto the nearest screen; and 5 seconds after a
+; screen is turned off or unplugged, every window left on it moves onto a
+; screen still on (any virtual desktop, maximized and minimized ones too),
+; and back when it is on again. 0 = off.
+KeepOnScreen=1
 
 [Desktops]
 ; NameInTray=1 shows the desktop name as text on the taskbar, left of the
@@ -1075,7 +1073,7 @@ ScanWindowsBody() {
             tPlace := QpcMs() - t
             t := QpcMs()
             if ready
-                KeepOnScreenGuard(hwnd)
+                KeepOnScreenGuard(hwnd, info)
             tGuard := QpcMs() - t
         }
         if (g_modDesktops && title != "" && title != info.title) {

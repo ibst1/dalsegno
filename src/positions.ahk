@@ -17,12 +17,7 @@ g_autoSaveModOnly := true      ; autosave only when the modifier is held ([Posit
 g_saveError := "", g_saveErrorText := ""
 
 g_moveEndCb := 0, g_winEventHook := 0
-g_keepOnScreen := "off"   ; off | office | all  (see KeepOnScreenGuard)
-; Office frame processes. Their document windows carry real titles, so the
-; guard reaches them; the exe is what scopes the "office" setting.
-g_officeExe := Map("winword.exe", 1, "excel.exe", 1, "powerpnt.exe", 1
-    , "outlook.exe", 1, "onenote.exe", 1, "onenoteim.exe", 1, "mspub.exe", 1
-    , "msaccess.exe", 1, "visio.exe", 1, "winproj.exe", 1, "lync.exe", 1)
+g_keepOnScreen := true   ; [Positions] KeepOnScreen: KeepOnScreenGuard and the rescue
 
 PositionsLoadConfig() {
     global configIni, moveEnabled, autoSaveEnabled, notifyEnabled, g_autoSaveModOnly, g_keepOnScreen
@@ -30,10 +25,9 @@ PositionsLoadConfig() {
     autoSaveEnabled := IniRead(configIni, "Positions", "AutoSave", 1) != "0"
     notifyEnabled   := IniRead(configIni, "Positions", "Notify", 1) != "0"
     g_autoSaveModOnly := IniRead(configIni, "Positions", "AutoSaveModifierOnly", 1) != "0"
-    v := StrLower(Trim(IniRead(configIni, "Positions", "KeepOnScreen", "office")))
-    g_keepOnScreen := (v = "all") ? "all" : (v = "0" || v = "off" || v = "") ? "off" : "office"
-    global g_rescueOn
-    g_rescueOn := IniRead(configIni, "Positions", "RescueOnDisplayChange", 1) != "0"
+    ; 1/0; before 2.1 also office/all (both now on: every window) and off
+    v := StrLower(Trim(IniRead(configIni, "Positions", "KeepOnScreen", 1)))
+    g_keepOnScreen := !(v = "0" || v = "off" || v = "")
 }
 
 ; Autosave: Windows tells us exactly when a drag ends. EVENT_SYSTEM_MOVESIZEEND
@@ -360,57 +354,33 @@ MonitorFromWindow(hwnd) {
 }
 
 ; --- keep windows on screen -------------------------------------------------
-; Windows restores each app window - Office documents especially - to its last
-; coordinates, which can land in a monitor "dead zone" (a gap in an L-shaped
-; layout, or a screen that is now gone), opening the window where no monitor
-; is. This nudges such a window the smallest distance onto the nearest real
-; screen's work area. It acts ONLY on a window that sits entirely off every
-; monitor, so one parked at a screen edge on purpose is left alone. Called
-; from the scan for every ready window.
-KeepOnScreenGuard(hwnd) {
-    global g_keepOnScreen, g_officeExe
-    if (g_keepOnScreen = "off")
-        return
-    info := BaseInfo(hwnd)          ; real, titled, non-cloaked, non-tool, not ignored
-    if (info = "")
-        return
-    if (g_keepOnScreen = "office" && !g_officeExe.Has(StrLower(info.exe)))
-        return
-    mm := 0
-    try mm := WinGetMinMax(hwnd)
-    if (mm != 0)                    ; minimized (-1) or maximized (1): not off-screen
-        return
-    x := 0, y := 0, w := 0, h := 0
-    try WinGetPos(&x, &y, &w, &h, hwnd)
-    if (w <= 0 || h <= 0)
-        return
-    nx := 0, ny := 0
-    if !OffScreenTarget(x, y, w, h, &nx, &ny)
-        return
-    try WinMove(nx, ny, , , hwnd)
-    Trace("keep-on-screen " TraceWin(hwnd) " " x "," y " -> " nx "," ny)
-}
+; Apps reopen their windows at the last coordinates - Office documents above
+; all - which can be where no screen is: a gap in an L-shaped layout, a
+; screen of another workplace, a screen that is turned off. A NEW window
+; whose title bar cannot be grabbed on a screen that is on goes onto the
+; nearest one, the way the rescue below moves windows (and if it opened on a
+; screen that is merely off, it goes back there when that is on again).
+; Only during a window's first KEEP_ON_SCREEN_MS: some programs park windows
+; off the screens on purpose, and a guard that kept pulling them back would
+; fight them for good. Windows open before the script started are left to
+; the rescue. Called from the scan for every ready window.
+KEEP_ON_SCREEN_MS := 10000
 
-; True (and sets nx,ny) when the rect is entirely off every monitor; nx,ny is
-; then the smallest move onto the nearest monitor's work area. False when any
-; part of the rect already overlaps a monitor (bounds, so a window under the
-; taskbar still counts as on-screen).
-OffScreenTarget(x, y, w, h, &nx, &ny) {
-    loop MonitorGetCount() {
-        MonitorGet(A_Index, &l, &t, &r, &b)
-        if (x < r && x + w > l && y < b && y + h > t)
-            return false
-    }
-    best := ""
-    loop MonitorGetCount() {
-        MonitorGetWorkArea(A_Index, &l, &t, &r, &b)
-        tx := (w >= r - l) ? l : Min(Max(x, l), r - w)
-        ty := (h >= b - t) ? t : Min(Max(y, t), b - h)
-        d := Abs(tx - x) + Abs(ty - y)
-        if (best = "" || d < best)
-            best := d, nx := tx, ny := ty
-    }
-    return true
+KeepOnScreenGuard(hwnd, info) {
+    global g_keepOnScreen, KEEP_ON_SCREEN_MS
+    if (!g_keepOnScreen || info.key = "*")
+        return
+    if !info.HasProp("guardSince")
+        info.guardSince := A_TickCount
+    if (A_TickCount - info.guardSince > KEEP_ON_SCREEN_MS)
+        return
+    if (BaseInfo(hwnd) = "")   ; real, titled, non-cloaked, non-tool, not ignored
+        return
+    try {
+        if RescueWindow(hwnd)
+            Trace("keep-on-screen " TraceWin(hwnd))
+    } catch as e
+        Trace("keep-on-screen " hwnd " FAILED: " e.Message)
 }
 
 ; --- rescue after a monitor is unplugged -------------------------------------
@@ -421,11 +391,10 @@ OffScreenTarget(x, y, w, h, &nx, &ny) {
 ; window whose title bar cannot be grabbed on any monitor is moved onto the
 ; nearest remaining screen - normal, maximized (re-maximized there) and
 ; minimized (its restore rectangle) alike. Windows the user can reach are
-; never touched. [Positions] RescueOnDisplayChange=0 turns it off.
+; never touched. [Positions] KeepOnScreen=0 turns it off.
 ; The Desktops module restarts the script 2.5 s after a layout change; a
 ; rescue still pending is handed over as /rescue=<ms left> (DalSegno.ahk).
 RESCUE_DELAY_MS := 5000
-g_rescueOn := true
 g_rescueDue := 0     ; A_TickCount the pending rescue runs at, 0 = none
 
 RescueInit() {
@@ -437,8 +406,8 @@ RescueInit() {
 }
 
 RescueDisplayChange(*) {
-    global g_rescueOn, RESCUE_DELAY_MS
-    if g_rescueOn
+    global g_keepOnScreen, RESCUE_DELAY_MS
+    if g_keepOnScreen
         RescueSchedule(RESCUE_DELAY_MS)
 }
 
@@ -815,8 +784,8 @@ PowerExit(*) {
 }
 
 StartPowerHelper() {
-    global g_rescueOn
-    if (!g_rescueOn || !FileExist(A_ScriptDir "\DalSegnoPower.ahk"))
+    global g_keepOnScreen
+    if (!g_keepOnScreen || !FileExist(A_ScriptDir "\DalSegnoPower.ahk"))
         return   ; (a missing script would get AutoHotkey's error box)
     ; restored: set during the auto-execute section it would become every
     ; thread's default, and the scan would see every hidden window
@@ -832,9 +801,9 @@ StartPowerHelper() {
 ; DALSEGNO_POWER from the helper, every 2.5 s: wParam = the screens that are
 ; off, lParam = the built-in ones, bit n-1 for \\.\DISPLAYn.
 PowerReport(wParam, lParam, *) {
-    global g_deadMon, g_rescueOn
+    global g_deadMon, g_keepOnScreen
     dead := Map()
-    if g_rescueOn
+    if g_keepOnScreen
         loop 32
             if (wParam & (1 << (A_Index - 1)))
                 dead["\\.\DISPLAY" A_Index] := true

@@ -10,10 +10,11 @@ each switchable on its own:
 - **Positions** — move a window by hand and every window like it returns to
   that spot. Positions are kept per monitor setup and per computer;
   maximized windows come back maximized on the same monitor.
-  Office windows that open entirely off the screens are slid back on (a
-  safety net for the way Word reopens a document where a monitor used to
-  be). When a screen is turned off or unplugged, the windows left on it are
-  moved onto a screen that is still on — and back again when it comes on.
+  Windows are kept on screens that are on: a window that opens off the
+  screens is slid back on (Word reopens a document where a monitor used to
+  be), and when a screen is turned off or unplugged, the windows left on it
+  are moved onto a screen that is still on — and back again when it comes
+  on.
 - **Desktops** — always see which virtual desktop you are on (numbered tray
   icon, overlay on every switch, the desktop name on the taskbar), and move
   windows between desktops with hotkeys, the mouse wheel, the window menu or
@@ -69,7 +70,14 @@ lives on under `legacy/deskpilot/`; the design of the merge is in
   display configuration is untouched. When it is on again, the saved
   configuration comes back and every moved window returns to its place on
   it (step by step if it was moved more than once), unless you have moved
-  it since. `[Positions] RescueOnDisplayChange=0` or the GUI turns it off.
+  it since.
+- **New windows off the screens.** Apps reopen windows at their last
+  coordinates — Word a document where a screen used to be. A new window
+  whose title bar cannot be reached on a screen that is on goes onto the
+  nearest one (watched for its first 10 seconds only: some programs park
+  windows off-screen on purpose). With the above one setting,
+  `[Positions] KeepOnScreen`, or the GUI's *Keep windows on screens that
+  are on*.
 
 ## The window menu
 
@@ -233,7 +241,7 @@ dropping comments inside them.
 [Modules]      Positions=1  Desktops=1
 [Menu]         Modifier=CapsLock  Button=RButton  Enabled=1  WholeWindow=1  Exclude=
 [Positions]    MoveWindows=1  AutoSave=1  AutoSaveModifierOnly=1  Notify=1  RulesOnly=0
-               KeepOnScreen=office  RescueOnDisplayChange=1
+               KeepOnScreen=1
 [Desktops]     NameInTray=1  Wheel=1  ArrowIcons=0
 [Hotkeys]      OpenUi=d … Reload=F5, MoveNext=!#Right … ShowName=
 [Rules]        see above

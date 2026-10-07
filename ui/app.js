@@ -109,10 +109,8 @@ const STR = {
     tglModOnly: 'Only when {mod} is held while dropping',
     modOnlyHelp: 'Saving becomes a deliberate gesture: a sloppy drag cannot overwrite a carefully placed position. Deliberate saves ({mod} + S, the window menu, Save all) always work.',
     tglNotify: 'Toasts',
-    tglOnScreen: 'Keep Office windows on screen',
-    tglRescue: 'Bring windows back when a screen is turned off',
-    rescueHelp: '5 seconds after a screen is turned off or unplugged, every window left where no screen is any longer (on any desktop, maximized and minimized ones too) moves onto a screen that is still on. Windows you can reach are not touched. A screen turned off with its button is noticed too (asked over DDC/CI); if it was the primary screen, the laptop screen becomes primary until it is on again. Then the windows go back where they were.',
-    onScreenHelp: 'If Word, Excel or another Office window opens entirely off your monitors, slide it onto the nearest screen.',
+    tglOnScreen: 'Keep windows on screens that are on',
+    onScreenHelp: 'A new window that opens where no screen is (Word reopens a document where a screen used to be) goes onto the nearest screen. 5 seconds after a screen is turned off or unplugged, every window left on it (on any desktop, maximized and minimized ones too) moves onto a screen that is still on, and back when it is on again. A screen turned off with its button is noticed too (asked over DDC/CI); if it was the primary screen, the laptop screen becomes primary until it is on again. Windows you can reach are not touched.',
     managedH: 'Which windows get positions',
     onlyRules: 'Manage <b>only</b> windows that match a rule',
     onlyRulesHelp: 'Off (default): every window is managed. A window that matches no rule is identified by its program and window class, so all windows of the same program share one position. On: only windows matching a rule get a position at all.',
@@ -218,10 +216,8 @@ const STR = {
     tglModOnly: 'Bara när {mod} hålls nere vid släppet',
     modOnlyHelp: 'Sparandet blir en avsiktlig gest: en slarvig flytt kan inte skriva över ett omsorgsfullt placerad position. Avsiktliga sparningar ({mod} + S, fönstermenyn, Spara alla) fungerar alltid.',
     tglNotify: 'Notiser',
-    tglOnScreen: 'Håll Office-fönster på skärmen',
-    tglRescue: 'Hämta tillbaka fönster när en skärm stängs av',
-    rescueHelp: '5 sekunder efter att en skärm stängts av eller kopplats ur flyttas varje fönster som hamnat där ingen skärm finns längre (på alla skrivbord, även maximerade och minimerade) till en skärm som fortfarande är på. Fönster du kommer åt rörs inte. Även en skärm som stängs av med strömknappen märks (via DDC/CI); var den primär blir laptopskärmen primär tills den slås på igen. Då flyttas fönstren tillbaka dit de var.',
-    onScreenHelp: 'Om ett Word-, Excel- eller annat Office-fönster öppnas helt utanför skärmarna dras det in på närmaste skärm.',
+    tglOnScreen: 'Håll fönster på skärmar som är på',
+    onScreenHelp: 'Ett nytt fönster som öppnas där ingen skärm finns (Word öppnar ett dokument där en skärm brukade sitta) dras in på närmaste skärm. 5 sekunder efter att en skärm stängts av eller kopplats ur flyttas varje fönster som låg på den (på alla skrivbord, även maximerade och minimerade) till en skärm som fortfarande är på, och tillbaka när den slås på igen. Även en skärm som stängs av med strömknappen märks (via DDC/CI); var den primär blir laptopskärmen primär tills den slås på igen. Fönster du kommer åt rörs inte.',
     managedH: 'Vilka fönster får positioner',
     onlyRules: 'Hantera <b>endast</b> fönster som matchar en regel',
     onlyRulesHelp: 'Av (standard): alla fönster hanteras. Ett fönster som inte matchar någon regel identifieras av sitt program och sin fönsterklass, så alla fönster i samma program delar en position. På: bara fönster som matchar en regel får en position över huvud taget.',
@@ -308,7 +304,7 @@ function localizeStatic() {
    'lblMenuButton|lblMenuButton', 'lblMenuWhole|tglMenuWhole', 'menuWholeHelp|menuWholeHelp',
    'lblMenuExclude|lblMenuExclude', 'menuExcludeHelp|menuExcludeHelp',
    'behaveH|behaveH', 'lblMove|tglMove', 'lblSave|tglSave', 'lblModOnly|tglModOnly', 'modOnlyHelp|modOnlyHelp',
-   'lblNotify|tglNotify', 'lblOnScreen|tglOnScreen', 'onScreenHelp|onScreenHelp', 'lblRescue|tglRescue', 'rescueHelp|rescueHelp', 'managedH|managedH', 'onlyRulesHelp|onlyRulesHelp',
+   'lblNotify|tglNotify', 'lblOnScreen|tglOnScreen', 'onScreenHelp|onScreenHelp', 'managedH|managedH', 'onlyRulesHelp|onlyRulesHelp',
    'onlyRulesExeH|onlyRulesExeH', 'onlyRulesExeHelp|onlyRulesExeHelp', 'ignoreH|ignoreH',
    'ignExeHelp|ignExeHelp', 'ignTitleHelp|ignTitleHelp', 'managedSavedHint|managedSavedHint',
    'hkH|hkH', 'hkHelp|hkHelp', 'langH|langH', 'langHelp|langHelp', 'filesH|filesH',
@@ -352,13 +348,11 @@ function renderSettings() {
   $('tglModOnly').checked = !!s.modOnly;
   $('tglNotify').checked = !!s.notify;
   $('tglOnScreen').checked = !!s.keepOnScreen;
-  $('tglRescue').checked = !!s.rescue;
   $('tglMove').disabled = !positionsOn();
   $('tglSave').disabled = !positionsOn();
   $('tglModOnly').disabled = !positionsOn() || !s.autosave;
   $('tglNotify').disabled = !positionsOn();
   $('tglOnScreen').disabled = !positionsOn();
-  $('tglRescue').disabled = !positionsOn();
   $('tglNameInTray').checked = !!s.nameInTray;
   $('tglWheel').checked = !!s.wheel;
   $('tglArrows').checked = !!s.arrowIcons;
@@ -394,7 +388,6 @@ $('tglSave').addEventListener('change', e => post({ action: 'toggle', name: 'aut
 $('tglModOnly').addEventListener('change', e => post({ action: 'toggle', name: 'modOnly', value: e.target.checked ? 1 : 0 }));
 $('tglNotify').addEventListener('change', e => post({ action: 'toggle', name: 'notify', value: e.target.checked ? 1 : 0 }));
 $('tglOnScreen').addEventListener('change', e => post({ action: 'toggle', name: 'keepOnScreen', value: e.target.checked ? 1 : 0 }));
-$('tglRescue').addEventListener('change', e => post({ action: 'toggle', name: 'rescue', value: e.target.checked ? 1 : 0 }));
 $('btnSaveAll').addEventListener('click', () => post({ action: 'saveAll' }));
 $('btnApplyAll').addEventListener('click', () => post({ action: 'applyAll' }));
 $('btnOpenPositions').addEventListener('click', () => post({ action: 'openPositions' }));

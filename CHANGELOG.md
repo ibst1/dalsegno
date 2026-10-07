@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- "Keep Office windows on screen" and "Bring windows back when a screen is
+  turned off" are one setting now, for every window: "Keep windows on
+  screens that are on", [Positions] KeepOnScreen=1/0 (the old values office
+  and all both mean on). A new window that opens where its title bar cannot
+  be reached is moved the way the rescue moves windows - onto a screen that
+  is ON (the old guard counted a screen turned off but still in the layout
+  as on, and left a Word document there in the dark), maximized and
+  minimized windows too, and back when its screen is on again. Watched only
+  for a window's first 10 s, since some programs park windows off-screen on
+  purpose. RescueOnDisplayChange is gone.
+
 - New: windows left behind when a screen is turned off or unplugged come
   back on their own. 5 seconds after the last monitor change, every window
   whose title bar cannot be reached on any screen - on any virtual desktop,
