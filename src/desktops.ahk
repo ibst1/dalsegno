@@ -546,7 +546,9 @@ RestartAfterDisplayChange() {
     global g_screenSnapshot
     if (ScreenSnapshot() = g_screenSnapshot)
         return
-    RestartScript()
+    ; a rescue of stranded windows still waiting goes along to the new instance
+    ms := RescuePendingMs()
+    RestartScript(ms ? "/rescue=" ms : "")
 }
 
 ScreenSnapshot() {

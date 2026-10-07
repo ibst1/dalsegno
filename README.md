@@ -12,7 +12,8 @@ each switchable on its own:
   maximized windows come back maximized on the same monitor.
   Office windows that open entirely off the screens are slid back on (a
   safety net for the way Word reopens a document where a monitor used to
-  be).
+  be). When a screen is turned off or unplugged, the windows left on it are
+  moved onto a screen that is still on — and back again when it comes on.
 - **Desktops** — always see which virtual desktop you are on (numbered tray
   icon, overlay on every switch, the desktop name on the taskbar), and move
   windows between desktops with hotkeys, the mouse wheel, the window menu or
@@ -55,6 +56,20 @@ lives on under `legacy/deskpilot/`; the design of the merge is in
   and a position from a docking station with the same screens arranged
   differently is never applied. A position that would put the title bar
   outside every monitor is left unused.
+- **Screens turned off.** 5 seconds after a screen is turned off or
+  unplugged, every window whose title bar can no longer be reached — on any
+  virtual desktop, maximized and minimized ones too — is moved onto the
+  nearest screen still on. A DisplayPort screen turned off with its button
+  usually stays in the Windows layout, so Windows never says it is gone; the
+  helper process `DalSegnoPower.ahk` asks the screens themselves over DDC/CI
+  (power mode) every 2.5 s instead, and a screen without DDC follows the
+  others. A screen that is off is treated as unplugged: left out of the
+  monitor setup, its windows moved, and if it was the primary screen the
+  laptop's own screen becomes primary — for the session only, the saved
+  display configuration is untouched. When it is on again, the saved
+  configuration comes back and every moved window returns to its place on
+  it (step by step if it was moved more than once), unless you have moved
+  it since. `[Positions] RescueOnDisplayChange=0` or the GUI turns it off.
 
 ## The window menu
 
@@ -202,6 +217,9 @@ old             = /desktop:2 /off re:^Something$
 | `%AppData%\DalSegno\DalSegno config.ini` | settings and rules, per machine (UTF-16, created with defaults on first run; moved here from the script folder on first run of 2.1) |
 | `%AppData%\DalSegno\DalSegno positions.ini` | saved positions, per machine (UTF-16) |
 | `DalSegnoArrow.ahk` | the tray arrow helper |
+| `DalSegnoProbe.ahk` | helper process: asks UI Automation what sits on the taskbar, for the desktop label |
+| `DalSegnoPower.ahk` | helper process: asks the screens over DDC/CI whether they are on (`/debug` logs every poll) |
+| `%LOCALAPPDATA%\DalSegno\state.ini` | screens found off, the primary screen to restore, the windows to move back |
 | `ui/` | the WebView2 GUI |
 | `lib/`, `ComVar.ahk`, `Promise.ahk` | WebView2 + JSON libraries |
 | `icons/`, `app.ico` | tray icons: the desktop numbers, the arrows, the segno |
@@ -215,6 +233,7 @@ dropping comments inside them.
 [Modules]      Positions=1  Desktops=1
 [Menu]         Modifier=CapsLock  Button=RButton  Enabled=1  WholeWindow=1  Exclude=
 [Positions]    MoveWindows=1  AutoSave=1  AutoSaveModifierOnly=1  Notify=1  RulesOnly=0
+               KeepOnScreen=office  RescueOnDisplayChange=1
 [Desktops]     NameInTray=1  Wheel=1  ArrowIcons=0
 [Hotkeys]      OpenUi=d … Reload=F5, MoveNext=!#Right … ShowName=
 [Rules]        see above
@@ -285,6 +304,14 @@ shortcut. `/selftest` writes the parsed state to `selftest.txt` and exits;
   error log in `%LOCALAPPDATA%\DalSegno\error.log` (per machine, outside the
   synced folder).
 - Desktops beyond 9 get a generic tray icon and no digit hotkeys.
+- No named window layouts ("work", "home") to save and pick by hand: the
+  positions are already kept per monitor setup and come back on their own
+  when you dock. If you want such snapshots anyway — a set of apps opened
+  and arranged with one click — see
+  [PowerToys Workspaces](https://learn.microsoft.com/windows/powertoys/workspaces).
+- `%LOCALAPPDATA%` is virtualized for the Store edition of AutoHotkey: the
+  files said to be there are under
+  `%LOCALAPPDATA%\Packages\...AutoHotkeyv2StoreEdition...\LocalCache\Local\DalSegno`.
 
 ## License
 

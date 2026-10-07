@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- New: windows left behind when a screen is turned off or unplugged come
+  back on their own. 5 seconds after the last monitor change, every window
+  whose title bar cannot be reached on any screen - on any virtual desktop,
+  maximized ones re-maximized, minimized ones by their restore rectangle - is
+  moved onto the nearest remaining screen (shrunk only if it is larger than
+  it), with a note saying how many. Windows you can reach are never touched.
+  The restart the Desktops module does after a monitor change hands a pending
+  rescue on to the new instance (/rescue=<ms>). [Positions]
+  RescueOnDisplayChange=0, or the toggle in the GUI, turns it off.
+
+- New: a screen turned off with its button - which Windows usually keeps in
+  the layout, so the above never fires - is found too. A helper process,
+  DalSegnoPower.ahk, asks the screens over DDC/CI (VCP D6, power mode) every
+  2.5 s; a screen without DDC follows the others. A screen that is off is
+  treated as unplugged: left out of the monitor setup (so the positions saved
+  for the screens still on apply), its windows rescued, and when it was the
+  primary screen the built-in one becomes primary - for the session only,
+  the saved display configuration is not touched. When it is on again the
+  saved configuration comes back, and every rescued window goes back to its
+  place on it - unless it has been moved since. A window rescued twice
+  (screen 2 off: to 3; screen 3 off: to 1) remembers both stops and goes
+  back step by step: to 3 when 3 is on, on to 2 when 2 is. Paused while Windows itself
+  has the displays off. State in %LOCALAPPDATA%\DalSegno\state.ini.
+
 - Fix: with DalSegno running, every key and mouse event on the PC could wait
   up to a second - typing driven from another PC through Glissando crawled.
   DalSegno's keyboard and mouse hooks run on the same thread as the window

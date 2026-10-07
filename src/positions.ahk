@@ -32,6 +32,8 @@ PositionsLoadConfig() {
     g_autoSaveModOnly := IniRead(configIni, "Positions", "AutoSaveModifierOnly", 1) != "0"
     v := StrLower(Trim(IniRead(configIni, "Positions", "KeepOnScreen", "office")))
     g_keepOnScreen := (v = "all") ? "all" : (v = "0" || v = "off" || v = "") ? "off" : "office"
+    global g_rescueOn
+    g_rescueOn := IniRead(configIni, "Positions", "RescueOnDisplayChange", 1) != "0"
 }
 
 ; Autosave: Windows tells us exactly when a drag ends. EVENT_SYSTEM_MOVESIZEEND
@@ -48,6 +50,7 @@ PositionsInit() {
         "uint", 0x2,                       ; OUTOFCONTEXT | SKIPOWNPROCESS
         "ptr")
     OnExit(PositionsExit)
+    RescueInit()
 }
 
 ; The exit hook. Returns 0: a nonzero return value tells AHK to CANCEL the
@@ -85,7 +88,7 @@ OpenPositionsFile(*) {
 ; then would see a "new setup" and move every window to its saved place.
 SetupKey() {
     prev := DllCall("SetThreadDpiAwarenessContext", "ptr", -2, "ptr")   ; SYSTEM_AWARE
-    try return MonitorGetCount() "x" SysGet(78) "_" Hash32(MonitorLayout()) "_" A_ComputerName
+    try return LiveMonitorCount() "x" LiveWidth() "_" Hash32(MonitorLayout()) "_" A_ComputerName
     finally {
         if prev
             DllCall("SetThreadDpiAwarenessContext", "ptr", prev, "ptr")
@@ -96,7 +99,7 @@ SetupKey() {
 ; under it are still read when the current layout has none of its own.
 LegacySetupKey() {
     prev := DllCall("SetThreadDpiAwarenessContext", "ptr", -2, "ptr")
-    try return MonitorGetCount() "x" SysGet(78) "_" A_ComputerName
+    try return LiveMonitorCount() "x" LiveWidth() "_" A_ComputerName
     finally {
         if prev
             DllCall("SetThreadDpiAwarenessContext", "ptr", prev, "ptr")
@@ -104,10 +107,13 @@ LegacySetupKey() {
 }
 
 ; Every monitor's rectangle, sorted so that the enumeration order does not
-; matter.
+; matter. Screens that are turned off (IsDeadMonitor) are left out: with them
+; off the setup is the one of the screens still on.
 MonitorLayout() {
     rects := []
     loop MonitorGetCount() {
+        if IsDeadMonitor(A_Index)
+            continue
         MonitorGet(A_Index, &l, &t, &r, &b)
         rects.Push(Format("{},{},{},{}", l, t, r, b))
     }
@@ -129,6 +135,8 @@ MonitorLayout() {
 ; top 40 px) lies on some monitor, i.e. the window can be grabbed there.
 RectOnScreen(x, y, w, h) {
     loop MonitorGetCount() {
+        if IsDeadMonitor(A_Index)
+            continue
         MonitorGet(A_Index, &l, &t, &r, &b)
         if (Min(x + w, r) - Max(x, l) >= 100 && Min(y + 40, b) > Max(y, t))
             return true
@@ -328,6 +336,8 @@ MoveToSaved(hwnd, key) {
 
 MonitorAtPoint(x, y) {
     loop MonitorGetCount() {
+        if IsDeadMonitor(A_Index)
+            continue
         MonitorGet(A_Index, &l, &t, &r, &b)
         if (x >= l && x < r && y >= t && y < b)
             return A_Index
@@ -401,6 +411,559 @@ OffScreenTarget(x, y, w, h, &nx, &ny) {
             best := d, nx := tx, ny := ty
     }
     return true
+}
+
+; --- rescue after a monitor is unplugged -------------------------------------
+; Turning a screen off or undocking can leave windows where no monitor is any
+; longer - Windows moves most of them, but not all, and not the ones parked
+; on other virtual desktops. RESCUE_DELAY_MS after the last WM_DISPLAYCHANGE
+; (a burst while the screens renegotiate; each one restarts the wait) every
+; window whose title bar cannot be grabbed on any monitor is moved onto the
+; nearest remaining screen - normal, maximized (re-maximized there) and
+; minimized (its restore rectangle) alike. Windows the user can reach are
+; never touched. [Positions] RescueOnDisplayChange=0 turns it off.
+; The Desktops module restarts the script 2.5 s after a layout change; a
+; rescue still pending is handed over as /rescue=<ms left> (DalSegno.ahk).
+RESCUE_DELAY_MS := 5000
+g_rescueOn := true
+g_rescueDue := 0     ; A_TickCount the pending rescue runs at, 0 = none
+
+RescueInit() {
+    OnMessage(0x7E, RescueDisplayChange)   ; WM_DISPLAYCHANGE
+    PowerInit()
+    for a in A_Args
+        if RegExMatch(a, "i)^/rescue=(\d+)$", &m)
+            RescueSchedule(Max(Integer(m[1]), 500))
+}
+
+RescueDisplayChange(*) {
+    global g_rescueOn, RESCUE_DELAY_MS
+    if g_rescueOn
+        RescueSchedule(RESCUE_DELAY_MS)
+}
+
+RescueSchedule(ms) {
+    global g_rescueDue
+    g_rescueDue := A_TickCount + ms
+    SetTimer(RescueRun, -ms)
+    Trace("rescue in " ms " ms")
+}
+
+; Milliseconds left until the pending rescue, 0 when none is pending.
+RescuePendingMs() {
+    global g_rescueDue
+    return g_rescueDue ? Max(g_rescueDue - A_TickCount, 1) : 0
+}
+
+RescueRun() {
+    global g_rescueDue, g_menuOpen
+    if g_menuOpen {   ; the menu runs the thread per-monitor aware - see ScanWindows
+        RescueSchedule(1000)
+        return
+    }
+    g_rescueDue := 0
+    if !LiveMonitorCount()
+        return
+    prev := DllCall("SetThreadDpiAwarenessContext", "ptr", -2, "ptr")   ; SYSTEM_AWARE
+    back := 0, n := 0
+    try {
+        back := ReturnRescued()
+        n := RescueStranded()
+    } finally {
+        if prev
+            DllCall("SetThreadDpiAwarenessContext", "ptr", prev, "ptr")
+    }
+    if back
+        Notify(Format(Tr("returned"), back), Tr("appTitle"))
+    if n
+        Notify(Format(Tr("rescued"), n), Tr("appTitle"))
+}
+
+; Moves every stranded window onto a monitor; returns how many were moved.
+RescueStranded() {
+    global g_dllLoaded
+    n := 0
+    for hwnd in WinGetList() {
+        ; windows on other desktops are cloaked but real; cloaked ghosts that
+        ; are on no desktop (UWP leftovers) are not
+        if IsCloaked(hwnd) && !(g_dllLoaded && DesktopOf(hwnd) != "")
+            continue
+        if (BaseInfo(hwnd, true) = "")
+            continue
+        try {
+            if RescueWindow(hwnd)
+                n++
+        } catch as e
+            Trace("rescue " hwnd " FAILED: " e.Message)
+    }
+    Trace("rescue done, " n " moved")
+    return n
+}
+
+RescueWindow(hwnd) {
+    mm := WinGetMinMax(hwnd)
+    if (mm = 0) {
+        WinGetPos(&x, &y, &w, &h, hwnd)
+        if (w <= 0 || h <= 0 || RectOnScreen(x, y, w, h))
+            return false
+        chain := RescueChain(hwnd), hop := RescueHop(x, y, w, h, 0)
+        FitOnScreen(&x, &y, &w, &h)
+        WinMove(x, y, w, h, hwnd)
+        RescueRecord(hwnd, chain, hop)
+        Trace("rescue " TraceWin(hwnd) " -> " x "," y " " w "x" h)
+        return true
+    }
+    if (mm = 1) {
+        WinGetPos(&x, &y, &w, &h, hwnd)
+        ; a maximized window overhangs its monitor by the frame - test the
+        ; monitor rectangle it fills, i.e. its centre
+        if MonitorAtPoint(x + w // 2, y + h // 2)
+            return false
+        chain := RescueChain(hwnd), hop := ""
+        if NormalRect(hwnd, &nx, &ny, &nw, &nh)
+            hop := RescueHop(nx, ny, nw, nh, 1)
+        WinRestore(hwnd)
+        WinGetPos(&x, &y, &w, &h, hwnd)
+        FitOnScreen(&x, &y, &w, &h)
+        WinMove(x, y, w, h, hwnd)
+        WinMaximize(hwnd)
+        RescueRecord(hwnd, chain, hop)
+        Trace("rescue maximized " TraceWin(hwnd) " -> " x "," y)
+        return true
+    }
+    ; minimized: only the restore rectangle (WINDOWPLACEMENT.rcNormalPosition,
+    ; in workspace coordinates - see NormalRect) is moved, so it comes back
+    ; on a screen; it stays minimized
+    if (!NormalRect(hwnd, &x, &y, &w, &h) || RectOnScreen(x, y, w, h))
+        return false
+    chain := RescueChain(hwnd), hop := RescueHop(x, y, w, h, -1)
+    FitOnScreen(&x, &y, &w, &h)
+    SetNormalRect(hwnd, x, y, w, h)
+    RescueRecord(hwnd, chain, hop)
+    Trace("rescue minimized " TraceWin(hwnd) " -> " x "," y)
+    return true
+}
+
+; Sets a minimized window's restore rectangle (screen coordinates); it stays
+; minimized and does not take the focus.
+SetNormalRect(hwnd, x, y, w, h) {
+    wp := Buffer(44, 0)
+    NumPut("UInt", 44, wp, 0)
+    if !DllCall("GetWindowPlacement", "ptr", hwnd, "ptr", wp)
+        return false
+    MonitorGetWorkArea(MonitorGetPrimary(), &wl, &wt)
+    NumPut("Int", x - wl, "Int", y - wt, "Int", x + w - wl, "Int", y + h - wt, wp, 28)
+    NumPut("UInt", 7, wp, 8)   ; showCmd SW_SHOWMINNOACTIVE
+    return DllCall("SetWindowPlacement", "ptr", hwnd, "ptr", wp)
+}
+
+; --- and back again ----------------------------------------------------------
+; A rescued window remembers where it was: the screen (device name) and its
+; place relative to that screen's corner - the coordinates themselves change
+; when the primary screen does. Rescued again before it went back (screen 2
+; off: to screen 3; screen 3 off: to screen 1), it remembers every stop: the
+; chain 2, 3. When a screen comes on again, the window goes to the FIRST stop
+; in its chain that is on - screen 3 on: to 3; screen 2 on too: on to 2. Not
+; when it has been moved, maximized, restored or minimized since it was put
+; where it is: then the user (or a saved position) has placed it, and that
+; wins. Kept in state.ini [Rescued] to outlive the restarts that layout
+; changes bring:
+;   hwnd = exe | stops | state | where
+;   stops  dev,dx,dy,w,h,state;dev,dx,dy,w,h,state;...  (oldest first)
+;   state  0 normal, 1 maximized, -1 minimized - the window's state now
+;   where  dev,dx,dy,w,h - where it was put (normal windows; else empty)
+; Only a screen that is off but still in the layout has a device to go back
+; to; a window rescued from an unplugged screen stays (Windows itself brings
+; windows back when a screen is plugged in again).
+
+; The stop for a rectangle about to be rescued: "" when it is on no screen
+; that is merely off.
+RescueHop(x, y, w, h, st) {
+    rect := Buffer(16)
+    NumPut("Int", x, "Int", y, "Int", x + w, "Int", y + h, rect)
+    hMon := DllCall("MonitorFromRect", "ptr", rect, "uint", 0, "ptr")   ; DEFAULTTONULL
+    if !hMon
+        return ""
+    dev := MonitorDevice(hMon, &ml, &mt)
+    if (dev = "" || !IsDeadDevice(dev))
+        return ""
+    return dev "," (x - ml) "," (y - mt) "," w "," h "," st
+}
+
+; The stops a window already has, when it is still where the last rescue put
+; it; "" otherwise.
+RescueChain(hwnd) {
+    v := IniRead(PowerStatePath(), "Rescued", hwnd, "")
+    p := StrSplit(v, "|")
+    return (p.Length >= 4 && RescueUntouched(hwnd, p)) ? p[2] : ""
+}
+
+; Writes the window's entry after a rescue: its earlier stops, the new one,
+; and where it is now.
+RescueRecord(hwnd, chain, hop) {
+    f := PowerStatePath()
+    stops := (chain != "" && hop != "") ? chain ";" hop : (hop != "" ? hop : chain)
+    if (stops = "") {
+        try IniDelete(f, "Rescued", hwnd)
+        return
+    }
+    try IniWrite(WinGetProcessName(hwnd) "|" stops "|" WinGetMinMax(hwnd) "|" WhereNow(hwnd)
+        , f, "Rescued", hwnd)
+}
+
+; A normal window's rectangle relative to the screen it is on: dev,dx,dy,w,h.
+WhereNow(hwnd) {
+    if (WinGetMinMax(hwnd) != 0)
+        return ""
+    WinGetPos(&x, &y, &w, &h, hwnd)
+    rect := Buffer(16)
+    NumPut("Int", x, "Int", y, "Int", x + w, "Int", y + h, rect)
+    dev := MonitorDevice(DllCall("MonitorFromRect", "ptr", rect, "uint", 2, "ptr"), &ml, &mt)
+    return (dev = "") ? "" : dev "," (x - ml) "," (y - mt) "," w "," h
+}
+
+; True when the window is still as the last rescue left it (entry split on |).
+RescueUntouched(hwnd, p) {
+    if (WinGetMinMax(hwnd) != Integer(p[3]))
+        return false
+    return Integer(p[3]) != 0 || WhereNow(hwnd) = p[4]
+}
+
+; The monitor number with that device name, 0 when it is not in the layout.
+MonitorByDevice(dev) {
+    loop MonitorGetCount()
+        if (MonitorGetName(A_Index) = dev)
+            return A_Index
+    return 0
+}
+
+; The device name and top-left corner of a monitor handle.
+MonitorDevice(hMon, &l, &t) {
+    mi := Buffer(104, 0)
+    NumPut("UInt", 104, mi, 0)
+    if !DllCall("GetMonitorInfoW", "ptr", hMon, "ptr", mi)
+        return ""
+    l := NumGet(mi, 4, "Int"), t := NumGet(mi, 8, "Int")
+    return StrGet(mi.Ptr + 40, 32, "UTF-16")
+}
+
+IsDeadDevice(dev) {
+    global g_deadMon
+    return g_deadMon.Has(dev)
+}
+
+; Moves the rescued windows whose screen is on again back; returns how many.
+ReturnRescued() {
+    f := PowerStatePath()
+    section := ""
+    try section := IniRead(f, "Rescued")
+    if (section = "")
+        return 0
+    n := 0
+    for line in StrSplit(section, "`n", "`r") {
+        eq := InStr(line, "=")
+        if !eq
+            continue
+        hwnd := Integer(SubStr(line, 1, eq - 1)), p := StrSplit(SubStr(line, eq + 1), "|")
+        try {
+            if (p.Length < 4 || !WinExist(hwnd) || WinGetProcessName(hwnd) != p[1]
+                || !RescueUntouched(hwnd, p)) {
+                IniDelete(f, "Rescued", hwnd)   ; gone, or placed by the user since
+                continue
+            }
+            stops := StrSplit(p[2], ";")
+            ; the first stop whose screen is on
+            i := 0, m := 0
+            for s in stops {
+                dev := StrSplit(s, ",")[1]
+                if ((m := MonitorByDevice(dev)) && !IsDeadMonitor(m)) {
+                    i := A_Index
+                    break
+                }
+            }
+            if !i
+                continue   ; every screen it was on is still off
+            s := StrSplit(stops[i], ",")
+            MonitorGet(m, &ml, &mt)
+            x := ml + Integer(s[2]), y := mt + Integer(s[3]), w := Integer(s[4]), h := Integer(s[5])
+            mm := WinGetMinMax(hwnd)
+            if (mm = -1)
+                SetNormalRect(hwnd, x, y, w, h)
+            else {
+                if (mm = 1)
+                    WinRestore(hwnd)
+                WinMove(x, y, w, h, hwnd)
+                if (mm = 1 || Integer(s[6]) = 1)
+                    WinMaximize(hwnd)
+            }
+            n++
+            Trace("return " TraceWin(hwnd) " -> " s[1] " " x "," y " " w "x" h " (stop " i " of " stops.Length ")")
+            ; the stops before it stay: their screens are still off
+            rest := ""
+            loop i - 1
+                rest .= (rest = "" ? "" : ";") stops[A_Index]
+            RescueRecord(hwnd, rest, "")
+        } catch as e
+            Trace("return " hwnd " FAILED: " e.Message)
+    }
+    return n
+}
+
+; Puts the rectangle inside the work area of the monitor nearest to it,
+; shrinking it only when it is larger than that work area.
+FitOnScreen(&x, &y, &w, &h) {
+    best := "", bl := 0, bt := 0, br := 0, bb := 0
+    loop MonitorGetCount() {
+        if IsDeadMonitor(A_Index)
+            continue
+        MonitorGetWorkArea(A_Index, &l, &t, &r, &b)
+        ; distance from the rectangle's centre to the work area
+        cx := x + w // 2, cy := y + h // 2
+        d := Max(l - cx, 0, cx - r) + Max(t - cy, 0, cy - b)
+        if (best = "" || d < best)
+            best := d, bl := l, bt := t, br := r, bb := b
+    }
+    if (best = "")
+        return
+    w := Min(w, br - bl), h := Min(h, bb - bt)
+    x := Min(Max(x, bl), br - w), y := Min(Max(y, bt), bb - h)
+}
+
+; --- screens that are off but still in the layout ----------------------------
+; A DisplayPort screen turned off with its button usually stays in the
+; Windows layout - no WM_DISPLAYCHANGE, so the rescue above never runs, and
+; when it was the primary screen the taskbar and every new window keep going
+; to a dark screen. The helper process DalSegnoPower.ahk asks the screens
+; themselves over DDC/CI and reports the ones that are off (how: see there).
+; Here such a screen is treated as unplugged: it is left out of the setup
+; (so the positions saved for the screens still on apply), the windows on it
+; are rescued, and when it was the primary screen the built-in screen (or
+; else the largest one still on) becomes primary - for the session only, the
+; saved display configuration is not touched. When the old primary is on
+; again, the saved configuration is put back.
+; State that has to outlive the restart a layout change brings (Desktops
+; module) is kept in %LOCALAPPDATA%\DalSegno\state.ini.
+g_deadMon := Map()   ; device name (\\.\DISPLAYn) -> true: off although in the layout
+
+IsDeadMonitor(n) {
+    global g_deadMon
+    if !g_deadMon.Count
+        return false
+    try return g_deadMon.Has(MonitorGetName(n))
+    return false
+}
+
+LiveMonitorCount() {
+    global g_deadMon
+    c := MonitorGetCount()
+    if !g_deadMon.Count
+        return c
+    n := 0
+    loop c
+        n += !IsDeadMonitor(A_Index)
+    return n
+}
+
+; The width of the virtual screen, or with screens off, of the screens still
+; on - SysGet(78) unchanged when all are on, so the saved setups keep their keys.
+LiveWidth() {
+    global g_deadMon
+    if !g_deadMon.Count
+        return SysGet(78)
+    lo := "", hi := ""
+    loop MonitorGetCount() {
+        if IsDeadMonitor(A_Index)
+            continue
+        MonitorGet(A_Index, &l, , &r)
+        lo := (lo = "") ? l : Min(lo, l), hi := (hi = "") ? r : Max(hi, r)
+    }
+    return (lo = "") ? 0 : hi - lo
+}
+
+PowerStatePath() {
+    SplitPath(ErrorLogPath(), , &dir)
+    return dir "\state.ini"
+}
+
+PowerInit() {
+    global g_deadMon
+    OnMessage(DllCall("RegisterWindowMessage", "str", "DALSEGNO_POWER", "uint"), PowerReport)
+    ; the screens found off by the instance before a restart, if that was just now
+    f := PowerStatePath()
+    t := IniRead(f, "Power", "Time", "")
+    if (t != "" && DateDiff(A_Now, t, "Seconds") < 60)
+        for dev in StrSplit(IniRead(f, "Power", "Dead", ""), "|")
+            if (dev != "")
+                g_deadMon[dev] := true
+    if g_deadMon.Count
+        Trace("power: off at start " IniRead(f, "Power", "Dead", ""))
+    OnExit(PowerExit)
+    StartPowerHelper()
+    SetTimer(StartPowerHelper, 30000)   ; brought back if it ever dies
+}
+
+; The screens that are off, for the next instance (PowerInit) - a restart
+; follows every layout change.
+PowerExit(*) {
+    global g_deadMon
+    s := ""
+    for dev in g_deadMon
+        s .= dev "|"
+    f := PowerStatePath()
+    try IniWrite(s, f, "Power", "Dead"), IniWrite(A_Now, f, "Power", "Time")
+    return 0
+}
+
+StartPowerHelper() {
+    global g_rescueOn
+    if (!g_rescueOn || !FileExist(A_ScriptDir "\DalSegnoPower.ahk"))
+        return   ; (a missing script would get AutoHotkey's error box)
+    ; restored: set during the auto-execute section it would become every
+    ; thread's default, and the scan would see every hidden window
+    prevHidden := A_DetectHiddenWindows
+    DetectHiddenWindows true
+    try running := WinExist("DalSegnoPower ahk_class AutoHotkey")
+    finally DetectHiddenWindows prevHidden
+    if running
+        return
+    try Run('"' A_AhkPath '" "' A_ScriptDir '\DalSegnoPower.ahk"')
+}
+
+; DALSEGNO_POWER from the helper, every 2.5 s: wParam = the screens that are
+; off, lParam = the built-in ones, bit n-1 for \\.\DISPLAYn.
+PowerReport(wParam, lParam, *) {
+    global g_deadMon, g_rescueOn
+    dead := Map()
+    if g_rescueOn
+        loop 32
+            if (wParam & (1 << (A_Index - 1)))
+                dead["\\.\DISPLAY" A_Index] := true
+    s := "", old := ""
+    for dev in dead
+        s .= dev "|"
+    for dev in g_deadMon
+        old .= dev "|"
+    if (s != old) {
+        Trace("power: off [" old "] -> [" s "]")
+        g_deadMon := dead
+        SetTimer(PowerChanged.Bind(lParam), -1)
+    } else
+        PowerRestorePrimary()
+}
+
+PowerChanged(internalMask) {
+    global g_deadMon
+    if PowerRestorePrimary()
+        return   ; the layout change brings WM_DISPLAYCHANGE, and with it the return
+    if !g_deadMon.Count {
+        RescueSchedule(500)   ; screens on again: their windows go back
+        return
+    }
+    live := LiveMonitorCount()
+    if !live
+        return   ; every screen off: nothing to move to
+    prim := MonitorGetPrimary()
+    if IsDeadMonitor(prim) {
+        ; the new primary: the built-in screen, else the largest one still on
+        best := 0, bestArea := -1
+        loop MonitorGetCount() {
+            if IsDeadMonitor(A_Index)
+                continue
+            MonitorGet(A_Index, &l, &t, &r, &b)
+            area := (r - l) * (b - t)
+            if RegExMatch(MonitorGetName(A_Index), "i)DISPLAY(\d+)$", &m)
+                && (internalMask & (1 << (m[1] - 1)))
+                area += 1 << 40
+            if (area > bestArea)
+                best := A_Index, bestArea := area
+        }
+        oldDev := MonitorGetName(prim), newDev := MonitorGetName(best)
+        ; written BEFORE the change: SetDisplayConfig takes seconds, and the
+        ; restart the layout change brings (Desktops module) can end this
+        ; instance before it returns
+        f := PowerStatePath()
+        hadOrig := IniRead(f, "Power", "OrigPrimary", "") != ""
+        if !hadOrig
+            IniWrite(oldDev, f, "Power", "OrigPrimary")
+        Trace("power: primary " oldDev " -> " newDev)
+        if SetPrimaryScreen(newDev)
+            return   ; the layout change brings WM_DISPLAYCHANGE, and with it the rescue
+        if !hadOrig
+            IniDelete(f, "Power", "OrigPrimary")
+        Trace("power: primary " oldDev " -> " newDev " FAILED")
+    }
+    RescueSchedule(500)
+}
+
+; The old primary is on again: the saved display configuration goes back.
+; True when it did.
+PowerRestorePrimary() {
+    f := PowerStatePath()
+    orig := IniRead(f, "Power", "OrigPrimary", "")
+    if (orig = "")
+        return false
+    present := false
+    loop MonitorGetCount()
+        if (MonitorGetName(A_Index) = orig) {
+            present := true
+            if IsDeadMonitor(A_Index)
+                return false
+            if (A_Index = MonitorGetPrimary()) {   ; already back (a reboot, by hand)
+                IniDelete(f, "Power", "OrigPrimary")
+                return false
+            }
+        }
+    if !present
+        return false   ; unplugged: undocked, the layout is Windows' own business
+    IniDelete(f, "Power", "OrigPrimary")
+    Trace("power: " orig " on again, restoring the saved layout")
+    ; SDC_APPLY | SDC_USE_DATABASE_CURRENT: the configuration Windows has
+    ; saved for these screens, which SetPrimaryScreen never wrote to. Takes
+    ; seconds - this instance may be restarted before it returns.
+    rc := DllCall("SetDisplayConfig", "uint", 0, "ptr", 0, "uint", 0, "ptr", 0, "uint", 0x80 | 0x0F)
+    if rc
+        Trace("power: restoring the saved layout FAILED rc=" rc)
+    return rc = 0
+}
+
+; Makes the screen with that device name the primary one: the layout shifted
+; so that it sits at 0,0 - applied for this session only (no
+; SDC_SAVE_TO_DATABASE), so a reboot or PowerRestorePrimary brings back the
+; saved layout.
+SetPrimaryScreen(dev) {
+    if DllCall("GetDisplayConfigBufferSizes", "uint", 2, "uint*", &np := 0, "uint*", &nm := 0)
+        return false
+    paths := Buffer(np * 72, 0), modes := Buffer(nm * 64, 0)
+    if DllCall("QueryDisplayConfig", "uint", 2, "uint*", &np, "ptr", paths, "uint*", &nm, "ptr", modes, "ptr", 0)
+        return false
+    ; the source mode of that screen: its position is the shift
+    dx := "", dy := ""
+    loop nm {
+        o := (A_Index - 1) * 64
+        if (NumGet(modes, o, "UInt") != 1)   ; DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE
+            continue
+        req := Buffer(84, 0)
+        NumPut("UInt", 1, "UInt", 84, req, 0)                     ; GET_SOURCE_NAME
+        NumPut("Int64", NumGet(modes, o + 8, "Int64"), req, 8)    ; adapterId
+        NumPut("UInt", NumGet(modes, o + 4, "UInt"), req, 16)     ; source id
+        if DllCall("DisplayConfigGetDeviceInfo", "ptr", req)
+            continue
+        if (StrGet(req.Ptr + 20, 32, "UTF-16") = dev) {
+            dx := NumGet(modes, o + 28, "Int"), dy := NumGet(modes, o + 32, "Int")
+            break
+        }
+    }
+    if (dx = "")
+        return false
+    loop nm {
+        o := (A_Index - 1) * 64
+        if (NumGet(modes, o, "UInt") != 1)
+            continue
+        NumPut("Int", NumGet(modes, o + 28, "Int") - dx, "Int", NumGet(modes, o + 32, "Int") - dy, modes, o + 28)
+    }
+    ; SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_ALLOW_CHANGES
+    rc := DllCall("SetDisplayConfig", "uint", np, "ptr", paths, "uint", nm, "ptr", modes, "uint", 0x80 | 0x20 | 0x400)
+    return rc = 0
 }
 
 ; Called from the window scan for every window: places new windows that have

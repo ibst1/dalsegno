@@ -95,6 +95,8 @@ Tr(id) {
         "savedAll",       "{1} window positions saved.",
         "movedAll",       "{1} windows were moved to their saved positions.",
         "noMatch",        "No open window matches that saved position.",
+        "rescued",        "{1} windows were moved from a screen that is gone.",
+        "returned",       "{1} windows went back to their screen.",
         "forgot",         "Forgot the position for:",
         "nothingForget",  "No saved position to forget for the active window.",
         "cannotHandle",   "The active window cannot be managed (no title, ignored, or matches no rule).",
@@ -196,6 +198,8 @@ Tr(id) {
         "savedAll",       "{1} fönsterpositioner sparade.",
         "movedAll",       "{1} fönster flyttades till sina sparade positioner.",
         "noMatch",        "Inget öppet fönster matchar den sparade positionen.",
+        "rescued",        "{1} fönster flyttades från en skärm som inte finns längre.",
+        "returned",       "{1} fönster flyttades tillbaka till sin skärm.",
         "forgot",         "Glömde positionen för:",
         "nothingForget",  "Ingen sparad position att glömma för det aktiva fönstret.",
         "cannotHandle",   "Det aktiva fönstret hanteras inte (saknar titel, är ignorerat, eller matchar ingen regel).",
@@ -395,6 +399,10 @@ RulesOnly=0
 ; onto the nearest screen. office = Office apps only; all = every managed
 ; window; off = never.
 KeepOnScreen=office
+; RescueOnDisplayChange=1: 5 seconds after a screen is turned off or unplugged,
+; every window left where it cannot be reached (on any virtual desktop,
+; maximized and minimized ones too) moves onto a remaining screen. 0 = off.
+RescueOnDisplayChange=1
 
 [Desktops]
 ; NameInTray=1 shows the desktop name as text on the taskbar, left of the
@@ -1959,8 +1967,9 @@ CloseOtherInstances() {
 ; Restart: a new instance is started and closes this one (CloseOtherInstances
 ; above). Reload() would do the same through AutoHotkey's own mechanism, box
 ; included.
-RestartScript(*) {
-    try Run('"' A_AhkPath '" "' A_ScriptFullPath '"')
+; args: extra arguments for the new instance (a pending rescue, /rescue=<ms>).
+RestartScript(args := "") {
+    try Run('"' A_AhkPath '" "' A_ScriptFullPath '"' (args != "" ? " " args : ""))
 }
 
 ErrorLogPath() {
