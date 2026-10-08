@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fix: a window whose title bar lay behind the taskbar counted as reachable,
+  so it was never rescued (an Explorer window left at the bottom edge when
+  the other screens went off stayed hidden). "Reachable" now means at least
+  20 px of the title bar inside a screen's work area, not just 1 px anywhere
+  on the monitor. Saved positions are checked the same way.
+
 - "Keep Office windows on screen" and "Bring windows back when a screen is
   turned off" are one setting now, for every window: "Keep windows on
   screens that are on", [Positions] KeepOnScreen=1/0 (the old values office

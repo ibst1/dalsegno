@@ -125,14 +125,17 @@ MonitorLayout() {
     return out
 }
 
-; True when at least a 100 px wide piece of the rectangle's title band (its
-; top 40 px) lies on some monitor, i.e. the window can be grabbed there.
+; True when at least a 100 px wide, 20 px high piece of the rectangle's title
+; band (its top 40 px) lies in some monitor's work area, i.e. the window can
+; be grabbed there. The work area, not the whole monitor: a title bar behind
+; the taskbar cannot be grabbed (a window at the very bottom edge, hidden by
+; the taskbar, passed the old whole-monitor test and was never rescued).
 RectOnScreen(x, y, w, h) {
     loop MonitorGetCount() {
         if IsDeadMonitor(A_Index)
             continue
-        MonitorGet(A_Index, &l, &t, &r, &b)
-        if (Min(x + w, r) - Max(x, l) >= 100 && Min(y + 40, b) > Max(y, t))
+        MonitorGetWorkArea(A_Index, &l, &t, &r, &b)
+        if (Min(x + w, r) - Max(x, l) >= 100 && Min(y + 40, b) - Max(y, t) >= 20)
             return true
     }
     return false
