@@ -42,6 +42,8 @@ g_lastGuid := ""         ; GUID at last poll - separates a switch from startup/r
 g_lastState := ""        ; guid|name|count - update the tray only when something changed
 g_lastStatus := 0        ; last read status, used by the taskbar name label
 g_osd := 0
+g_moveNotice := 0        ; the "moved by rule" notice with its Bring back button
+g_ruleExempt := Map()    ; hwnd -> true: brought back by hand, desktop rules leave it alone
 g_label := 0             ; the name label on the taskbar
 g_labelText := ""        ; last rendered label content (avoids needless redraws)
 g_nameInTray := true
@@ -491,10 +493,83 @@ DesktopApplyToWindow(hwnd, desktop, follow) {
     return true
 }
 
-; Small overlay after a rule moved a window away without following: which
-; window went to which desktop.
+; Notice after a rule moved a window away without following: which window
+; went to which desktop, with a button that brings it back here for now. The
+; rule stays; only this window is left alone by desktop rules while it lives.
+; Bottom right above the taskbar, like a Windows notification, for 10 s (the
+; mouse over it keeps it).
 RuleMoveNotice(hwnd, desktop) {
-    ShowOsdText(Format(Tr("ruleMoved"), ShortTitle(hwnd), NameForIndex(desktop)), true)
+    prevDpi := DllCall("SetThreadDpiAwarenessContext", "ptr", -4, "ptr")
+    try
+        RuleMoveNoticeCore(hwnd, desktop)
+    finally {
+        if prevDpi
+            DllCall("SetThreadDpiAwarenessContext", "ptr", prevDpi, "ptr")
+    }
+}
+
+RuleMoveNoticeCore(hwnd, desktop) {
+    global g_moveNotice
+    CloseMoveNotice()
+    MonitorGetWorkArea(MonitorGetPrimary(), &l, &t, &r, &b)
+    scale := ScreenDpiAtPoint(r - 1, b - 1) / 96
+    g := Gui("-DPIScale +AlwaysOnTop -Caption +ToolWindow +E0x08000000")
+    g.BackColor := "1E293B"
+    g.MarginX := Round(18 * scale), g.MarginY := Round(14 * scale)
+    g.SetFont("s" Round(9.5 * scale) " w600 cWhite", "Segoe UI")
+    g.Add("Text", "w" Round(330 * scale), Format(Tr("ruleMoved"), ShortTitle(hwnd), NameForIndex(desktop)))
+    g.SetFont("s" Round(8.5 * scale) " w400 cCBD5E1")
+    g.Add("Text", "w" Round(330 * scale) " y+" Round(4 * scale), Tr("ruleMovedWhy"))
+    g.SetFont("s" Round(8.5 * scale) " w600 c000000")
+    btn := g.Add("Button", "y+" Round(10 * scale) " h" Round(28 * scale), " " Tr("ruleMoveBack") " ")
+    btn.OnEvent("Click", (*) => RuleMoveBack(hwnd))
+    close := g.Add("Button", "x+" Round(8 * scale) " yp hp", " " Tr("noticeClose") " ")
+    close.OnEvent("Click", (*) => CloseMoveNotice())
+    DllCall("dwmapi\DwmSetWindowAttribute", "ptr", g.Hwnd
+        , "uint", 33, "uint*", 2, "uint", 4)   ; DWMWA_WINDOW_CORNER_PREFERENCE = ROUND
+    g.Show("NoActivate Hide AutoSize")
+    g.GetPos(, , &w, &h)
+    pad := Round(12 * scale)
+    g.Show("NoActivate x" (r - w - pad) " y" (b - h - pad))
+    WinSetTransparent(248, g)
+    g_moveNotice := { gui: g, until: A_TickCount + 10000 }
+    SetTimer(MoveNoticeTick, 500)
+}
+
+MoveNoticeTick() {
+    global g_moveNotice
+    if !IsObject(g_moveNotice)
+        return SetTimer(MoveNoticeTick, 0)
+    CoordMode("Mouse", "Screen")
+    MouseGetPos(, , &under)
+    if (under = g_moveNotice.gui.Hwnd)
+        g_moveNotice.until := A_TickCount + 3000
+    else if (A_TickCount > g_moveNotice.until)
+        CloseMoveNotice()
+}
+
+CloseMoveNotice() {
+    global g_moveNotice
+    SetTimer(MoveNoticeTick, 0)
+    if IsObject(g_moveNotice)
+        try g_moveNotice.gui.Destroy()
+    g_moveNotice := 0
+}
+
+; "Bring back": the window to the desktop the user is on, activated, and
+; exempt from desktop rules until it closes (a title change would send it
+; away again otherwise). New windows still follow the rule.
+RuleMoveBack(hwnd) {
+    global g_ruleExempt
+    CloseMoveNotice()
+    if !WinExist(hwnd)
+        return
+    for h in [g_ruleExempt*]   ; forget closed windows
+        if !WinExist(h)
+            g_ruleExempt.Delete(h)
+    g_ruleExempt[hwnd] := true
+    DesktopBringHere(hwnd)
+    SetTimer(ActivateWindow.Bind(hwnd), -300)
 }
 
 ; Called from the window scan for a window that is new (old title "") or
@@ -505,9 +580,11 @@ RuleMoveNotice(hwnd, desktop) {
 ; applied, or no rule wants the window) and false when it should be repeated
 ; on the next scan: the window has no identity yet, or no desktop yet.
 DesktopRuleSweep(hwnd, title, oldTitle) {
-    global titleRules, g_dllLoaded
+    global titleRules, g_dllLoaded, g_ruleExempt
     if !g_dllLoaded
         return true
+    if g_ruleExempt.Has(hwnd)
+        return true   ; brought back by hand from a rule's desktop
     info := BaseInfo(hwnd)
     if (info = "") {
         ; try again only while the rejection can still pass: cloaked or

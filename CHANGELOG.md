@@ -1,6 +1,28 @@
 # Changelog
 
-## Unreleased
+## 2.1.0 (2026-10-12)
+
+- A rule that sends a window to another desktop now says so in a notice at
+  the bottom right, above the taskbar - "Flyttat av regel: Patienthistorik
+  → 1 · LIMS" - that stays 10 s (longer while the mouse is over it), with a
+  button "Ta tillbaka just nu": the window comes back to the desktop you are
+  on and is left alone by desktop rules until it closes. The rule itself
+  stays; new windows still go where it says. Replaces the small overlay
+  that vanished after three seconds.
+
+- The release zip now includes DalSegnoPower.ahk (the screen power helper
+  behind "Keep windows on screens that are on"), and build.ps1 runs in
+  Windows PowerShell 5.1 again.
+
+- New: a Java window is never larger than its screen. ChAS's Whole Genome
+  View opened 2560x1440 at 10,10 on a 2560x1440 screen (150 %) and was never
+  drawn - open, focused and on the taskbar to Windows, but nothing showed,
+  not from the taskbar button, not with the main window minimized; shrunk
+  to fit, it showed at once. A normal Java window (SunAwtFrame/SunAwtDialog,
+  JavaFX) wider or taller than its monitor's work area by more than a frame
+  is now shrunk to that work area and moved inside it - at any time, also
+  windows open before DalSegno started, never during a drag, at most three
+  times a minute per window. [Positions] FitJavaWindows=0 turns it off.
 
 - Fix: a window whose title bar lay behind the taskbar counted as reachable,
   so it was never rescued (an Explorer window left at the bottom edge when

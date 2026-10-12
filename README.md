@@ -78,6 +78,13 @@ lives on under `legacy/deskpilot/`; the design of the merge is in
   windows off-screen on purpose). With the above one setting,
   `[Positions] KeepOnScreen`, or the GUI's *Keep windows on screens that
   are on*.
+- **Java windows never larger than their screen.** A Java window (AWT/Swing
+  or JavaFX - ChAS, IGV) that is wider or taller than the work area of its
+  screen can stop being drawn: it is open, focused and on the taskbar, and
+  nothing of it shows. Such a window is shrunk to the work area and moved
+  inside it - any time, not only when it opens, but never while you drag it,
+  and at most three times a minute, so an app that insists wins.
+  `[Positions] FitJavaWindows=0` turns it off.
 
 ## The window menu
 
@@ -241,7 +248,7 @@ dropping comments inside them.
 [Modules]      Positions=1  Desktops=1
 [Menu]         Modifier=CapsLock  Button=RButton  Enabled=1  WholeWindow=1  Exclude=
 [Positions]    MoveWindows=1  AutoSave=1  AutoSaveModifierOnly=1  Notify=1  RulesOnly=0
-               KeepOnScreen=1
+               KeepOnScreen=1  FitJavaWindows=1
 [Desktops]     NameInTray=1  Wheel=1  ArrowIcons=0
 [Hotkeys]      OpenUi=d … Reload=F5, MoveNext=!#Right … ShowName=
 [Rules]        see above

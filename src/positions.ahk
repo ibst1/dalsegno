@@ -18,9 +18,10 @@ g_saveError := "", g_saveErrorText := ""
 
 g_moveEndCb := 0, g_winEventHook := 0
 g_keepOnScreen := true   ; [Positions] KeepOnScreen: KeepOnScreenGuard and the rescue
+g_fitJava := true        ; [Positions] FitJavaWindows: FitJavaGuard
 
 PositionsLoadConfig() {
-    global configIni, moveEnabled, autoSaveEnabled, notifyEnabled, g_autoSaveModOnly, g_keepOnScreen
+    global configIni, moveEnabled, autoSaveEnabled, notifyEnabled, g_autoSaveModOnly, g_keepOnScreen, g_fitJava
     moveEnabled     := IniRead(configIni, "Positions", "MoveWindows", 1) != "0"
     autoSaveEnabled := IniRead(configIni, "Positions", "AutoSave", 1) != "0"
     notifyEnabled   := IniRead(configIni, "Positions", "Notify", 1) != "0"
@@ -28,6 +29,7 @@ PositionsLoadConfig() {
     ; 1/0; before 2.1 also office/all (both now on: every window) and off
     v := StrLower(Trim(IniRead(configIni, "Positions", "KeepOnScreen", 1)))
     g_keepOnScreen := !(v = "0" || v = "off" || v = "")
+    g_fitJava := IniRead(configIni, "Positions", "FitJavaWindows", 1) != "0"
 }
 
 ; Autosave: Windows tells us exactly when a drag ends. EVENT_SYSTEM_MOVESIZEEND
@@ -384,6 +386,87 @@ KeepOnScreenGuard(hwnd, info) {
             Trace("keep-on-screen " TraceWin(hwnd))
     } catch as e
         Trace("keep-on-screen " hwnd " FAILED: " e.Message)
+}
+
+; --- Java windows never larger than their screen ------------------------------
+; A Java (AWT/Swing) frame larger than its screen can stop being drawn at all:
+; ChAS's Whole Genome View, opened at 10,10 2560x1440 on a 2560x1440 screen at
+; 150 %, was visible, focused and on the taskbar to Windows, yet nothing of it
+; reached the screen - not from its taskbar button, not with the main window
+; minimized (2026-10-09). Shrunk to fit, it was drawn at once. So a normal
+; (not maximized, not minimized) Java window wider or taller than the work
+; area of its monitor - by more than a window frame - is shrunk to that work
+; area and moved inside it. Every window, at any time, also those open before
+; the script started; never during a drag, and at most JAVA_FIT_MAX times a
+; minute per window, so an app that insists on its size wins instead of being
+; fought. Called from the scan for every ready window.
+; [Positions] FitJavaWindows=0 turns it off.
+JAVA_FIT_MAX := 3
+
+FitJavaGuard(hwnd, info) {
+    global g_fitJava, JAVA_FIT_MAX
+    if !g_fitJava
+        return
+    if !info.HasProp("java") {   ; the class never changes - asked once
+        cls := ""
+        try cls := WinGetClass(hwnd)
+        info.java := (cls = "SunAwtFrame" || cls = "SunAwtDialog"
+            || InStr(cls, "GlassWndClass-GlassWindowClass") = 1)   ; JavaFX
+    }
+    if !info.java
+        return
+    try {
+        if (WinGetMinMax(hwnd) != 0 || IsCloaked(hwnd) || InMoveSize(hwnd))
+            return
+        WinGetPos(&x, &y, &w, &h, hwnd)
+        if (w <= 0 || h <= 0 || !WorkAreaOf(hwnd, &l, &t, &r, &b))
+            return
+        ; GetWindowRect includes the invisible resize borders (7 px a side
+        ; at 100 %) - a window filling the work area is that much larger
+        tol := 2 * Round(8 * A_ScreenDPI / 96)
+        if (w <= r - l + tol && h <= b - t + tol)
+            return
+        if !info.HasProp("fitTimes")
+            info.fitTimes := []
+        while (info.fitTimes.Length && A_TickCount - info.fitTimes[1] > 60000)
+            info.fitTimes.RemoveAt(1)
+        if (info.fitTimes.Length >= JAVA_FIT_MAX) {
+            if (info.fitTimes.Length = JAVA_FIT_MAX) {   ; traced once
+                info.fitTimes.Push(A_TickCount)
+                Trace("fit java " TraceWin(hwnd) " - the app keeps it larger, giving up for a minute")
+            }
+            return
+        }
+        info.fitTimes.Push(A_TickCount)
+        nw := Min(w, r - l), nh := Min(h, b - t)
+        nx := Min(Max(x, l), r - nw), ny := Min(Max(y, t), b - nh)
+        WinMove(nx, ny, nw, nh, hwnd)
+        Trace(Format("fit java {} {},{} {}x{} -> {},{} {}x{}", TraceWin(hwnd), x, y, w, h, nx, ny, nw, nh))
+    } catch as e
+        Trace("fit java " hwnd " FAILED: " e.Message)
+}
+
+; The work area of the monitor the window is (mostly) on.
+WorkAreaOf(hwnd, &l, &t, &r, &b) {
+    hMon := DllCall("MonitorFromWindow", "ptr", hwnd, "uint", 2, "ptr")   ; NEAREST
+    mi := Buffer(40, 0)
+    NumPut("UInt", 40, mi, 0)
+    if !DllCall("GetMonitorInfoW", "ptr", hMon, "ptr", mi)
+        return false
+    l := NumGet(mi, 20, "Int"), t := NumGet(mi, 24, "Int")
+    r := NumGet(mi, 28, "Int"), b := NumGet(mi, 32, "Int")
+    return r > l && b > t
+}
+
+; True while the window's thread is in a move/resize loop (the user is
+; dragging it or its border).
+InMoveSize(hwnd) {
+    tid := DllCall("GetWindowThreadProcessId", "ptr", hwnd, "ptr", 0, "uint")
+    gti := Buffer(A_PtrSize = 8 ? 72 : 48, 0)
+    NumPut("UInt", gti.Size, gti, 0)
+    if !DllCall("GetGUIThreadInfo", "uint", tid, "ptr", gti)
+        return false
+    return (NumGet(gti, 4, "UInt") & 0x2) != 0   ; GUI_INMOVESIZE
 }
 
 ; --- rescue after a monitor is unplugged -------------------------------------

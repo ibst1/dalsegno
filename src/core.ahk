@@ -126,6 +126,9 @@ Tr(id) {
         "dllMissing",     "VirtualDesktopAccessor.dll missing – cannot move windows",
         "moveFailed",     "Could not move the window",
         "ruleMoved",      "Moved by rule: {1} → {2}",
+        "ruleMovedWhy",   "A DalSegno rule sends this window to another desktop.",
+        "ruleMoveBack",   "Bring back for now",
+        "noticeClose",    "Close",
         "posOffScreen",   "Saved position for {1} is off the screens - not applied. Save it again.",
         "renameTitle",    "DalSegno - rename desktop",
         "renamePrompt",   "New name for desktop {1} (empty = Windows' default):",
@@ -229,6 +232,9 @@ Tr(id) {
         "dllMissing",     "VirtualDesktopAccessor.dll saknas – kan inte flytta fönster",
         "moveFailed",     "Kunde inte flytta fönstret",
         "ruleMoved",      "Flyttat av regel: {1} → {2}",
+        "ruleMovedWhy",   "En DalSegno-regel skickar det här fönstret till ett annat skrivbord.",
+        "ruleMoveBack",   "Ta tillbaka just nu",
+        "noticeClose",    "Stäng",
         "posOffScreen",   "Sparad position för {1} ligger utanför skärmarna och används inte. Spara om den.",
         "renameTitle",    "DalSegno - byt namn på skrivbord",
         "renamePrompt",   "Nytt namn för skrivbord {1} (tomt = Windows standardnamn):",
@@ -401,6 +407,9 @@ RulesOnly=0
 ; screen still on (any virtual desktop, maximized and minimized ones too),
 ; and back when it is on again. 0 = off.
 KeepOnScreen=1
+; FitJavaWindows=1: a Java window (ChAS, IGV...) larger than its screen is
+; shrunk to fit - Java can stop drawing such a window altogether. 0 = off.
+FitJavaWindows=1
 
 [Desktops]
 ; NameInTray=1 shows the desktop name as text on the taskbar, left of the
@@ -1072,8 +1081,10 @@ ScanWindowsBody() {
             PositionsPlace(hwnd, info, setup)
             tPlace := QpcMs() - t
             t := QpcMs()
-            if ready
+            if ready {
                 KeepOnScreenGuard(hwnd, info)
+                FitJavaGuard(hwnd, info)
+            }
             tGuard := QpcMs() - t
         }
         if (g_modDesktops && title != "" && title != info.title) {
