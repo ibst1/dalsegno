@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.2.0 (2026-10-13)
 
 - A window set to "Show on all desktops" was missing from the window list
   (Windows reports it on no desktop, so it was dropped as a ghost). It is

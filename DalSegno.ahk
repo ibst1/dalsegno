@@ -1,5 +1,5 @@
 ;===============================================================================
-; DalSegno Window Manager — v2.1.0 (2026-10-12)
+; DalSegno Window Manager — v2.2.0 (2026-10-13)
 ;
 ; Dal segno (𝄋) — "from the sign": go back to the marked place. Windows return
 ; to their marked places: the saved position on the right monitor, and the
