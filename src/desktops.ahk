@@ -229,17 +229,48 @@ PollDesktops() {
     g_lastState := state
     UpdateTray(s)
     UpdateLabel()
-    if (switched && !WindowsShowsSwitch())
-        ShowOsd(s)
+    ; decided a moment later: Windows' flyout shows 30-50 ms after the switch,
+    ; and a poll can land right after it
+    if switched
+        SetTimer(OsdUnlessWindowsShows, -150)
 }
 
-; Windows' own switch flyout (bottom centre) is on screen - Ctrl+Win+arrows
-; show it, a switch through the dll does not. A window of its own, created
-; when the switch starts and destroyed when the flyout fades, so it is still
-; there when the next poll notices the switch; our overlay on top of it would
-; say the same thing twice.
+OsdUnlessWindowsShows() {
+    if !WindowsShowsSwitch()
+        ShowOsd()
+}
+
+; Windows' own switch notice is on screen - our overlay on top of it would say
+; the same thing twice. Two kinds, measured on 23H2:
+; - Ctrl+Win+arrows: a VirtualDesktopHotkeySwitcher window, created for the
+;   switch and destroyed after.
+; - every other switch Windows shows a name for (touchpad swipe, a switch
+;   through the dll - our own hotkeys): a small untitled XAML island at the
+;   bottom centre, kept and only hidden between switches, visible ~2 s. It
+;   lives in a z-order band EnumWindows (WinExist, WinGetList) does not walk;
+;   FindWindowEx does.
+; Without either, Windows said nothing (or shows a kind not known here) and
+; ours is the only notice - shown twice rather than not at all.
 WindowsShowsSwitch() {
-    return WinExist("ahk_class VirtualDesktopHotkeySwitcher ahk_exe explorer.exe") != 0
+    if WinExist("ahk_class VirtualDesktopHotkeySwitcher ahk_exe explorer.exe")
+        return true
+    h := 0
+    loop {
+        h := DllCall("FindWindowEx", "ptr", 0, "ptr", h, "str", "XamlExplorerHostIslandWindow", "ptr", 0, "ptr")
+        if !h
+            return false
+        try {
+            if (WinGetTitle(h) != "" || !(WinGetStyle(h) & 0x10000000))
+                continue
+            ; topmost, no-activate - and small, not the Alt+Tab or Task View
+            ; host of the same class
+            if (WinGetExStyle(h) & 0x08000008) != 0x08000008
+                continue
+            WinGetPos(, , &w, &hh, h)
+            if (w > 0 && w < 800 && hh > 0 && hh < 300 && WinGetProcessName(h) = "explorer.exe")
+                return true
+        }
+    }
 }
 
 ; --- hotkeys ---------------------------------------------------------------------

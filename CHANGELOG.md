@@ -21,10 +21,12 @@
   all. The portable zip's shortcut starts DalSegno.exe instead of the .ahk,
   which opens nothing without AutoHotkey installed.
 
-- Fix: switching desktop with Ctrl+Win+arrows showed two notices - Windows'
-  own flyout at the bottom and DalSegno's overlay. The overlay now stays
-  away while Windows' flyout is on screen; switches Windows shows nothing
-  for (DalSegno's hotkeys, the taskbar wheel, the tray picker) keep it.
+- Fix: switching desktop showed two notices - Windows' own name flyout at
+  the bottom and DalSegno's overlay. The overlay now stays away while
+  Windows' flyout is on screen: the Ctrl+Win+arrows preview, and the small
+  name flyout Windows shows for a touchpad swipe and for a switch through
+  DalSegno's own hotkeys (a window EnumWindows does not list - found with
+  FindWindowEx). Where Windows shows nothing, the overlay still shows.
 
 ## 2.1.0 (2026-10-12)
 
