@@ -1876,7 +1876,7 @@ BuildTrayMenu() {
     tray.Add(Tr("trayPositions"), OpenPositionsFile)
     tray.Add(Tr("trayLanguage"), langMenu)
     tray.Add(Tr("trayAutostart"), ToggleAutostart)
-    if FileExist(AutostartShortcut())
+    if IsAutostart()
         tray.Check(Tr("trayAutostart"))
     tray.Add()
     tray.Add(Tr("trayRestart"), (*) => RestartScript())
@@ -1904,22 +1904,47 @@ ShowHotkeys(*) {
     MsgBox Tr("hkText"), Tr("hkTitle")
 }
 
-AutostartShortcut() {
-    return A_Startup "\DalSegno.lnk"
+; What a startup shortcut starts: the portable zip's DalSegno.exe (the
+; interpreter renamed, loading DalSegno.ahk beside it) when that is what runs
+; us - a bare .ahk opens nothing without AutoHotkey installed - and the SCRIPT
+; otherwise, not AutoHotkey with the script as an argument: the Store
+; edition's exe path carries its version number and changes with every update.
+AutostartTarget() {
+    return (A_AhkPath = A_ScriptDir "\DalSegno.exe") ? A_AhkPath : A_ScriptFullPath
 }
 
-; Tray toggle: create or remove a shortcut in the user's Startup folder. The
-; shortcut points at the SCRIPT, not at AutoHotkey with the script as an
-; argument - the Store edition's exe path carries its version number and
-; changes with every update.
-ToggleAutostart(*) {
-    lnk := AutostartShortcut()
-    if FileExist(lnk) {
-        try FileDelete(lnk)
+; Every shortcut in the Startup folder that starts this DalSegno - ours, and
+; one made by hand ("DalSegno.ahk - genväg.lnk"): unseen, it read as "off",
+; and switching on added a second instance at logon.
+AutostartShortcuts() {
+    found := []
+    loop files A_Startup "\*.lnk" {
+        target := ""
+        try FileGetShortcut(A_LoopFileFullPath, &target)
+        if (target = A_ScriptFullPath || target = A_ScriptDir "\DalSegno.exe")
+            found.Push(A_LoopFileFullPath)
+    }
+    return found
+}
+
+IsAutostart() => AutostartShortcuts().Length > 0
+
+; On: a shortcut in the user's Startup folder, unless one already starts us.
+; Off: every shortcut that does, hand-made ones included.
+SetAutostart(on) {
+    if on {
+        if !IsAutostart()
+            try FileCreateShortcut(AutostartTarget(), A_Startup "\DalSegno.lnk", A_ScriptDir)
     } else {
-        try FileCreateShortcut(A_ScriptFullPath, lnk, A_ScriptDir)
+        for lnk in AutostartShortcuts()
+            try FileDelete(lnk)
     }
     BuildTrayMenu()
+    PushStateSoon()
+}
+
+ToggleAutostart(*) {
+    SetAutostart(!IsAutostart())
 }
 
 ; =============================================================================

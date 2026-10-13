@@ -99,6 +99,7 @@ const STR = {
     modulesHelp: 'Each half can be switched off on its own: off means no hotkeys, no timer work, no menu items and no tab for it.',
     modPositions: 'Positions - remember where windows go, per monitor setup and computer',
     modDesktops: 'Desktops - virtual desktops: switching, moving, overlay, taskbar label',
+    tglAutostart: 'Start with Windows',
     menuH: 'Window menu',
     menuHelp: 'Hold the modifier and press the button on a window to open the menu. The plain right-click is left to the app. The modifier is also the key the position hotkeys below are held with.',
     tglMenuOn: 'Enable the window menu', lblMenuModifier: 'Modifier', lblMenuButton: 'Button',
@@ -207,6 +208,7 @@ const STR = {
     modulesHelp: 'Varje halva kan stängas av för sig: av betyder inga kortkommandon, inget timerarbete, inga menyval och ingen flik för den.',
     modPositions: 'Lägen - kom ihåg var fönster ska ligga, per skärmuppsättning och dator',
     modDesktops: 'Skrivbord - virtuella skrivbord: växla, flytta, överlägg, etikett i aktivitetsfältet',
+    tglAutostart: 'Starta med Windows',
     menuH: 'Fönstermeny',
     menuHelp: 'Håll modifieraren och tryck knappen på ett fönster för att öppna menyn. Vanligt högerklick lämnas till appen. Modifieraren är också tangenten positionskortkommandona nedan hålls med.',
     tglMenuOn: 'Aktivera fönstermenyn', lblMenuModifier: 'Modifierare', lblMenuButton: 'Knapp',
@@ -301,7 +303,7 @@ function localizeStatic() {
    'dllNote|dllNote', 'dhkH|dhkH', 'dhkHelp|dhkHelp', 'prefixH|prefixH', 'prefixHelp|prefixHelp',
    'taskbarH|taskbarH', 'lblNameInTray|tglNameInTray', 'lblWheel|tglWheel', 'wheelHelp|wheelHelp',
    'lblArrows|tglArrows', 'arrowsHelp|arrowsHelp',
-   'modulesH|modulesH', 'modulesHelp|modulesHelp', 'lblModPositions|modPositions', 'lblModDesktops|modDesktops',
+   'modulesH|modulesH', 'modulesHelp|modulesHelp', 'lblModPositions|modPositions', 'lblModDesktops|modDesktops', 'lblAutostart|tglAutostart',
    'menuH|menuH', 'menuHelp|menuHelp', 'lblMenuOn|tglMenuOn', 'lblMenuModifier|lblMenuModifier',
    'lblMenuButton|lblMenuButton', 'lblMenuWhole|tglMenuWhole', 'menuWholeHelp|menuWholeHelp',
    'lblMenuExclude|lblMenuExclude', 'menuExcludeHelp|menuExcludeHelp',
@@ -339,6 +341,7 @@ function renderSettings() {
   const s = st.settings;
   $('tglModPositions').checked = !!st.modules.positions;
   $('tglModDesktops').checked = !!st.modules.desktops;
+  $('tglAutostart').checked = !!s.autostart;
   $('tglMenuOn').checked = !!s.menuOn;
   if (document.activeElement !== $('inMenuModifier')) $('inMenuModifier').value = s.modifier ?? '';
   if (document.activeElement !== $('inMenuButton')) $('inMenuButton').value = s.menuButton ?? '';
@@ -389,6 +392,7 @@ $('tglMove').addEventListener('change', e => post({ action: 'toggle', name: 'mov
 $('tglSave').addEventListener('change', e => post({ action: 'toggle', name: 'autosave', value: e.target.checked ? 1 : 0 }));
 $('tglModOnly').addEventListener('change', e => post({ action: 'toggle', name: 'modOnly', value: e.target.checked ? 1 : 0 }));
 $('tglNotify').addEventListener('change', e => post({ action: 'toggle', name: 'notify', value: e.target.checked ? 1 : 0 }));
+$('tglAutostart').addEventListener('change', e => post({ action: 'toggle', name: 'autostart', value: e.target.checked ? 1 : 0 }));
 $('tglOnScreen').addEventListener('change', e => post({ action: 'toggle', name: 'keepOnScreen', value: e.target.checked ? 1 : 0 }));
 $('btnSaveAll').addEventListener('click', () => post({ action: 'saveAll' }));
 $('btnApplyAll').addEventListener('click', () => post({ action: 'applyAll' }));

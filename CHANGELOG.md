@@ -14,6 +14,18 @@
   dialog. Matching windows are shown on every desktop when they appear or
   their title changes into matching; "follow" does not apply.
 
+- "Start with Windows" is in the settings window too (Settings, under the
+  modules), not only in the tray menu. Both now recognise any shortcut in
+  the Startup folder that starts DalSegno - one made by hand read as "off",
+  and switching on started a second instance at logon; off removes them
+  all. The portable zip's shortcut starts DalSegno.exe instead of the .ahk,
+  which opens nothing without AutoHotkey installed.
+
+- Fix: switching desktop with Ctrl+Win+arrows showed two notices - Windows'
+  own flyout at the bottom and DalSegno's overlay. The overlay now stays
+  away while Windows' flyout is on screen; switches Windows shows nothing
+  for (DalSegno's hotkeys, the taskbar wheel, the tray picker) keep it.
+
 ## 2.1.0 (2026-10-12)
 
 - A rule that sends a window to another desktop now says so in a notice at

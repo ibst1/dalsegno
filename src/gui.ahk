@@ -246,6 +246,7 @@ PushState() {
         , "settings", Map("move", moveEnabled ? 1 : 0, "autosave", autoSaveEnabled ? 1 : 0
             , "notify", notifyEnabled ? 1 : 0, "rulesOnly", rulesOnly ? 1 : 0
             , "keepOnScreen", g_keepOnScreen ? 1 : 0, "lang", g_lang
+            , "autostart", IsAutostart() ? 1 : 0
             , "modOnly", g_autoSaveModOnly ? 1 : 0, "modifier", g_modifier
             , "menuButton", g_menuButton, "menuOn", g_menuOn ? 1 : 0
             , "menuWhole", g_menuWhole ? 1 : 0, "menuExclude", g_menuExclude
@@ -342,6 +343,8 @@ UiToggle(name, value) {
         case "notify":
             if (notifyEnabled != v)
                 ToggleToasts()
+        case "autostart":
+            SetAutostart(v)
         case "keepOnScreen":
             if (g_keepOnScreen != v) {
                 IniWrite(v ? 1 : 0, configIni, "Positions", "KeepOnScreen")

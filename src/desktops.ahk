@@ -229,8 +229,17 @@ PollDesktops() {
     g_lastState := state
     UpdateTray(s)
     UpdateLabel()
-    if switched
+    if (switched && !WindowsShowsSwitch())
         ShowOsd(s)
+}
+
+; Windows' own switch flyout (bottom centre) is on screen - Ctrl+Win+arrows
+; show it, a switch through the dll does not. A window of its own, created
+; when the switch starts and destroyed when the flyout fades, so it is still
+; there when the next poll notices the switch; our overlay on top of it would
+; say the same thing twice.
+WindowsShowsSwitch() {
+    return WinExist("ahk_class VirtualDesktopHotkeySwitcher ahk_exe explorer.exe") != 0
 }
 
 ; --- hotkeys ---------------------------------------------------------------------
