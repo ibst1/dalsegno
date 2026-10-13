@@ -213,7 +213,9 @@ old             = /desktop:2 /off re:^Something$
   applies to every window on the machine whose config holds it. It stays for
   a config you still keep in a synced folder by hand.
 - `/desktop:<n>` moves matching windows there when they appear or their
-  title changes into matching; `/follow` switches along.
+  title changes into matching; `/follow` switches along. `/desktop:all`
+  shows them on every desktop instead (Windows' "Show this window on all
+  desktops").
 - `/off` keeps the rule but switches it off.
 - The alias is the rule's key: its saved positions are stored under
   `rule:<alias>` in the positions file. It is generated from the text when a

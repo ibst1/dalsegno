@@ -400,12 +400,19 @@ MoveWindowToDesktop(hwnd, target, follow, s := 0) {
     global g_dllLoaded
     if !IsObject(s)
         s := ReadDesktopStatus()
-    if (!s || s.index = 0 || target < 1 || target > s.count || target = s.index)
+    if (!s || s.index = 0 || target < 1 || target > s.count)
         return
     if !g_dllLoaded {
-        ShowOsdText(Tr("dllMissing"))
+        if (target != s.index)
+            ShowOsdText(Tr("dllMissing"))
         return
     }
+    ; a window shown on every desktop is on none in particular: sending it to
+    ; one means it stops being everywhere (unpinned, it stays on this one)
+    if IsPinned(hwnd)
+        SetPinned(hwnd, false)
+    if (target = s.index)
+        return
     if !DllCall("VirtualDesktopAccessor\MoveWindowToDesktopNumber"
         , "ptr", hwnd, "int", target - 1, "int") {
         ShowOsdText(Tr("moveFailed"))
@@ -473,6 +480,18 @@ DesktopApplyToWindow(hwnd, desktop, follow) {
     global g_dllLoaded, g_modDesktops
     if (!g_modDesktops || !g_dllLoaded || !desktop)
         return true
+    ; every desktop: pinned. A pinned window reads -1 too, so that is asked
+    ; first; -1 otherwise is a window too new to be on a desktop yet
+    if (desktop < 0) {
+        if IsPinned(hwnd)
+            return true
+        nr := -1
+        try nr := DllCall("VirtualDesktopAccessor\GetWindowDesktopNumber", "ptr", hwnd, "int")
+        if (nr < 0)
+            return false
+        SetPinned(hwnd, true)
+        return IsPinned(hwnd)
+    }
     nr := -1
     try nr := DllCall("VirtualDesktopAccessor\GetWindowDesktopNumber", "ptr", hwnd, "int")
     if (nr < 0)
@@ -805,15 +824,17 @@ IsPinned(win) {
 }
 
 TogglePin(win, *) {
+    SetPinned(win, !IsPinned(win))
+}
+
+; Windows' own "Show this window on all desktops" - the same setting Task View
+; and the window menu show, so whichever changes it, the others see it.
+SetPinned(win, on) {
     global g_dllLoaded
     if (!g_dllLoaded || !WinExist(win))
         return
-    try {
-        if IsPinned(win)
-            DllCall("VirtualDesktopAccessor\UnPinWindow", "ptr", win)
-        else
-            DllCall("VirtualDesktopAccessor\PinWindow", "ptr", win)
-    }
+    try DllCall("VirtualDesktopAccessor\" (on ? "PinWindow" : "UnPinWindow"), "ptr", win)
+    PushStateSoon()
 }
 
 ; --- taskbar name label ----------------------------------------------------------

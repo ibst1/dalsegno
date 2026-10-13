@@ -145,6 +145,7 @@ Tr(id) {
         "dlgSavePos",     "Save this window's current position",
         "dlgDesktop",     "Desktop:",
         "dlgNoDesktop",   "(none)",
+        "dlgAllDesktops", "All desktops",
         "dlgFollow",      "follow",
         "dlgOk",          "OK",
         "dlgCancel",      "Cancel",
@@ -251,6 +252,7 @@ Tr(id) {
         "dlgSavePos",     "Spara fönstrets nuvarande position",
         "dlgDesktop",     "Skrivbord:",
         "dlgNoDesktop",   "(inget)",
+        "dlgAllDesktops", "Alla skrivbord",
         "dlgFollow",      "följ efter",
         "dlgOk",          "OK",
         "dlgCancel",      "Avbryt",
@@ -452,7 +454,8 @@ ShowName=
 ; class (quote it if it contains spaces) - what a program row in the list
 ; becomes when it is given a desktop or switched off. /desktop:<n> moves
 ; matching windows to that desktop when they appear (or their title changes
-; into matching); /follow switches along. /off keeps the rule but switches it off.
+; into matching); /follow switches along. /desktop:all shows them on every
+; desktop instead. /off keeps the rule but switches it off.
 ; The alias names the rule and its saved positions. Order matters: the first
 ; matching rule wins. Easiest to create from the window menu.
 ; Examples:
@@ -542,8 +545,9 @@ ParseRuleValue(alias, value) {
             r.cls := m[1] != "" ? m[1] : m[2], rest := m[3]
         } else if RegExMatch(rest, "^/computer:(\S+)\s*(.*)$", &m) {
             r.computers := m[1], rest := m[2]
-        } else if RegExMatch(rest, "^/desktop:(\d+)\s*(.*)$", &m) {
-            r.desktop := Integer(m[1]), rest := m[2]
+        } else if RegExMatch(rest, "i)^/desktop:(\d+|all)\s*(.*)$", &m) {
+            ; -1 = every desktop (the window pinned), 0 = none
+            r.desktop := m[1] = "all" ? -1 : Integer(m[1]), rest := m[2]
         } else if RegExMatch(rest, "^/follow(?:\s+(.*))?$", &m) {
             r.follow := true, rest := m[1]
         } else if RegExMatch(rest, "^/off(?:\s+(.*))?$", &m) {
@@ -568,7 +572,7 @@ RuleValue(r) {
     if (RuleComputers(r) != "")
         v .= "/computer:" RuleComputers(r) " "
     if r.desktop
-        v .= "/desktop:" r.desktop " "
+        v .= "/desktop:" (r.desktop < 0 ? "all" : r.desktop) " "
     if r.follow
         v .= "/follow "
     if !r.enabled
@@ -1644,8 +1648,10 @@ TmSaveOrRule(hwnd) {
             items := [Tr("dlgNoDesktop")]
             for n in names
                 items.Push(n)
+            items.Push(Tr("dlgAllDesktops"))   ; last: desktop -1
             ctl["desktop"] := g.AddDropDownList("x+6 yp-4 w220", items)
-            ctl["desktop"].Choose((rule && rule.desktop) ? rule.desktop + 1 : 1)
+            ctl["desktop"].Choose(!(rule && rule.desktop) ? 1
+                : rule.desktop < 0 ? items.Length : Min(rule.desktop + 1, items.Length - 1))
             ctl["follow"] := g.AddCheckbox("x+10 yp+4", Tr("dlgFollow"))
             ctl["follow"].Value := (rule && rule.follow) ? 1 : 0
         }
@@ -1671,7 +1677,13 @@ RuleDialogOk(g, hwnd, alias, ctl, info) {
     regex := ctl["regex"].Value ? true : false
     enabled := true, useProg := false
     keepPos := ctl["save"].Value ? true : false
-    desktop := ctl.Has("desktop") ? ctl["desktop"].Value - 1 : 0
+    desktop := 0
+    if ctl.Has("desktop") {
+        ; the last item is "All desktops"
+        desktop := ctl["desktop"].Value - 1
+        if (ctl["desktop"].Value = DesktopNames().Length + 2)
+            desktop := -1
+    }
     follow := ctl.Has("follow") && ctl["follow"].Value ? true : false
     ; the program condition of a title rule; "" = the rule keeps what it has
     ; (a regex program has no checkbox), "-" = no program condition

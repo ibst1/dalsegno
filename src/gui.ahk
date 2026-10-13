@@ -186,6 +186,8 @@ UiMessage(sender, args) {
         case "moveWinDesktop":
             MoveWindowToDesktop(Integer(msg["hwnd"]), Integer(msg["desktop"]), false)
             PushStateSoon()
+        case "pinWin":
+            SetPinned(Integer(msg["hwnd"]), msg["pinned"] ? true : false)
         case "ruleFromWin":
             SetTimer(TmSaveOrRule.Bind(Integer(msg["hwnd"])), -1)
         case "setRule":
@@ -293,9 +295,12 @@ ListWindows() {
         if (info = "")
             continue
         desktop := g_modDesktops ? DesktopOf(hwnd) : ""
-        if (g_modDesktops && g_dllLoaded && desktop = "")
+        ; a window shown on all desktops has no desktop number either, but it
+        ; is very much there - listed as such, not dropped as a ghost
+        pinned := g_modDesktops && IsPinned(hwnd)
+        if (g_modDesktops && g_dllLoaded && desktop = "" && !pinned)
             continue
-        dup := info.exe "|" info.title "|" desktop
+        dup := info.exe "|" info.title "|" (pinned ? "all" : desktop)
         if seen.Has(dup) {
             seen[dup]["n"] := seen[dup]["n"] + 1
             continue
@@ -309,7 +314,7 @@ ListWindows() {
             , "key", key
             , "rule", SubStr(key, 1, 5) = "rule:" ? SubStr(key, 6) : ""
             , "managed", key != "" ? 1 : 0
-            , "desktop", desktop, "n", 1
+            , "desktop", desktop, "pinned", pinned ? 1 : 0, "n", 1
             , "x", x, "y", y, "w", w, "h", h
             , "saved", key != "" && LoadPos(key) != "" ? 1 : 0)
         seen[dup] := row

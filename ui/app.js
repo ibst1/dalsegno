@@ -32,7 +32,7 @@ const STR = {
     thWidth: 'Width', thHeight: 'Height',
     thWindowTip: 'Which windows the row applies to - that is, which windows share the position. A rule\'s text and program are edited right here and saved when you leave the field. A program with several rows has several kinds of window (main window, dialogs, helper windows); the window class after the text tells them apart. Hover a row for the window the position was saved from.',
     thActiveTip: 'Untick to switch a row off without deleting it: its windows are then left alone, and its saved position waits until it is ticked again. Unticking a program row makes it a rule for the program (same window class), positions included.',
-    thDesktopTip: 'The virtual desktop the row\'s windows are moved to when they appear or their title changes into matching. "follow" switches along. Picking a desktop on a program row makes it a rule for the program (same window class), positions included.',
+    thDesktopTip: 'The virtual desktop the row\'s windows are moved to when they appear or their title changes into matching. "follow" switches along. "All desktops" shows them on every desktop instead. Picking a desktop on a program row makes it a rule for the program (same window class), positions included.',
     thXTip: 'Distance from the left edge of the desktop, in pixels.',
     thYTip: 'Distance from the top edge of the desktop, in pixels.',
     thWidthTip: 'Window width in pixels.', thHeightTip: 'Window height in pixels.',
@@ -73,7 +73,8 @@ const STR = {
     thProgram: 'Program', thTitle: 'Title', thWinDesktop: 'Desktop',
     thProgramTip: 'Executable name of the process owning the window.',
     thTitleTip: 'The window title right now. Rules match against this.',
-    thWinDesktopTip: 'The virtual desktop the window is on right now - pick another to move it there.',
+    thWinDesktopTip: 'The virtual desktop the window is on right now - pick another to move it there. "All desktops" is Windows\' "Show this window on all desktops", the same setting as in the window menu.',
+    deskAll: 'All desktops',
     thNowTip: 'Where the window is right now - what a rule made from it would save.',
     makeRule: 'Make a rule…',
     makeRuleTip: 'What the rule applies to (all windows of the program, or windows with a text in the title), its desktop, and whether to save the window\'s position',
@@ -142,7 +143,7 @@ const STR = {
     thWidth: 'Bredd', thHeight: 'Höjd',
     thWindowTip: 'Vilka fönster raden gäller - alltså vilka fönster som delar positionen. En regels text och program redigeras direkt här och sparas när du lämnar fältet. Ett program med flera rader har flera sorters fönster (huvudfönster, dialoger, hjälpfönster); fönsterklassen efter texten skiljer dem åt. Håll muspekaren över raden för att se fönstret positionen sparades från.',
     thActiveTip: 'Kryssa ur för att stänga av en rad utan att ta bort den: dess fönster lämnas då i fred, och den sparade positionen väntar tills raden kryssas i igen. Kryssar du ur en programrad blir den en regel för programmet (samma fönsterklass), med sina positioner.',
-    thDesktopTip: 'Det virtuella skrivbord radens fönster flyttas till när de dyker upp eller deras titel ändras till att matcha. "följ efter" växlar också dit. Väljer du skrivbord på en programrad blir den en regel för programmet (samma fönsterklass), med sina positioner.',
+    thDesktopTip: 'Det virtuella skrivbord radens fönster flyttas till när de dyker upp eller deras titel ändras till att matcha. "följ efter" växlar också dit. "Alla skrivbord" visar dem på alla skrivbord i stället. Väljer du skrivbord på en programrad blir den en regel för programmet (samma fönsterklass), med sina positioner.',
     thXTip: 'Avstånd från skrivbordets vänsterkant, i bildpunkter.',
     thYTip: 'Avstånd från skrivbordets överkant, i bildpunkter.',
     thWidthTip: 'Fönstrets bredd i bildpunkter.', thHeightTip: 'Fönstrets höjd i bildpunkter.',
@@ -182,7 +183,8 @@ const STR = {
     thProgram: 'Program', thTitle: 'Titel', thWinDesktop: 'Skrivbord',
     thProgramTip: 'Namnet på programfilen som äger fönstret.',
     thTitleTip: 'Fönstrets titel just nu. Regler matchas mot den.',
-    thWinDesktopTip: 'Det virtuella skrivbord fönstret ligger på just nu - välj ett annat för att flytta det dit.',
+    thWinDesktopTip: 'Det virtuella skrivbord fönstret ligger på just nu - välj ett annat för att flytta det dit. "Alla skrivbord" är Windows "Visa det här fönstret på alla skrivbord", samma inställning som i fönstermenyn.',
+    deskAll: 'Alla skrivbord',
     thNowTip: 'Var fönstret ligger just nu - det en regel gjord av fönstret skulle spara.',
     makeRule: 'Gör regel…',
     makeRuleTip: 'Vad regeln ska gälla (alla programmets fönster, eller fönster med en text i titeln), dess skrivbord, och om fönstrets position ska sparas',
@@ -488,7 +490,7 @@ function rowsForSetup(setup = curSetup) {
     const pos = byKey.get('rule:' + r.alias) || null;
     const posAnywhere = anyRulePos.has(r.alias);
     return { kind: 'rule', rule: r, pos, foreign: !ruleOnComputer(r, pc),
-             inert: !posAnywhere && !(Number(r.desktop) > 0) };
+             inert: !posAnywhere && !Number(r.desktop) };
   });
   const known = new Set(st.rules.map(r => 'rule:' + r.alias));
   // the rules in their own order (it decides which wins), then positions of
@@ -508,6 +510,8 @@ function desktopOptions(sel) {
   const n = Math.max(names.length, sel || 0);
   for (let i = 1; i <= n; i++)
     o += `<option value="${i}"${i === sel ? ' selected' : ''}>${esc(names[i - 1] || i)}</option>`;
+  // -1: every desktop - the rule pins its windows
+  o += `<option value="-1"${sel < 0 ? ' selected' : ''}>${esc(t('deskAll'))}</option>`;
   return o;
 }
 
@@ -533,8 +537,11 @@ const ruleOnComputer = (r, pc) => !r.computers ||
 function desktopCell(r, disabled = false) {
   if (!desktopsOn()) return '<td class="deskcell"></td>';
   const dis = disabled ? ' disabled' : '';
-  return `<td class="deskcell"><select class="r-desktop"${dis}>${desktopOptions(Number(r.desktop) || 0)}</select>` +
-    `<label><input type="checkbox" class="r-follow"${r.follow ? ' checked' : ''}${dis}> ${esc(t('followLbl'))}</label></td>`;
+  const desk = Number(r.desktop) || 0;
+  // a window on every desktop has nowhere to follow it to
+  const fdis = disabled || desk < 0 ? ' disabled' : '';
+  return `<td class="deskcell"><select class="r-desktop"${dis}>${desktopOptions(desk)}</select>` +
+    `<label><input type="checkbox" class="r-follow"${r.follow ? ' checked' : ''}${fdis}> ${esc(t('followLbl'))}</label></td>`;
 }
 
 // programs with more than one row in the list being rendered: their rows
@@ -645,7 +652,7 @@ const listed = row => !row.foreign || revealed.has(row.rule.alias);
 // just-created rule stays visible until it gets a position or desktop.
 const shownInRules = row => row.kind !== 'rule'
   || revealed.has(row.rule.alias)
-  || (!row.foreign && (!!row.pos || Number(row.rule.desktop) > 0));
+  || (!row.foreign && (!!row.pos || !!Number(row.rule.desktop)));
 
 function editingRow() {
   const ae = document.activeElement;
@@ -842,12 +849,14 @@ function renderFree() {
   }
   const deskCell = w => {
     if (!desktopsOn()) return '<td class="deskcell"></td>';
-    const cur = Number(w.desktop) || 0;
+    const pinned = !!Number(w.pinned);
+    const cur = pinned ? 0 : Number(w.desktop) || 0;
     const names = st.desktops.names || [];
     let o = '';
     for (let i = 1; i <= Math.max(names.length, cur); i++)
       o += `<option value="${i}"${i === cur ? ' selected' : ''}>${esc(names[i - 1] || i)}</option>`;
-    return `<td class="deskcell">${cur ? `<select class="w-desktop">${o}</select>` : '<span class="dim">–</span>'}</td>`;
+    o += `<option value="all"${pinned ? ' selected' : ''}>${esc(t('deskAll'))}</option>`;
+    return `<td class="deskcell">${cur || pinned ? `<select class="w-desktop">${o}</select>` : '<span class="dim">–</span>'}</td>`;
   };
   const num = v => `<td class="num">${v === '' || v === undefined ? '<span class="dim">–</span>' : esc(v)}</td>`;
   body.innerHTML = rows.map(w => `
@@ -885,7 +894,8 @@ applyFolds();
 $('winBody').addEventListener('change', e => {
   if (!e.target.classList.contains('w-desktop')) return;
   const hwnd = Number(e.target.closest('tr').dataset.hwnd);
-  post({ action: 'moveWinDesktop', hwnd, desktop: Number(e.target.value) });
+  if (e.target.value === 'all') post({ action: 'pinWin', hwnd, pinned: 1 });
+  else post({ action: 'moveWinDesktop', hwnd, desktop: Number(e.target.value) });
 });
 
 // ── status bar ─────────────────────────────────────────────────────────

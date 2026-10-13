@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- A window set to "Show on all desktops" was missing from the window list
+  (Windows reports it on no desktop, so it was dropped as a ghost). It is
+  listed now, its Desktop column reading "All desktops"; the column's menu
+  sets and clears the same Windows setting as the window menu's toggle, and
+  picking a desktop - there, from the window menu or with a hotkey - unpins
+  the window and sends it there.
+
+- New: a rule's Desktop can be "All desktops" (`/desktop:all` in the
+  config) - in the list, on program rows, and in the window menu's rule
+  dialog. Matching windows are shown on every desktop when they appear or
+  their title changes into matching; "follow" does not apply.
+
 ## 2.1.0 (2026-10-12)
 
 - A rule that sends a window to another desktop now says so in a notice at
