@@ -121,7 +121,7 @@ const STR = {
     ignoreH: 'Ignore', ignExeHelp: 'Programs (one exe name per line):', ignTitleHelp: 'Titles containing (one text per line):',
     managedSavedHint: 'Changes here are saved as soon as you leave the field.',
     hkH: 'Position hotkeys',
-    hkHelp: 'Pressed together with {mod}. AutoHotkey key names (d, F10, Home, Backspace…). Leave empty to disable one.',
+    hkHelp: 'A bare key (d, F10, Home, Backspace…) is pressed together with {mod}. Write the modifiers yourself to use another combination: ^!d = Ctrl+Alt+D, #d = Win+D, +F10 = Shift+F10, >^d = right Ctrl+D (^ Ctrl, ! Alt, + Shift, # Win, < > left/right side). Leave empty to disable one.',
     hkOpenUi: 'Open the DalSegno window', hkSaveActive: "Save the active window's position",
     hkSaveAll: "Save all open windows' positions", hkApplyAll: 'Move all windows to their saved positions',
     hkForgetActive: "Forget the active window's position", hkToggleMove: 'Toggle automatic moving', hkReload: 'Restart the script',
@@ -230,7 +230,7 @@ const STR = {
     ignoreH: 'Ignorera', ignExeHelp: 'Program (ett exenamn per rad):', ignTitleHelp: 'Titlar som innehåller (en text per rad):',
     managedSavedHint: 'Ändringar här sparas så fort du lämnar fältet.',
     hkH: 'Lägeskortkommandon',
-    hkHelp: 'Trycks tillsammans med {mod}. AutoHotkey-tangentnamn (d, F10, Home, Backspace…). Lämna tomt för att stänga av ett.',
+    hkHelp: 'En ensam tangent (d, F10, Home, Backspace…) trycks tillsammans med {mod}. Skriv modifierarna själv för en annan kombination: ^!d = Ctrl+Alt+D, #d = Win+D, +F10 = Skift+F10, >^d = höger Ctrl+D (^ Ctrl, ! Alt, + Skift, # Win, < > vänster/höger sida). Lämna tomt för att stänga av ett.',
     hkOpenUi: 'Öppna DalSegno-fönstret', hkSaveActive: 'Spara det aktiva fönstrets position',
     hkSaveAll: 'Spara alla öppna fönsters positioner', hkApplyAll: 'Flytta alla fönster till sina sparade positioner',
     hkForgetActive: 'Glöm det aktiva fönstrets position', hkToggleMove: 'Växla automatisk flyttning', hkReload: 'Starta om skriptet',
@@ -416,7 +416,7 @@ function renderHotkeys() {
   const mod = st.settings.modifier || 'CapsLock';
   $('hkList').innerHTML = HK_ACTIONS.map(name => `
     <div class="hkrow">
-      <span class="hkcombo">${esc(mod)} +
+      <span class="hkcombo"><span class="hkmod"${standalone(hk[name]) ? ' hidden' : ''}>${esc(mod)} +</span>
         <input class="hkkey" data-name="${name}" value="${esc(hk[name] ?? '')}"></span>
       <span class="hklbl">${esc(t('hk' + name))}</span>
     </div>`).join('');
@@ -429,6 +429,17 @@ function renderHotkeys() {
   $('dhkList').innerHTML = rows(DHK);
   $('prefixList').innerHTML = rows(PREFIXES);
 }
+// Mirrors IsStandaloneHotkey in core.ahk: a key with modifiers of its own
+// is not pressed with the modifier.
+function standalone(key) {
+  key = (key || '').trim();
+  return /^[<>^!+#*~$]+\S/.test(key) || key.includes(' & ');
+}
+document.addEventListener('input', e => {
+  if (!e.target.classList || !e.target.classList.contains('hkkey')) return;
+  const lbl = e.target.parentElement.querySelector('.hkmod');
+  if (lbl) lbl.hidden = standalone(e.target.value);
+});
 document.addEventListener('change', e => {
   if (!e.target.classList || !e.target.classList.contains('hkkey')) return;
   post({ action: 'setHotkey', name: e.target.dataset.name, key: e.target.value.trim() });

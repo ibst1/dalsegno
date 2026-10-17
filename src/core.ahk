@@ -39,7 +39,7 @@ g_ruleDlg := 0                 ; the window menu's save/rule dialog, one at a ti
 g_hk := Map("OpenUi", "d", "SaveActive", "s", "SaveAll", "a"
     , "ApplyAll", "Home", "ForgetActive", "Backspace"
     , "ToggleMove", "F10", "Reload", "F5")
-g_actionKeys := []             ; the plain keys registered under the modifier
+g_actionKeys := []             ; registered position hotkeys: {key, gated by the modifier?}
 
 ; --- Rules and which windows are managed --------------------------------------
 titleRules   := []   ; { alias, pattern, regex, exe, exeRegex, desktop, follow, enabled }
@@ -285,6 +285,10 @@ Tr(id) {
         )"))
     txt := L[L.Has(g_lang) ? g_lang : "en"][id]
     ; the modifier and the keys are configurable, so labels carry placeholders
+    ; "{mod} + {kX}" is one label, since a key may carry its own modifiers
+    if InStr(txt, "{k")
+        for namn, key in g_hk
+            txt := StrReplace(txt, "{mod} + {k" namn "}", HotkeyLabel(key))
     if InStr(txt, "{mod}")
         txt := StrReplace(txt, "{mod}", g_modifier)
     if InStr(txt, "{k")
@@ -1302,7 +1306,9 @@ ModifierWatchdog() {
 ; (ModifierActive, like the menu: CapsModifier's RCtrl is injected, so a
 ; physical-only check let CapsLock+D through as Ctrl+D), never
 ; "Modifier & key" - a prefix registration makes AutoHotkey hold the key back
-; from other scripts' hooks.
+; from other scripts' hooks. A key written with modifiers of its own (^!d,
+; #d, CapsLock & d - see IsStandaloneHotkey) is not tied to the modifier at
+; all: it is registered as written, with no criterion.
 ApplyActionHotkeys() {
     global g_actionKeys, g_hk, g_modPositions
     static handlers := Map("OpenUi", (*) => OpenUi(), "SaveActive", (*) => SaveActive()
@@ -1310,9 +1316,10 @@ ApplyActionHotkeys() {
         , "ForgetActive", (*) => ForgetActive()
         , "ToggleMove", (*) => ToggleMove(), "Reload", (*) => RestartScript())
     static positionsOnly := Map("SaveActive", 1, "SaveAll", 1, "ApplyAll", 1, "ForgetActive", 1, "ToggleMove", 1)
-    HotIf(ModifierActive)
-    for k in g_actionKeys
-        try Hotkey(k, "Off")
+    for e in g_actionKeys {
+        HotIf(e.gated ? ModifierActive : "")
+        try Hotkey(e.key, "Off")
+    }
     g_actionKeys := []
     for namn, handler in handlers {
         key := g_hk.Has(namn) ? g_hk[namn] : ""
@@ -1323,12 +1330,30 @@ ApplyActionHotkeys() {
         ; expresses a held CapsLock as RCtrl - so CapsLock+D arrives as
         ; Ctrl+D and a bare "d" never matches. The criterion (the modifier
         ; physically down) is what gates it; Ctrl+D on its own passes through.
+        gated := !IsStandaloneHotkey(key)
+        reg := gated ? "*" key : key
+        HotIf(gated ? ModifierActive : "")
         try {
-            Hotkey("*" key, handler, "On")
-            g_actionKeys.Push("*" key)
+            Hotkey(reg, handler, "On")
+            g_actionKeys.Push({key: reg, gated: gated})
         }
     }
     HotIf()
+}
+
+; A position hotkey is either a bare key, pressed with the modifier ("d"), or
+; a complete AutoHotkey hotkey that carries its own modifiers ("^!d", "#d",
+; ">^d", "CapsLock & d"). A lone symbol key ("+", "#") stays a bare key.
+IsStandaloneHotkey(key) {
+    return RegExMatch(key, "^[<>^!+#*~$]+\S") || InStr(key, " & ")
+}
+
+; How a position hotkey reads in the tray menu and the help text.
+HotkeyLabel(key) {
+    global g_modifier
+    if (key = "")
+        return "-"
+    return IsStandaloneHotkey(key) ? key : g_modifier " + " key
 }
 
 ; (Re)registers the menu BUTTON. * is not optional: a hotkey without it fires
