@@ -1273,7 +1273,7 @@ ModifierHeld(*) {
 ; menu uses this; auto-save keeps the strict physical ModifierHeld, so a
 ; logical-only match never triggers a silent save. The logical read is live,
 ; so there is no 10 s cap on it.
-ModifierActive() {
+ModifierActive(*) {
     global g_modifier
     if ModifierHeld()
         return true
@@ -1298,7 +1298,9 @@ ModifierWatchdog() {
 ; The position actions, on the modifier. The keys come from [Hotkeys] and can
 ; change on any settings reload, so whatever was registered last time is
 ; switched off first, under the same #HotIf context. They are plain keys
-; under a criterion that reads the modifier's physical state, never
+; under a criterion that reads the modifier physically OR logically
+; (ModifierActive, like the menu: CapsModifier's RCtrl is injected, so a
+; physical-only check let CapsLock+D through as Ctrl+D), never
 ; "Modifier & key" - a prefix registration makes AutoHotkey hold the key back
 ; from other scripts' hooks.
 ApplyActionHotkeys() {
@@ -1308,7 +1310,7 @@ ApplyActionHotkeys() {
         , "ForgetActive", (*) => ForgetActive()
         , "ToggleMove", (*) => ToggleMove(), "Reload", (*) => RestartScript())
     static positionsOnly := Map("SaveActive", 1, "SaveAll", 1, "ApplyAll", 1, "ForgetActive", 1, "ToggleMove", 1)
-    HotIf(ModifierHeld)
+    HotIf(ModifierActive)
     for k in g_actionKeys
         try Hotkey(k, "Off")
     g_actionKeys := []
