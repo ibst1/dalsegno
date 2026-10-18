@@ -793,17 +793,30 @@ SetDesktopName(n, name) {
 }
 
 ; True when the cursor is inside the (visible) name label's rectangle - the
-; label itself is click-through, so hit-testing never reports it.
+; label itself is click-through, so hit-testing never reports it. Both are
+; read in physical pixels (per-monitor-v2), where UpdateLabel places the
+; label: the script itself is only system-DPI aware, and on mixed-DPI
+; monitors MouseGetPos and WinGetPos virtualize differently - the label read
+; as x=4848 there while it sat at x=2928, so no click ever matched.
 MouseOverLabel(*) {
     _sg := SlowGuard("MouseOverLabel", 30)
     global g_label
+    static pt := Buffer(8), rc := Buffer(16)
     try {
         if (!IsObject(g_label) || !DllCall("IsWindowVisible", "ptr", g_label.Hwnd))
             return false
-        CoordMode("Mouse", "Screen")
-        MouseGetPos(&mx, &my)
-        WinGetPos(&bx, &by, &bw, &bh, g_label)
-        return (mx >= bx && mx < bx + bw && my >= by && my < by + bh)
+        prevDpi := DllCall("SetThreadDpiAwarenessContext", "ptr", -4, "ptr")
+        try {
+            ok := DllCall("GetCursorPos", "ptr", pt) && DllCall("GetWindowRect", "ptr", g_label.Hwnd, "ptr", rc)
+        } finally {
+            if prevDpi
+                DllCall("SetThreadDpiAwarenessContext", "ptr", prevDpi, "ptr")
+        }
+        if !ok
+            return false
+        mx := NumGet(pt, 0, "int"), my := NumGet(pt, 4, "int")
+        return (mx >= NumGet(rc, 0, "int") && mx < NumGet(rc, 8, "int")
+            && my >= NumGet(rc, 4, "int") && my < NumGet(rc, 12, "int"))
     } catch {
         return false
     }
