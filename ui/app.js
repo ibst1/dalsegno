@@ -40,12 +40,12 @@ const STR = {
     removeSel: 'Remove selected',
     confirmRemoveSel: 'Remove {0} rows? A rule is deleted with its saved positions in every monitor setup; a program row loses its saved positions in every setup.',
     saveAll: 'Save all now', saveAllTip: "Save every open window's current position",
-    applyAll: 'Move all now', applyAllTip: 'Move every open window to its saved position ({mod} + Home)',
+    applyAll: 'Move all now', applyAllTip: 'Move every open window to its saved position ({kApplyAll})',
     addRule: '+ Add rule', addRuleTip: 'A new rule row - type the text and press Enter',
     filterPh: 'Filter…',
     filterTip: 'Show only rows whose program, window class, rule text or saved-from title contains this text. Esc clears it.',
     posNoMatch: 'No rows match "{0}" in this monitor setup.',
-    posEmpty: 'No rules and no saved positions for this monitor setup yet. Drag a window where you want it, save with {mod} + S, or hold {mod} and right-click a window.',
+    posEmpty: 'No rules and no saved positions for this monitor setup yet. Drag a window where you want it, save with {kSaveActive}, or hold {mod} and right-click a window.',
     badgeMax: 'maximized',
     moveNow: 'Move now', moveNowTip: 'Move the open windows this row applies to, to the saved position',
     moveNowNoTip: 'Nothing to move to: no saved position in this monitor setup',
@@ -60,7 +60,7 @@ const STR = {
     appliesRuleGone: 'rule "{0}" (no longer exists)', appliesStd: 'all {0} windows',
     appliesRule: 'windows with "{0}" in the title', appliesRuleExe: '{1} windows with "{0}" in the title',
     savedFromTip: 'Saved from: {0}', noPosYet: 'no position yet',
-    inertTip: 'This rule has no desktop and no position in this monitor setup yet, so it moves nothing here - but its windows are still its own: saving one puts the position under the rule. Pick a desktop, or save a matching window with {mod} + S.',
+    inertTip: 'This rule has no desktop and no position in this monitor setup yet, so it moves nothing here - but its windows are still its own: saving one puts the position under the rule. Pick a desktop, or save a matching window with {kSaveActive}.',
     patternPh: 'text in the title', exePh: '(any)', regexLbl: 'regex',
     computerLbl: 'computer', computersPh: '(all)',
     computersTip: 'The computers the rule applies on, comma-separated. Empty: every computer. The config is shared between computers through the synced folder.',
@@ -101,7 +101,7 @@ const STR = {
     modDesktops: 'Desktops - virtual desktops: switching, moving, overlay, taskbar label',
     tglAutostart: 'Start with Windows',
     menuH: 'Window menu',
-    menuHelp: 'Hold the modifier and press the button on a window to open the menu. The plain right-click is left to the app. The modifier is also the key the position hotkeys below are held with.',
+    menuHelp: 'Hold the modifier and press the button on a window to open the menu. The plain right-click is left to the app.',
     tglMenuOn: 'Enable the window menu', lblMenuModifier: 'Modifier', lblMenuButton: 'Button',
     tglMenuWhole: 'Opens anywhere in the window', menuWholeHelp: 'Off restricts it to the title bar and the top band of apps with custom title bars.',
     lblMenuExclude: 'Leave these programs alone',
@@ -109,7 +109,7 @@ const STR = {
     behaveH: 'Positions',
     tglMove: 'Move new windows automatically', tglSave: 'Save position on manual move',
     tglModOnly: 'Only when {mod} is held while dropping',
-    modOnlyHelp: 'Saving becomes a deliberate gesture: a sloppy drag cannot overwrite a carefully placed position. Deliberate saves ({mod} + S, the window menu, Save all) always work.',
+    modOnlyHelp: 'Saving becomes a deliberate gesture: a sloppy drag cannot overwrite a carefully placed position. Deliberate saves ({kSaveActive}, the window menu, Save all) always work.',
     tglNotify: 'Toasts',
     tglOnScreen: 'Keep windows on screens that are on',
     onScreenHelp: 'A new window that opens where no screen is (Word reopens a document where a screen used to be) goes onto the nearest screen. 5 seconds after a screen is turned off or unplugged, every window left on it (on any desktop, maximized and minimized ones too) moves onto a screen that is still on, and back when it is on again. A screen turned off with its button is noticed too (asked over DDC/CI); if it was the primary screen, the laptop screen becomes primary until it is on again. Windows you can reach are not touched.',
@@ -121,7 +121,7 @@ const STR = {
     ignoreH: 'Ignore', ignExeHelp: 'Programs (one exe name per line):', ignTitleHelp: 'Titles containing (one text per line):',
     managedSavedHint: 'Changes here are saved as soon as you leave the field.',
     hkH: 'Position hotkeys',
-    hkHelp: 'A bare key (d, F10, Home, Backspace…) is pressed together with {mod}. Write the modifiers yourself to use another combination: ^!d = Ctrl+Alt+D, #d = Win+D, +F10 = Shift+F10, >^d = right Ctrl+D (^ Ctrl, ! Alt, + Shift, # Win, < > left/right side). Leave empty to disable one.',
+    hkHelp: 'AutoHotkey syntax: ^ Ctrl, ! Alt, + Shift, # Win, < > left/right side. >^d = right Ctrl+D, ^!d = Ctrl+Alt+D, #F10 = Win+F10. Leave empty to disable one.',
     hkOpenUi: 'Open the DalSegno window', hkSaveActive: "Save the active window's position",
     hkSaveAll: "Save all open windows' positions", hkApplyAll: 'Move all windows to their saved positions',
     hkForgetActive: "Forget the active window's position", hkToggleMove: 'Toggle automatic moving', hkReload: 'Restart the script',
@@ -152,12 +152,12 @@ const STR = {
     removeSel: 'Ta bort markerade',
     confirmRemoveSel: 'Ta bort {0} rader? En regel tas bort med sina sparade positioner i alla skärmuppsättningar; en programrad förlorar sina sparade positioner i alla uppsättningar.',
     saveAll: 'Spara alla nu', saveAllTip: 'Spara alla öppna fönsters nuvarande positioner',
-    applyAll: 'Flytta alla nu', applyAllTip: 'Flytta alla öppna fönster till sina sparade positioner ({mod} + Home)',
+    applyAll: 'Flytta alla nu', applyAllTip: 'Flytta alla öppna fönster till sina sparade positioner ({kApplyAll})',
     addRule: '+ Lägg till regel', addRuleTip: 'En ny regelrad - skriv texten och tryck Enter',
     filterPh: 'Filtrera…',
     filterTip: 'Visa bara rader vars program, fönsterklass, regeltext eller ursprungsfönster innehåller texten. Esc rensar.',
     posNoMatch: 'Inga rader matchar "{0}" i den här skärmuppsättningen.',
-    posEmpty: 'Inga regler och inga sparade positioner för den här skärmuppsättningen ännu. Dra ett fönster dit du vill ha det, spara med {mod} + S, eller håll {mod} och högerklicka på ett fönster.',
+    posEmpty: 'Inga regler och inga sparade positioner för den här skärmuppsättningen ännu. Dra ett fönster dit du vill ha det, spara med {kSaveActive}, eller håll {mod} och högerklicka på ett fönster.',
     badgeMax: 'maximerat',
     moveNow: 'Flytta nu', moveNowTip: 'Flytta de öppna fönster raden gäller till den sparade positionen',
     moveNowNoTip: 'Inget att flytta till: ingen sparad position i den här skärmuppsättningen',
@@ -172,7 +172,7 @@ const STR = {
     appliesRuleGone: 'regeln "{0}" (finns inte längre)', appliesStd: 'alla {0}-fönster',
     appliesRule: 'fönster med "{0}" i titeln', appliesRuleExe: '{1}-fönster med "{0}" i titeln',
     savedFromTip: 'Sparat från: {0}', noPosYet: 'ingen position ännu',
-    inertTip: 'Regeln har varken skrivbord eller position i den här skärmuppsättningen ännu och flyttar därför inget här - men dess fönster är fortfarande dess egna: sparar du ett hamnar positionen under regeln. Välj ett skrivbord, eller spara ett matchande fönster med {mod} + S.',
+    inertTip: 'Regeln har varken skrivbord eller position i den här skärmuppsättningen ännu och flyttar därför inget här - men dess fönster är fortfarande dess egna: sparar du ett hamnar positionen under regeln. Välj ett skrivbord, eller spara ett matchande fönster med {kSaveActive}.',
     patternPh: 'text i titeln', exePh: '(alla)', regexLbl: 'regex',
     computerLbl: 'dator', computersPh: '(alla)',
     computersTip: 'De datorer regeln gäller på, kommaseparerade. Tomt: alla datorer. Inställningarna delas mellan datorerna via den synkade mappen.',
@@ -210,7 +210,7 @@ const STR = {
     modDesktops: 'Skrivbord - virtuella skrivbord: växla, flytta, överlägg, etikett i aktivitetsfältet',
     tglAutostart: 'Starta med Windows',
     menuH: 'Fönstermeny',
-    menuHelp: 'Håll modifieraren och tryck knappen på ett fönster för att öppna menyn. Vanligt högerklick lämnas till appen. Modifieraren är också tangenten positionskortkommandona nedan hålls med.',
+    menuHelp: 'Håll modifieraren och tryck knappen på ett fönster för att öppna menyn. Vanligt högerklick lämnas till appen.',
     tglMenuOn: 'Aktivera fönstermenyn', lblMenuModifier: 'Modifierare', lblMenuButton: 'Knapp',
     tglMenuWhole: 'Öppnas var som helst i fönstret', menuWholeHelp: 'Av begränsar den till titelraden och överkanten på appar med egenritade titelrader.',
     lblMenuExclude: 'Lämna dessa program i fred',
@@ -218,7 +218,7 @@ const STR = {
     behaveH: 'Lägen',
     tglMove: 'Flytta nya fönster automatiskt', tglSave: 'Spara position vid manuell flytt',
     tglModOnly: 'Bara när {mod} hålls nere vid släppet',
-    modOnlyHelp: 'Sparandet blir en avsiktlig gest: en slarvig flytt kan inte skriva över ett omsorgsfullt placerad position. Avsiktliga sparningar ({mod} + S, fönstermenyn, Spara alla) fungerar alltid.',
+    modOnlyHelp: 'Sparandet blir en avsiktlig gest: en slarvig flytt kan inte skriva över ett omsorgsfullt placerad position. Avsiktliga sparningar ({kSaveActive}, fönstermenyn, Spara alla) fungerar alltid.',
     tglNotify: 'Notiser',
     tglOnScreen: 'Håll fönster på skärmar som är på',
     onScreenHelp: 'Ett nytt fönster som öppnas där ingen skärm finns (Word öppnar ett dokument där en skärm brukade sitta) dras in på närmaste skärm. 5 sekunder efter att en skärm stängts av eller kopplats ur flyttas varje fönster som låg på den (på alla skrivbord, även maximerade och minimerade) till en skärm som fortfarande är på, och tillbaka när den slås på igen. Även en skärm som stängs av med strömknappen märks (via DDC/CI); var den primär blir laptopskärmen primär tills den slås på igen. Fönster du kommer åt rörs inte.',
@@ -230,7 +230,7 @@ const STR = {
     ignoreH: 'Ignorera', ignExeHelp: 'Program (ett exenamn per rad):', ignTitleHelp: 'Titlar som innehåller (en text per rad):',
     managedSavedHint: 'Ändringar här sparas så fort du lämnar fältet.',
     hkH: 'Lägeskortkommandon',
-    hkHelp: 'En ensam tangent (d, F10, Home, Backspace…) trycks tillsammans med {mod}. Skriv modifierarna själv för en annan kombination: ^!d = Ctrl+Alt+D, #d = Win+D, +F10 = Skift+F10, >^d = höger Ctrl+D (^ Ctrl, ! Alt, + Skift, # Win, < > vänster/höger sida). Lämna tomt för att stänga av ett.',
+    hkHelp: 'AutoHotkey-syntax: ^ Ctrl, ! Alt, + Skift, # Win, < > vänster/höger sida. >^d = höger Ctrl+D, ^!d = Ctrl+Alt+D, #F10 = Win+F10. Lämna tomt för att stänga av ett.',
     hkOpenUi: 'Öppna DalSegno-fönstret', hkSaveActive: 'Spara det aktiva fönstrets position',
     hkSaveAll: 'Spara alla öppna fönsters positioner', hkApplyAll: 'Flytta alla fönster till sina sparade positioner',
     hkForgetActive: 'Glöm det aktiva fönstrets position', hkToggleMove: 'Växla automatisk flyttning', hkReload: 'Starta om skriptet',
@@ -247,7 +247,9 @@ function t(id) {
   const s = (STR[lang] || STR.en)[id] ?? STR.en[id] ?? id;
   if (typeof s === 'function') return s;   // formatters, not text
   const mod = (st && st.settings && st.settings.modifier) || 'CapsLock';
-  return s.replace(/\{mod\}/g, mod);
+  // {kX}: the position hotkey X as configured - a complete hotkey of its own
+  const hk = (st && st.settings && st.settings.hotkeys) || {};
+  return s.replace(/\{mod\}/g, mod).replace(/\{k(\w+)\}/g, (m, n) => hk[n] || '-');
 }
 function esc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -413,11 +415,9 @@ function renderHotkeys() {
   if (document.activeElement && document.activeElement.classList &&
       document.activeElement.classList.contains('hkkey')) return;
   const hk = st.settings.hotkeys || {};
-  const mod = st.settings.modifier || 'CapsLock';
   $('hkList').innerHTML = HK_ACTIONS.map(name => `
     <div class="hkrow">
-      <span class="hkcombo"><span class="hkmod"${standalone(hk[name]) ? ' hidden' : ''}>${esc(mod)} +</span>
-        <input class="hkkey" data-name="${name}" value="${esc(hk[name] ?? '')}"></span>
+      <input class="hkkey wide" data-name="${name}" value="${esc(hk[name] ?? '')}">
       <span class="hklbl">${esc(t('hk' + name))}</span>
     </div>`).join('');
   const dhk = st.settings.desktopHotkeys || {};
@@ -429,17 +429,6 @@ function renderHotkeys() {
   $('dhkList').innerHTML = rows(DHK);
   $('prefixList').innerHTML = rows(PREFIXES);
 }
-// Mirrors IsStandaloneHotkey in core.ahk: a key with modifiers of its own
-// is not pressed with the modifier.
-function standalone(key) {
-  key = (key || '').trim();
-  return /^[<>^!+#*~$]+\S/.test(key) || key.includes(' & ');
-}
-document.addEventListener('input', e => {
-  if (!e.target.classList || !e.target.classList.contains('hkkey')) return;
-  const lbl = e.target.parentElement.querySelector('.hkmod');
-  if (lbl) lbl.hidden = standalone(e.target.value);
-});
 document.addEventListener('change', e => {
   if (!e.target.classList || !e.target.classList.contains('hkkey')) return;
   post({ action: 'setHotkey', name: e.target.dataset.name, key: e.target.value.trim() });

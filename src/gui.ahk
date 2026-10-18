@@ -393,9 +393,18 @@ UiSetHotkey(name, key) {
                     PushState()
                     return
                 }
+            ; a lone character with no modifier would take that character
+            ; away from all typing
+            if (StrLen(key) = 1 && !HasOwnModifiers(key)) {
+                Notify(Tr("badHotkey") " " key, Tr("appTitle"))
+                PushState()
+                return
+            }
             try {
+                ; syntax probe, never enabled - under a context of its own, so
+                ; it cannot touch the live (global) hotkey
                 HotIf(ModifierHeld)
-                Hotkey("*" key, (*) => 0, "Off")   ; syntax probe, never enabled
+                Hotkey(key, (*) => 0, "Off")
                 HotIf()
             } catch {
                 HotIf()

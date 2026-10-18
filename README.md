@@ -120,9 +120,9 @@ shown per-monitor DPI aware for as long as it is up.
 
 ## Hotkeys
 
-Position hotkeys are held with the modifier (`CapsLock` by default), unless
-a key is written with modifiers of its own (`^!d`, `#d`, `+F10`): then it is
-a standalone hotkey, not tied to the modifier. Desktop
+Position hotkeys are complete AutoHotkey hotkeys (`>^d` = right Ctrl+D,
+`^!d`, `#F10`); a config file from before 2.3 has bare keys, which are
+combined with the menu modifier once on start. Desktop
 hotkeys follow one principle — *Ctrl = switch, Alt = move the window,
 Ctrl+Alt = move and follow*. All are configurable in the GUI.
 

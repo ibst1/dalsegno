@@ -45,9 +45,9 @@ if (A_Args.Length && A_Args[1] = "/selftest") {
         out .= "`n  " r.alias " = " RuleValue(r)
     out .= "`nrulesOnlyExe=" rulesOnlyExe.Length " ignoreExe=" ignoreExe.Length " ignoreTitles=" ignoreTitles.Length
     keys := ""
-    for e in g_actionKeys
-        keys .= (keys = "" ? "" : ", ") e.key (e.gated ? "" : " (standalone)")
-    out .= "`nactionHotkeys(" g_modifier " held)=" keys
+    for k in g_actionKeys
+        keys .= (keys = "" ? "" : ", ") k
+    out .= "`nactionHotkeys=" keys
     keys := ""
     for k in g_desktopHotkeys
         keys .= (keys = "" ? "" : ", ") k
