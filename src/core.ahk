@@ -1935,18 +1935,41 @@ ShowHotkeys(*) {
     MsgBox Tr("hkText"), Tr("hkTitle")
 }
 
-; What a startup shortcut starts: the portable zip's DalSegno.exe (the
-; interpreter renamed, loading DalSegno.ahk beside it) when that is what runs
-; us - a bare .ahk opens nothing without AutoHotkey installed - and the SCRIPT
-; otherwise, not AutoHotkey with the script as an argument: the Store
-; edition's exe path carries its version number and changes with every update.
-AutostartTarget() {
-    return (A_AhkPath = A_ScriptDir "\DalSegno.exe") ? A_AhkPath : A_ScriptFullPath
+; Autostart is a value in HKCU\...\Run, not a shortcut in the Startup folder.
+; Explorer opens everything in the Startup folder at once, and at logon
+; (2026-10-19) two of five .ahk shortcuts never started: AutoHotkey's Store
+; package was activated three times for five. Run values are started one at
+; a time. Shortcuts that start us are still recognised, and removed by "off".
+AUTOSTART_KEY := "HKCU\Software\Microsoft\Windows\CurrentVersion\Run"
+
+; What the Run value starts: the portable zip's DalSegno.exe (the interpreter
+; renamed, loading DalSegno.ahk beside it) when that is what runs us, else
+; AutoHotkey with the script. For the Store edition that is its app alias:
+; the exe path inside the package carries the version number and changes
+; with every update. A bare .ahk path does not work in a Run value.
+AutostartCommand() {
+    if (A_AhkPath = A_ScriptDir "\DalSegno.exe")
+        return '"' A_AhkPath '"'
+    alias := EnvGet("LOCALAPPDATA") "\Microsoft\WindowsApps\AutoHotkeyV2.exe"
+    return '"' (FileExist(alias) ? alias : A_AhkPath) '" "' A_ScriptFullPath '"'
 }
 
-; Every shortcut in the Startup folder that starts this DalSegno - ours, and
-; one made by hand ("DalSegno.ahk - genväg.lnk"): unseen, it read as "off",
-; and switching on added a second instance at logon.
+StartsUs(command) => InStr(command, A_ScriptFullPath) || InStr(command, A_ScriptDir "\DalSegno.exe")
+
+; Every Run value that starts this DalSegno, whatever its name
+AutostartRunValues() {
+    found := []
+    loop reg AUTOSTART_KEY, "V" {
+        cmd := ""
+        try cmd := RegRead()
+        if StartsUs(cmd)
+            found.Push(A_LoopRegName)
+    }
+    return found
+}
+
+; Every shortcut in the Startup folder that starts this DalSegno - ours from
+; older versions, and one made by hand ("DalSegno.ahk - genväg.lnk")
 AutostartShortcuts() {
     found := []
     loop files A_Startup "\*.lnk" {
@@ -1958,15 +1981,26 @@ AutostartShortcuts() {
     return found
 }
 
-IsAutostart() => AutostartShortcuts().Length > 0
+IsAutostart() => AutostartRunValues().Length > 0 || AutostartShortcuts().Length > 0
 
-; On: a shortcut in the user's Startup folder, unless one already starts us.
-; Off: every shortcut that does, hand-made ones included.
+; The Run key is written through reg.exe: under the Store edition of
+; AutoHotkey, RegWrite lands in the package's private copy of HKCU, which
+; only the package sees - Explorer never would. reg.exe runs outside it.
+; RegRead and loop reg see the real key.
+RegExe(args) {
+    try RunWait('reg.exe ' args, , "Hide")
+}
+
+; On: a Run value, unless something already starts us.
+; Off: every Run value and every shortcut that does, hand-made ones included.
 SetAutostart(on) {
     if on {
         if !IsAutostart()
-            try FileCreateShortcut(AutostartTarget(), A_Startup "\DalSegno.lnk", A_ScriptDir)
+            RegExe('add "' AUTOSTART_KEY '" /v DalSegno /t REG_SZ /d "'
+                . StrReplace(AutostartCommand(), '"', '\"') '" /f')
     } else {
+        for name in AutostartRunValues()
+            RegExe('delete "' AUTOSTART_KEY '" /v "' name '" /f')
         for lnk in AutostartShortcuts()
             try FileDelete(lnk)
     }
