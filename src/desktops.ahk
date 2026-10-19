@@ -37,6 +37,7 @@ if (VerCompare(A_OSVersion, "10.0.26100") < 0 && FileExist(A_ScriptDir "\23H2\Vi
     VDA_DLL := A_ScriptDir "\23H2\VirtualDesktopAccessor.dll"
 
 g_dllLoaded := false
+g_dllHandle := 0
 g_desktopHotkeys := []   ; what ApplyDesktopHotkeys registered
 g_lastGuid := ""         ; GUID at last poll - separates a switch from startup/rename
 g_lastState := ""        ; guid|name|count - update the tray only when something changed
@@ -70,8 +71,12 @@ DesktopsLoadConfig() {
 }
 
 DesktopsInit() {
-    global g_dllLoaded, g_screenSnapshot, g_desktopsStarted, VDA_DLL
-    g_dllLoaded := FileExist(VDA_DLL) ? DllCall("LoadLibrary", "str", VDA_DLL, "ptr") != 0 : false
+    global g_dllLoaded, g_dllHandle, g_screenSnapshot, g_desktopsStarted, VDA_DLL
+    if !g_dllHandle   ; once: the module can be switched off and on again
+        g_dllHandle := FileExist(VDA_DLL) ? DllCall("LoadLibrary", "str", VDA_DLL, "ptr") : 0
+    g_dllLoaded := g_dllHandle != 0
+    if g_dllLoaded
+        OnExit(DesktopsExit)
     g_screenSnapshot := ScreenSnapshot()
     g_desktopsStarted := true
     ApplyDesktopHotkeys()
@@ -84,6 +89,22 @@ DesktopsInit() {
     PollDesktops()       ; set the icon right away; the first call shows no OSD
     SetTimer(PollDesktops, 250)
     SetTimer(LabelGuard, 250)   ; keeps the name label placed, visible and on top
+}
+
+; The dll is unloaded while the script still runs. Left to the end of the
+; process, it crashed every exit - and so every restart - with an access
+; violation inside it (0xc0000005, 2026-10: 56 crashes in a week, each a
+; second before the new instance's first probe answer): the dll keeps its
+; connection to Explorer's COM objects per thread and lets go of it when the
+; process detaches, after COM is gone. Unloaded here, it lets go while COM
+; is still up.
+DesktopsExit(*) {
+    global g_dllHandle, g_dllLoaded
+    g_dllLoaded := false
+    if g_dllHandle
+        DllCall("FreeLibrary", "ptr", g_dllHandle)
+    g_dllHandle := 0
+    return 0
 }
 
 ; The module switched on or off in the settings while running.
