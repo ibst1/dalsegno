@@ -1044,10 +1044,20 @@ UiaButtonAt(x, y) {
     ; the probe asked each second. The buttons only move when windows open and
     ; close, so an answer holds while the window count is unchanged (5 min at
     ; most). The label catches up on the next guard tick.
+    ; The count changes the moment a window opens, but the taskbar slides the
+    ; new button in a moment later - a question asked in between hears "free"
+    ; and the full label sat over the buttons until the next change (seen
+    ; 2026-10-30). So once the bar has settled, every answer asked before that
+    ; is asked once more.
     global g_probeAnswers, g_windowCount
+    static lastCount := -1, countAt := 0
+    if (g_windowCount != lastCount)
+        lastCount := g_windowCount, countAt := A_TickCount
+    settled := A_TickCount - countAt >= 3000
     key := x "," y
     known := g_probeAnswers.Has(key)
     if !known || g_probeAnswers[key].windows != g_windowCount
+        || (settled && g_probeAnswers[key].asked < countAt + 3000)
         || A_TickCount - g_probeAnswers[key].at > 300000
         ProbeRequest(x, y, key)
     return known ? g_probeAnswers[key].button : false
@@ -1072,7 +1082,7 @@ ProbeRequest(x, y, key) {
         return
     }
     nextId := Mod(nextId + 1, 0x7FFFFFFF)
-    g_probePending[nextId] := { key: key, at: A_TickCount }
+    g_probePending[nextId] := { key: key, at: A_TickCount, windows: g_windowCount }
     try PostMessage(reqMsg, nextId, ((x + 32768) & 0xFFFF) | (((y + 32768) & 0xFFFF) << 16), , hwnd)
 }
 
@@ -1080,7 +1090,8 @@ ProbeAnswer(wParam, lParam, *) {
     global g_probePending, g_probeAnswers, g_windowCount
     if !g_probePending.Has(wParam)
         return
-    key := g_probePending[wParam].key
+    q := g_probePending[wParam]
+    key := q.key
     g_probePending.Delete(wParam)
     button := (lParam = 50000)
     static first := true
@@ -1089,7 +1100,9 @@ ProbeAnswer(wParam, lParam, *) {
         try FileAppend(FormatTime(, "HH:mm:ss") "  probe: first answer, " key " -> control type " lParam "`n", TracePath(), "UTF-8")
     }
     changed := !g_probeAnswers.Has(key) || g_probeAnswers[key].button != button
-    g_probeAnswers[key] := { button: button, at: A_TickCount, windows: g_windowCount }
+    ; stamped with the count and time of the question, not of the reply: a
+    ; reply to a question from before a change must not count as fresh
+    g_probeAnswers[key] := { button: button, at: A_TickCount, asked: q.at, windows: q.windows }
     if changed
         SetTimer(UpdateLabel, -1)   ; the label's form may change now
 }
