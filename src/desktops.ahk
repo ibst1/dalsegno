@@ -985,6 +985,10 @@ UpdateLabelInner() {
     ; usable for this on Windows 11 - the buttons are XAML, so the honest
     ; probe is asking UI Automation what sits at a given point.
     margin := Round(12 * LabelDpi(bar) / 96)
+    ; the label's side padding (its MarginX) is see-through, so only the text
+    ; has to land on free bar - probing the window edge sent "1/6" up into the
+    ; badge although it fitted beside the "..." button (2026-10-30)
+    pad := Round(10 * LabelDpi(bar) / 96)
     midY := barY + barH // 2
     forms := [[line1, line2]]
     if (line2 != "")
@@ -993,7 +997,7 @@ UpdateLabelInner() {
     line1 := "", line2 := ""
     for f in forms {
         width := LabelWidth(f[1], f[2], bar)
-        if !UiaButtonAt(barX + iconX - width - margin, midY) {
+        if !UiaButtonAt(barX + iconX - width - margin + pad, midY) {
             line1 := f[1], line2 := f[2]
             break
         }
