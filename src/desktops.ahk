@@ -978,8 +978,10 @@ UpdateLabelInner() {
     line2 := s.name != "" ? Tr("desktop") " " s.index " " Tr("of") " " s.count : ""
     ; The app buttons grow rightwards as windows are opened and eventually
     ; reach the strip we live in. Try the forms from richest to barest and
-    ; take the first one whose left edge lands on free bar; only if even the
-    ; counter collides does the label go away. MSTaskListWClass1 is not
+    ; take the first one whose left edge lands on free bar; if even the
+    ; counter collides, the bar has overflowed (the "..." button stretches
+    ; the buttons right up to the tray) and the one-line form floats as a
+    ; badge just above the bar instead. MSTaskListWClass1 is not
     ; usable for this on Windows 11 - the buttons are XAML, so the honest
     ; probe is asking UI Automation what sits at a given point.
     margin := Round(12 * LabelDpi(bar) / 96)
@@ -996,11 +998,12 @@ UpdateLabelInner() {
             break
         }
     }
-    if (line1 = "") {
-        HideLabel()
-        return
+    badge := (line1 = "")
+    if badge {
+        f := forms[forms.Length - 1]   ; "name n/m", or "desktop n" when unnamed
+        line1 := f[1], line2 := f[2]
     }
-    content := line1 "|" line2 "|" light
+    content := line1 "|" line2 "|" light "|" badge
     if (content != g_labelText || !IsObject(g_label)
         || !DllCall("IsWindow", "ptr", g_label.Hwnd)) {
         g_labelText := content
@@ -1018,13 +1021,23 @@ UpdateLabelInner() {
         b.MarginX := Round(10 * scale), b.MarginY := Round(3 * scale)
         b.SetFont("s9 q4 c" (light ? "1A1A1A" : "F5F5F5"), "Segoe UI Variable Display")
         b.Add("Text", "Center", line2 != "" ? line1 "`n" line2 : line1)
+        if badge {
+            ; over arbitrary window content bare text is unreadable: a solid,
+            ; rounded chip in the taskbar's colours
+            b.BackColor := light ? "F3F3F3" : "2B2B2B"
+            b.MarginY := Round(5 * scale)
+        }
         b.Show("NoActivate Hide AutoSize")
-        WinSetTransColor(keyColor, b)
+        if badge {
+            try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", b.Hwnd, "uint", 33   ; DWMWA_WINDOW_CORNER_PREFERENCE
+                , "int*", 2, "uint", 4)                                           ; DWMWCP_ROUND
+        } else
+            WinSetTransColor(keyColor, b)
         g_label := b
     }
     g_label.GetPos(, , &bw, &bh)
-    g_label.Show("NoActivate x" (barX + iconX - bw - Round(12 * LabelDpi(bar) / 96))
-        . " y" (barY + (barH - bh) // 2))
+    y := badge ? barY - bh - Round(6 * LabelDpi(bar) / 96) : barY + (barH - bh) // 2
+    g_label.Show("NoActivate x" (barX + iconX - bw - margin) " y" y)
     ; clicking the taskbar raises it within the topmost band - re-assert
     DllCall("SetWindowPos", "ptr", g_label.Hwnd, "ptr", 0
         , "int", 0, "int", 0, "int", 0, "int", 0, "uint", 0x13)   ; TOP, NOMOVE|NOSIZE|NOACTIVATE
