@@ -13,7 +13,8 @@
 ;
 ; A screen counts as off after two answers in a row (about 5 s) saying so:
 ;   - it answers "off" (D6 = 2..5), or
-;   - it has answered "on" before and now does not answer at all, or
+;   - it has answered "on" before (remembered in power.ini, also from earlier
+;     runs) and now does not answer at all, or
 ;   - it never answers (no DDC, as some screens) while every screen that does
 ;     answer is off: screens are turned off together, leaving the desk.
 ; The built-in screen of a laptop is never off (no DDC there; the lid takes it
@@ -74,8 +75,10 @@ Poll() {
         if (n < 1 || n > 32)
             continue
         if !state.Has(dev)
-            state[dev] := { offRuns: 0, seenOn: false }
+            state[dev] := { offRuns: 0, seenOn: false, id: MonitorId(dev) }
         s := state[dev]
+        if (!s.seenOn && s.id != "")
+            s.seenOn := SeenOn(s.id)
         if internal.Has(dev) {
             mons.Push({ dev: dev, n: n, internal: true, answer: "on", s: s })
             continue
@@ -83,8 +86,11 @@ Poll() {
         t0 := A_TickCount
         p := PowerMode(h)     ; 1 on, 2..5 off, -1 no answer
         answer := (p = 1) ? "on" : (p >= 2 && p <= 5) ? "off" : "none"
-        if (answer = "on")
+        if (answer = "on") {
+            if (!s.seenOn && s.id != "")
+                try IniWrite(1, PowerIni(), "SeenOn", s.id)
             s.seenOn := true, s.offRuns := 0
+        }
         else if (answer = "off" || s.seenOn)
             s.offRuns++
         mons.Push({ dev: dev, n: n, internal: false, answer: answer, s: s, ms: A_TickCount - t0, p: p })
@@ -128,6 +134,26 @@ EnumProc(hMon, hdc, pRect, data) {
     if DllCall("GetMonitorInfoW", "ptr", hMon, "ptr", mi)
         g_enum[StrGet(mi.Ptr + 40, 32, "UTF-16")] := hMon
     return true
+}
+
+; the screen's device id (MONITOR\<model>\{class}\<n>), which stays with the
+; screen while the DISPLAYn names can shift
+MonitorId(dev) {
+    dd := Buffer(840, 0)
+    NumPut("UInt", 840, dd, 0)
+    if !DllCall("EnumDisplayDevicesW", "wstr", dev, "uint", 0, "ptr", dd, "uint", 0)
+        return ""
+    return StrGet(dd.Ptr + 328, 128, "UTF-16")
+}
+
+; a screen that answers DDC only while on is silent when off, so whether it
+; ever answered "on" is kept between runs: a helper started while the screen
+; was off would otherwise take it for one without DDC and let it follow the rest
+PowerIni() => A_AppData "\DalSegno\power.ini"
+
+SeenOn(id) {
+    try return IniRead(PowerIni(), "SeenOn", id, 0) = 1
+    return false
 }
 
 DisplayNumber(dev) {
