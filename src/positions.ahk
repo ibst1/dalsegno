@@ -853,14 +853,112 @@ PowerInit() {
     if g_deadMon.Count
         Trace("power: off at start " IniRead(f, "Power", "Dead", ""))
     OnExit(PowerExit)
+    PowerPublish()
     StartPowerHelper()
     SetTimer(StartPowerHelper, 30000)   ; brought back if it ever dies
+    SetTimer(PowerCursor, 200)
+}
+
+; The screens that are off, for other programs (Glissando): window property
+; "DalSegno.OffScreens" on the script's hidden window, bit n-1 for
+; \\.\DISPLAYn. Gone (0) with no screen off.
+PowerPublish() {
+    global g_deadMon
+    mask := 0
+    for dev in g_deadMon
+        if RegExMatch(dev, "i)DISPLAY(\d+)$", &m) && m[1] <= 32
+            mask |= 1 << (m[1] - 1)
+    if mask
+        DllCall("SetProp", "ptr", A_ScriptHwnd, "str", "DalSegno.OffScreens", "ptr", mask)
+    else
+        DllCall("RemoveProp", "ptr", A_ScriptHwnd, "str", "DalSegno.OffScreens", "ptr")
+}
+
+; With screens off the cursor stays on the ones still on: Windows still
+; counts them, and the cursor would vanish onto them. One screen on (the
+; usual case, the laptop panel) is a ClipCursor; several, and the cursor is
+; put back on the nearest one. A clip someone else set (a game, a drag) is
+; left alone. Checked every 200 ms: Windows drops the clip by itself now and
+; then (Ctrl+Alt+Del, UAC). Per-monitor aware throughout: GetClipCursor
+; answers in physical pixels whatever the thread, and system-aware screen
+; rectangles of screens at another scale would never match it.
+g_cursorClip := ""   ; "l,t,r,b" of the clip set here, physical pixels; "" = none
+
+PowerCursor() {
+    prev := DllCall("SetThreadDpiAwarenessContext", "ptr", -4, "ptr")   ; PER_MONITOR_AWARE_V2
+    try PowerCursorKeep()
+    finally {
+        if prev
+            DllCall("SetThreadDpiAwarenessContext", "ptr", prev, "ptr")
+    }
+}
+
+PowerCursorKeep() {
+    global g_deadMon, g_cursorClip
+    live := []
+    if g_deadMon.Count
+        loop MonitorGetCount()
+            if !IsDeadMonitor(A_Index) {
+                MonitorGet(A_Index, &l, &t, &r, &b)
+                live.Push([l, t, r, b])
+            }
+    rc := Buffer(16)
+    DllCall("GetClipCursor", "ptr", rc)
+    cur := NumGet(rc, 0, "Int") "," NumGet(rc, 4, "Int") "," NumGet(rc, 8, "Int") "," NumGet(rc, 12, "Int")
+    if (live.Length = 1) {
+        m := live[1], want := m[1] "," m[2] "," m[3] "," m[4]
+        vl := SysGet(76), vt := SysGet(77)
+        free := vl "," vt "," vl + SysGet(78) "," vt + SysGet(79)
+        if (cur != want && (cur = free || cur = g_cursorClip)) {
+            NumPut("Int", m[1], "Int", m[2], "Int", m[3], "Int", m[4], rc)
+            DllCall("ClipCursor", "ptr", rc)
+            Trace("power: cursor kept on " want)
+        }
+        g_cursorClip := want
+        return
+    }
+    PowerCursorRelease(cur)
+    if (live.Length < 2)
+        return   ; no screen off, or every one
+    DllCall("GetCursorPos", "int64*", &pt := 0)
+    x := pt << 32 >> 32, y := pt >> 32
+    best := "", bestD := ""
+    for m in live {
+        nx := Min(Max(x, m[1]), m[3] - 1), ny := Min(Max(y, m[2]), m[4] - 1)
+        d := (nx - x) ** 2 + (ny - y) ** 2
+        if !d
+            return   ; on a screen that is on
+        if (bestD = "" || d < bestD)
+            best := [nx, ny], bestD := d
+    }
+    DllCall("SetCursorPos", "int", best[1], "int", best[2])
+}
+
+; Lets the cursor go again, if the clip is still the one set here.
+PowerCursorRelease(cur := "") {
+    global g_cursorClip
+    if (g_cursorClip = "")
+        return
+    if (cur = "") {
+        rc := Buffer(16)
+        DllCall("GetClipCursor", "ptr", rc)
+        cur := NumGet(rc, 0, "Int") "," NumGet(rc, 4, "Int") "," NumGet(rc, 8, "Int") "," NumGet(rc, 12, "Int")
+    }
+    if (cur = g_cursorClip) {
+        DllCall("ClipCursor", "ptr", 0)
+        Trace("power: cursor free again")
+    }
+    g_cursorClip := ""
 }
 
 ; The screens that are off, for the next instance (PowerInit) - a restart
 ; follows every layout change.
 PowerExit(*) {
     global g_deadMon
+    prev := DllCall("SetThreadDpiAwarenessContext", "ptr", -4, "ptr")
+    PowerCursorRelease()   ; the next instance clips again if still needed
+    if prev
+        DllCall("SetThreadDpiAwarenessContext", "ptr", prev, "ptr")
     s := ""
     for dev in g_deadMon
         s .= dev "|"
@@ -901,6 +999,7 @@ PowerReport(wParam, lParam, *) {
     if (s != old) {
         Trace("power: off [" old "] -> [" s "]")
         g_deadMon := dead
+        PowerPublish()
         SetTimer(PowerChanged.Bind(lParam), -1)
     } else
         PowerRestorePrimary()
