@@ -1001,8 +1001,24 @@ PowerReport(wParam, lParam, *) {
         g_deadMon := dead
         PowerPublish()
         SetTimer(PowerChanged.Bind(lParam), -1)
-    } else
-        PowerRestorePrimary()
+    } else if !PowerRestorePrimary()
+        PowerKeepPrimary(lParam)
+}
+
+; The primary screen is off although the screens that are off stayed the same:
+; Windows put its saved layout back (waking up, docking), or this instance
+; took the screens that are off over from the one before a restart. At most
+; every 30 s, so a primary Windows will not move is not asked for every poll.
+PowerKeepPrimary(internalMask) {
+    global g_deadMon
+    static last := 0
+    if (!g_deadMon.Count || A_TickCount - last < 30000)
+        return
+    if (!IsDeadMonitor(MonitorGetPrimary()) || !LiveMonitorCount())
+        return
+    last := A_TickCount
+    Trace("power: the primary " MonitorGetName(MonitorGetPrimary()) " is off")
+    SetTimer(PowerChanged.Bind(internalMask), -1)
 }
 
 PowerChanged(internalMask) {
