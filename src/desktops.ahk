@@ -603,6 +603,8 @@ RuleMoveNoticeCore(hwnd, desktop) {
     g.SetFont("s" Round(8.5 * scale) " w600 c000000")
     btn := g.Add("Button", "y+" Round(10 * scale) " h" Round(28 * scale), " " Tr("ruleMoveBack") " ")
     btn.OnEvent("Click", (*) => RuleMoveBack(hwnd))
+    follow := g.Add("Button", "x+" Round(8 * scale) " yp hp", " " Tr("ruleMoveFollow") " ")
+    follow.OnEvent("Click", (*) => RuleMoveFollow(hwnd, desktop))
     close := g.Add("Button", "x+" Round(8 * scale) " yp hp", " " Tr("noticeClose") " ")
     close.OnEvent("Click", (*) => CloseMoveNotice())
     DllCall("dwmapi\DwmSetWindowAttribute", "ptr", g.Hwnd
@@ -634,6 +636,20 @@ CloseMoveNotice() {
     if IsObject(g_moveNotice)
         try g_moveNotice.gui.Destroy()
     g_moveNotice := 0
+}
+
+; "Follow": the window stays where the rule put it; the user goes there. The
+; desktop is read from the window again, in case it has moved since.
+RuleMoveFollow(hwnd, desktop) {
+    CloseMoveNotice()
+    if !WinExist(hwnd)
+        return
+    nr := -1
+    try nr := DllCall("VirtualDesktopAccessor\GetWindowDesktopNumber", "ptr", hwnd, "int")
+    if (nr >= 0)
+        desktop := nr + 1
+    SwitchTo(desktop)
+    SetTimer(ActivateWindow.Bind(hwnd), -400)
 }
 
 ; "Bring back": the window to the desktop the user is on, activated, and

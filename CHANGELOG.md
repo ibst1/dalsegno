@@ -2,6 +2,10 @@
 
 ## 2.2.0 (2026-10-13)
 
+- The "Moved by rule" notice has a "Follow" button: it switches to the
+  desktop the window was sent to and activates the window there. The rule
+  and the window's desktop are left as they are.
+
 - A window set to "Show on all desktops" was missing from the window list
   (Windows reports it on no desktop, so it was dropped as a ghost). It is
   listed now, its Desktop column reading "All desktops"; the column's menu
