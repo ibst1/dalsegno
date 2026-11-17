@@ -799,6 +799,7 @@ FitOnScreen(&x, &y, &w, &h) {
 ; State that has to outlive the restart a layout change brings (Desktops
 ; module) is kept in %LOCALAPPDATA%\DalSegno\state.ini.
 g_deadMon := Map()   ; device name (\\.\DISPLAYn) -> true: off although in the layout
+g_powerHeard := 0    ; A_TickCount of the helper's last report (of the start, before the first)
 
 IsDeadMonitor(n) {
     global g_deadMon
@@ -841,7 +842,9 @@ PowerStatePath() {
 }
 
 PowerInit() {
-    global g_deadMon
+    global g_deadMon, g_powerHeard
+    g_powerHeard := A_TickCount
+    SetTimer(PowerStale, 10000)
     OnMessage(DllCall("RegisterWindowMessage", "str", "DALSEGNO_POWER", "uint"), PowerReport)
     ; the screens found off by the instance before a restart, if that was just now
     f := PowerStatePath()
@@ -985,7 +988,8 @@ StartPowerHelper() {
 ; DALSEGNO_POWER from the helper, every 2.5 s: wParam = the screens that are
 ; off, lParam = the built-in ones, bit n-1 for \\.\DISPLAYn.
 PowerReport(wParam, lParam, *) {
-    global g_deadMon, g_keepOnScreen
+    global g_deadMon, g_keepOnScreen, g_powerHeard
+    g_powerHeard := A_TickCount
     dead := Map()
     if g_keepOnScreen
         loop 32
@@ -1003,6 +1007,35 @@ PowerReport(wParam, lParam, *) {
         SetTimer(PowerChanged.Bind(lParam), -1)
     } else if !PowerRestorePrimary()
         PowerKeepPrimary(lParam)
+}
+
+; "Off" is only believed while the helper keeps saying so. It reports every
+; 2.5 s (also while it is not asking the screens - it repeats its last answer
+; then); without a report the screens that are off are whatever they were
+; when the last one came, or at the last exit (PowerInit) - for good. That is
+; how an instance the helper did not reach kept a screen off all day that
+; had been off for a minute in the morning (2026-11-17). After
+; POWER_STALE_MS of silence, seen at two checks in a row (a report may be
+; waiting in the queue behind a long scan), every screen counts as on again.
+POWER_STALE_MS := 30000
+
+PowerStale() {
+    global g_deadMon, g_powerHeard, POWER_STALE_MS
+    static strikes := 0
+    if (!g_deadMon.Count || A_TickCount - g_powerHeard < POWER_STALE_MS) {
+        strikes := 0
+        return
+    }
+    if (++strikes < 2)
+        return
+    strikes := 0
+    old := ""
+    for dev in g_deadMon
+        old .= dev "|"
+    Trace("power: no report for " (A_TickCount - g_powerHeard) " ms - off [" old "] forgotten")
+    g_deadMon := Map()
+    PowerPublish()
+    SetTimer(PowerChanged.Bind(0), -1)
 }
 
 ; The primary screen is off although the screens that are off stayed the same:

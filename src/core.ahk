@@ -2038,6 +2038,13 @@ ToggleAutostart(*) {
 ; them). The wait here is long and silent; an instance that still will not
 ; go is ended, and so is an instance stuck in that box (a dialog, no script
 ; window - it never ran, nothing is lost).
+; "This script" is DalSegno from ANY folder: the copy in dist\ ran beside the
+; one in the source folder for weeks, each restarting itself after every
+; layout change. Two of them place and rescue the same windows against each
+; other, and the power helper reported to one only - the other went on
+; believing a screen off that had been off when it started, and "rescued"
+; every new window from it (2026-11-17: PowerPoint thrown between two screens
+; for its first ten seconds).
 g_startTick := A_TickCount   ; when this instance's script began loading
 CloseOtherInstances() {
     prevHidden := A_DetectHiddenWindows, prevMode := A_TitleMatchMode
@@ -2046,9 +2053,18 @@ CloseOtherInstances() {
     try {
         me := ProcessExist()
         others := []
-        for hwnd in WinGetList(A_ScriptFullPath " ahk_class AutoHotkey")
-            if (WinGetPID(hwnd) != me)
+        for hwnd in WinGetList("ahk_class AutoHotkey") {
+            title := ""
+            try {
+                if (WinGetPID(hwnd) = me)
+                    continue
+                title := WinGetTitle(hwnd)
+            }
+            ; ...\DalSegno.ahk or ...\DalSegno.exe - not the helpers
+            ; (DalSegnoPower, DalSegnoProbe, DalSegnoArrow)
+            if (InStr(title, A_ScriptFullPath) = 1 || title ~= "i)\\DalSegno\.(ahk|exe)\b")
                 others.Push(hwnd)
+        }
         ; WM_CLOSE to the main window is ExitApp (OnExit reason "Close") -
         ; the same request #SingleInstance makes
         t0 := A_TickCount

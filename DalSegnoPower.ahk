@@ -25,6 +25,8 @@
 ; every poll:
 ;   DALSEGNO_POWER  wParam = bit n-1 set: \\.\DISPLAYn is off
 ;                   lParam = bit n-1 set: \\.\DISPLAYn is the built-in screen
+; (while nothing is asked the last report is repeated - the main script takes
+; silence for "every screen on")
 ; Started by the main script; exits by itself when the main script is gone.
 ; Argument /debug: write every poll to DalSegnoPower.log beside the script.
 ;===============================================================================
@@ -39,6 +41,7 @@ powerMsg := DllCall("RegisterWindowMessage", "str", "DALSEGNO_POWER", "uint")
 debug := A_Args.Length && A_Args[1] = "/debug"
 state := Map()          ; device -> { offRuns, seenOn }
 displayOn := true, displayOnSince := 0
+lastOff := "", lastInt := 0   ; the last report sent; "" before the first
 
 ; GUID_CONSOLE_DISPLAY_STATE: the displays Windows itself turned off (0) / on (1) / dimmed (2)
 guid := Buffer(16)
@@ -65,9 +68,14 @@ OnPowerBroadcast(wParam, lParam, *) {
 }
 
 Poll() {
-    global displayOn, displayOnSince, state, powerMsg
-    if (!displayOn || (displayOnSince && A_TickCount - displayOnSince < 20000))
+    global displayOn, displayOnSince, state, lastOff, lastInt
+    if (!displayOn || (displayOnSince && A_TickCount - displayOnSince < 20000)) {
+        ; nothing is asked, but the last answer is repeated: the main script
+        ; forgets the screens that are off when it stops hearing from here
+        if (lastOff != "")
+            Report(lastOff, lastInt)
         return
+    }
     internal := InternalScreens()
     mons := []
     for dev, h in Monitors() {
@@ -114,8 +122,19 @@ Poll() {
         line .= " " m.n (m.internal ? "=int" : "=" m.answer (m.HasProp("p") ? "(" m.p "," m.ms "ms)" : "")) (off ? "*OFF*" : "")
     }
     Log("poll" line)
-    if hwnd := MainWindow()
-        PostMessage(powerMsg, offMask, intMask, , hwnd)
+    lastOff := offMask, lastInt := intMask
+    Report(offMask, intMask)
+}
+
+; To every DalSegno there is, not the first one found: with a second copy
+; running (another folder, the compiled one) the one left out kept the
+; screens that were off when it started off for good.
+Report(offMask, intMask) {
+    global powerMsg
+    DetectHiddenWindows true
+    SetTitleMatchMode "RegEx"
+    for hwnd in WinGetList("i)\\DalSegno\.(ahk|exe)\b ahk_class ^AutoHotkey$")
+        try PostMessage(powerMsg, offMask, intMask, , hwnd)
 }
 
 ; device name -> HMONITOR, for every screen in the layout
