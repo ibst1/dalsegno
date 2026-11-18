@@ -75,7 +75,10 @@ lives on under `legacy/deskpilot/`; the design of the merge is in
   coordinates — Word a document where a screen used to be. A new window
   whose title bar cannot be reached on a screen that is on goes onto the
   nearest one (watched for its first 10 seconds only: some programs park
-  windows off-screen on purpose). With the above one setting,
+  windows off-screen on purpose). The same goes for a window restored from
+  the taskbar: one that was snapped (to half a screen, say) before it was
+  minimized comes back to its snapped place, even on a screen that is off.
+  With the above one setting,
   `[Positions] KeepOnScreen`, or the GUI's *Keep windows on screens that
   are on*.
 - **Java windows never larger than their screen.** A Java window (AWT/Swing

@@ -16,7 +16,7 @@ g_autoSaveModOnly := true      ; autosave only when the modifier is held ([Posit
 ; callers turn it into a message with SaveErrorText().
 g_saveError := "", g_saveErrorText := ""
 
-g_moveEndCb := 0, g_winEventHook := 0
+g_moveEndCb := 0, g_winEventHook := 0, g_restoreCb := 0, g_restoreHook := 0
 g_keepOnScreen := true   ; [Positions] KeepOnScreen: KeepOnScreenGuard and the rescue
 g_fitJava := true        ; [Positions] FitJavaWindows: FitJavaGuard
 
@@ -36,7 +36,7 @@ PositionsLoadConfig() {
 ; fires when the user releases a window after moving or resizing it - but NOT
 ; when the script itself calls WinMove.
 PositionsInit() {
-    global posIni, g_moveEndCb, g_winEventHook
+    global posIni, g_moveEndCb, g_winEventHook, g_restoreCb, g_restoreHook
     EnsureIniUtf16(posIni, "; DalSegno - saved window positions. Best not edited by hand.`n")
     g_moveEndCb := CallbackCreate(OnMoveEnd, "F", 7)
     g_winEventHook := DllCall("SetWinEventHook",
@@ -45,6 +45,13 @@ PositionsInit() {
         "uint", 0, "uint", 0,
         "uint", 0x2,                       ; OUTOFCONTEXT | SKIPOWNPROCESS
         "ptr")
+    g_restoreCb := CallbackCreate(OnRestore, "F", 7)
+    g_restoreHook := DllCall("SetWinEventHook",
+        "uint", 0x0017, "uint", 0x0017,   ; EVENT_SYSTEM_MINIMIZEEND
+        "ptr", 0, "ptr", g_restoreCb,
+        "uint", 0, "uint", 0,
+        "uint", 0x2,
+        "ptr")
     OnExit(PositionsExit)
     RescueInit()
 }
@@ -52,9 +59,11 @@ PositionsInit() {
 ; The exit hook. Returns 0: a nonzero return value tells AHK to CANCEL the
 ; exit. Traced, so a slow exit can be told from a slow exit REQUEST.
 PositionsExit(reason, code) {
-    global g_winEventHook
+    global g_winEventHook, g_restoreHook
     Trace("exit: reason " reason ", unhooking")
     DllCall("UnhookWinEvent", "ptr", g_winEventHook)
+    if g_restoreHook
+        DllCall("UnhookWinEvent", "ptr", g_restoreHook)
     Trace("exit: cleanup done")
     return 0
 }
@@ -386,6 +395,35 @@ KeepOnScreenGuard(hwnd, info) {
             Trace("keep-on-screen " TraceWin(hwnd))
     } catch as e
         Trace("keep-on-screen " hwnd " FAILED: " e.Message)
+}
+
+; A window restored from the taskbar can come back off the screens although
+; the rescue moved it: for a minimized window the rescue moves only its
+; restore rectangle, and a window that was SNAPPED (to half a screen, say)
+; before it was minimized does not come back there but to its snapped place -
+; Obsidian came back on the left half of a 4K screen that was off
+; (2026-11-18). So every window restored from minimized is checked once, as
+; the rescue checks it, when the restore animation is done.
+OnRestore(hHook, event, hwnd, idObject, idChild, idThread, time) {
+    global g_keepOnScreen
+    if (idObject != 0 || !g_keepOnScreen)
+        return
+    SetTimer(RestoreGuard.Bind(hwnd), -300)   ; out of the callback, after the animation
+}
+
+RestoreGuard(hwnd) {
+    if (!LiveMonitorCount() || !WinExist(hwnd) || BaseInfo(hwnd) = "")
+        return
+    prev := DllCall("SetThreadDpiAwarenessContext", "ptr", -2, "ptr")   ; SYSTEM_AWARE, as RescueRun
+    try {
+        if RescueWindow(hwnd)
+            Trace("keep-on-screen after restore " TraceWin(hwnd))
+    } catch as e
+        Trace("keep-on-screen after restore " hwnd " FAILED: " e.Message)
+    finally {
+        if prev
+            DllCall("SetThreadDpiAwarenessContext", "ptr", prev, "ptr")
+    }
 }
 
 ; --- Java windows never larger than their screen ------------------------------
